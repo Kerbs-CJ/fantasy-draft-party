@@ -978,6 +978,29 @@ const ZONE_POS = {
   R: { x: 80, y: 55 },
 };
 
+function renderPkScoreboard(match) {
+  const nameOf = (id) => players.find((p) => p.id === id)?.name || "?";
+  const row = (playerId) => {
+    const kicks = match.log.filter((k) => k.shooter === playerId);
+    const slots = Math.max(5, kicks.length);
+    let circles = "";
+    for (let i = 0; i < slots; i++) {
+      const kick = kicks[i];
+      const cls = kick ? (kick.scored ? "scored" : "missed") : "pending";
+      circles += `<span class="pk-circle ${cls}"></span>`;
+    }
+    return `
+      <div class="pk-team">
+        <div class="pk-team-row">
+          <span class="pk-team-name">${escapeHtml(nameOf(playerId))}</span>
+          <span class="pk-team-score">${match.score[playerId] || 0}</span>
+        </div>
+        <div class="pk-circles">${circles}</div>
+      </div>`;
+  };
+  return `<div class="pk-scoreboard">${row(match.p1)}${row(match.p2)}</div>`;
+}
+
 function renderShootout() {
   const me = myPlayer();
   const match = room.game_state.match;
@@ -993,10 +1016,7 @@ function renderShootout() {
       <div class="card">
         <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
         <p class="sub">${roundLabel}</p>
-        <div class="shootout-score">
-          <div><span>${escapeHtml(nameOf(match.p1))}</span><b>${match.score[match.p1] || 0}</b></div>
-          <div><span>${escapeHtml(nameOf(match.p2))}</span><b>${match.score[match.p2] || 0}</b></div>
-        </div>
+        ${renderPkScoreboard(match)}
         ${renderPkGoal(entry, anim.phase === "kicking")}
         ${
           anim.phase === "result"
@@ -1014,14 +1034,24 @@ function renderShootout() {
   let actionArea;
   if (iAmShooter && match.shooterPick === null) {
     actionArea = `
-      <p class="sub">You're shooting! Pick your target:</p>
-      <div class="zone-grid">${ZONES.map((z) => `<button class="zone-btn" data-action="pick-shooter" data-zone="${z}">${ZONE_LABEL[z]}</button>`).join("")}</div>`;
+      <div class="role-banner role-shoot">
+        <span class="role-icon">🎯</span>
+        <span class="role-text">YOUR SHOT<br><small>Pick your target</small></span>
+      </div>
+      <div class="zone-grid zone-shoot">${ZONES.map((z) => `<button class="zone-btn shoot" data-action="pick-shooter" data-zone="${z}">${ZONE_LABEL[z]}</button>`).join("")}</div>`;
   } else if (iAmKeeper && match.keeperPick === null) {
     actionArea = `
-      <p class="sub">You're in goal! Pick where to dive:</p>
-      <div class="zone-grid">${ZONES.map((z) => `<button class="zone-btn" data-action="pick-keeper" data-zone="${z}">${ZONE_LABEL[z]}</button>`).join("")}</div>`;
+      <div class="role-banner role-keep">
+        <span class="role-icon">🧤</span>
+        <span class="role-text">YOU'RE IN GOAL<br><small>Pick where to dive</small></span>
+      </div>
+      <div class="zone-grid zone-keep">${ZONES.map((z) => `<button class="zone-btn keep" data-action="pick-keeper" data-zone="${z}">${ZONE_LABEL[z]}</button>`).join("")}</div>`;
   } else if (iAmShooter || iAmKeeper) {
-    actionArea = `<p class="waiting">Locked in — waiting on ${escapeHtml(iAmShooter ? nameOf(keeperId) : nameOf(shooterId))}…</p>`;
+    actionArea = `
+      <div class="role-banner ${iAmShooter ? "role-shoot" : "role-keep"} locked">
+        <span class="role-icon">${iAmShooter ? "🎯" : "🧤"}</span>
+        <span class="role-text">LOCKED IN<br><small>Waiting on ${escapeHtml(iAmShooter ? nameOf(keeperId) : nameOf(shooterId))}…</small></span>
+      </div>`;
   } else {
     actionArea = `<p class="waiting">${escapeHtml(nameOf(shooterId))} is shooting, ${escapeHtml(nameOf(keeperId))} is in goal…</p>`;
   }
@@ -1030,10 +1060,7 @@ function renderShootout() {
     <div class="card">
       <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
       <p class="sub">${roundLabel}</p>
-      <div class="shootout-score">
-        <div><span>${escapeHtml(nameOf(match.p1))}</span><b>${match.score[match.p1] || 0}</b></div>
-        <div><span>${escapeHtml(nameOf(match.p2))}</span><b>${match.score[match.p2] || 0}</b></div>
-      </div>
+      ${renderPkScoreboard(match)}
       ${actionArea}
     </div>`;
 }
