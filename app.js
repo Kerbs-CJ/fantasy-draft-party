@@ -6,7 +6,11 @@ const TRIVIA_QUESTION_COUNT = 5;
 const TRIVIA_TIME_MS = 10000;
 const GUESS_PLAYER_COUNT = 7;
 const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
-const DEV_BOT_NAME = "🤖 Dev Bot";
+const DEV_BOT_PREFIX = "🤖 ";
+const DEV_TARGET_PLAYER_COUNT = 5; // matches the real draft-night group size
+function isDevBot(player) {
+  return !!player && player.name.startsWith(DEV_BOT_PREFIX);
+}
 
 let sb = null; // supabase client
 let DEV_MODE = false; // ?dev=1 in the URL — shows solo game-testing shortcuts
@@ -25,7 +29,8 @@ let local = {
   trivia: { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null },
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
-  botScheduledFor: null,
+  botShooterScheduledFor: null,
+  botKeeperScheduledFor: null,
   shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false },
 };
 
@@ -606,14 +611,20 @@ function resetLocalGameState() {
   local.trivia = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null };
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
-  local.botScheduledFor = null;
+  local.botShooterScheduledFor = null;
+  local.botKeeperScheduledFor = null;
   local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false };
 }
 
 async function ensureDevBotIfNeeded() {
-  if (players.length >= 2) return;
-  if (players.find((p) => p.name === DEV_BOT_NAME)) return;
-  await sb.from("players").insert({ id: crypto.randomUUID(), room_code: room.code, name: DEV_BOT_NAME, is_host: false });
+  const needed = DEV_TARGET_PLAYER_COUNT - players.length;
+  if (needed <= 0) return;
+  const existingBotCount = players.filter((p) => isDevBot(p)).length;
+  const inserts = [];
+  for (let i = 0; i < needed; i++) {
+    inserts.push({ id: crypto.randomUUID(), room_code: room.code, name: `${DEV_BOT_PREFIX}Bot ${existingBotCount + i + 1}`, is_host: false });
+  }
+  await sb.from("players").insert(inserts);
   await loadPlayers();
 }
 
@@ -622,6 +633,7 @@ async function devJump(status) {
   let game_state = {};
   if (status === "trivia") game_state = { order: randomTriviaOrder(), qIndex: 0 };
   if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
+  if (status === "shootout-intro") await ensureDevBotIfNeeded();
   if (status === "bracket") {
     await ensureDevBotIfNeeded();
     game_state = { bracket: { rounds: generateBracket(players.map((p) => p.id)) } };
@@ -691,23 +703,29 @@ function renderPkGoal(entry, animate) {
     </div>`;
 }
 
-// While solo-testing a shootout in dev mode, auto-play the bot's turn a
-// beat after it comes up, so a lone developer can play a full match.
+// While solo-testing in dev mode, auto-play any bot's turn a beat after
+// it comes up. With multiple bots (a full-size test bracket), a given
+// match might be bot-vs-bot with no human in it at all — so shooter and
+// keeper are checked and scheduled independently, not either/or.
 function ensureBotAutoPick() {
   if (!DEV_MODE) return;
   const match = room.game_state?.match;
   if (!match || match.winnerId) return;
-  const bot = players.find((p) => p.name === DEV_BOT_NAME);
-  if (!bot) return;
   const shooterId = match.turn === "p1" ? match.p1 : match.p2;
   const keeperId = match.turn === "p1" ? match.p2 : match.p1;
-  let role = null;
-  if (shooterId === bot.id && match.shooterPick === null) role = "shooter";
-  else if (keeperId === bot.id && match.keeperPick === null) role = "keeper";
-  if (!role) return;
+  scheduleBotPick(match, "shooter", isDevBot(players.find((p) => p.id === shooterId)) && match.shooterPick === null);
+  scheduleBotPick(match, "keeper", isDevBot(players.find((p) => p.id === keeperId)) && match.keeperPick === null);
+}
+
+function scheduleBotPick(match, role, shouldPick) {
+  const flagKey = role === "shooter" ? "botShooterScheduledFor" : "botKeeperScheduledFor";
+  if (!shouldPick) {
+    local[flagKey] = null;
+    return;
+  }
   const pickKey = `${match.roundIndex}-${match.turn}-${role}`;
-  if (local.botScheduledFor === pickKey) return;
-  local.botScheduledFor = pickKey;
+  if (local[flagKey] === pickKey) return;
+  local[flagKey] = pickKey;
   setTimeout(() => {
     const zone = ZONES[Math.floor(Math.random() * ZONES.length)];
     submitPick(role, zone);
