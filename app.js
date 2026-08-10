@@ -26,7 +26,7 @@ let local = {
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
   botScheduledFor: null,
-  shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null },
+  shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false },
 };
 
 init();
@@ -575,7 +575,7 @@ function resetLocalGameState() {
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
   local.botScheduledFor = null;
-  local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null };
+  local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false };
 }
 
 async function ensureDevBotIfNeeded() {
@@ -610,12 +610,13 @@ function ensureShootoutAnim() {
   if (!match) return;
   const matchKey = `${match.p1}-${match.p2}-${match.bracketR}-${match.bracketM}`;
   if (local.shootoutAnim.matchKey !== matchKey) {
-    local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null };
+    local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false };
   }
   if (match.log.length > local.shootoutAnim.lastLogLength && !local.shootoutAnim.phase) {
     local.shootoutAnim.lastLogLength = match.log.length;
     local.shootoutAnim.entry = match.log[match.log.length - 1];
     local.shootoutAnim.phase = "kicking";
+    local.shootoutAnim.kickAnimTriggered = false;
     setTimeout(() => {
       local.shootoutAnim.phase = "result";
       render();
@@ -1012,12 +1013,17 @@ function renderShootout() {
   // controls, regardless of whose turn it already is underneath.
   if (anim.phase) {
     const entry = anim.entry;
+    // Only actually kick off the CSS transition once per kick — a redundant
+    // re-render mid-flight (e.g. the realtime echo of our own DB write
+    // landing a beat later) must not replay it from the start position.
+    const doAnimate = anim.phase === "kicking" && !anim.kickAnimTriggered;
+    if (doAnimate) anim.kickAnimTriggered = true;
     return `
       <div class="card">
         <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
         <p class="sub">${roundLabel}</p>
         ${renderPkScoreboard(match)}
-        ${renderPkGoal(entry, anim.phase === "kicking")}
+        ${renderPkGoal(entry, doAnimate)}
         ${
           anim.phase === "result"
             ? `<p class="kick-result ${entry.scored ? "goal" : "save"}">${entry.scored ? "⚽ GOAL!" : "🧤 SAVED!"} — ${escapeHtml(nameOf(entry.shooter))} shot ${ZONE_LABEL[entry.shooterPick]}, ${escapeHtml(nameOf(entry.keeper))} dove ${ZONE_LABEL[entry.keeperPick]}</p>`
