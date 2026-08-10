@@ -2,12 +2,8 @@
 
 const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
-const REACTION_MIN_DELAY = 2000;
-const REACTION_MAX_DELAY = 5000;
 const TRIVIA_QUESTION_COUNT = 5;
 const TRIVIA_TIME_MS = 10000;
-const BAR_TARGET_MIN = 30;
-const BAR_TARGET_MAX = 70;
 
 let sb = null; // supabase client
 let DEV_MODE = false; // ?dev=1 in the URL — shows solo game-testing shortcuts
@@ -23,9 +19,7 @@ let local = {
   joinCodeInput: "",
   nameInput: "",
   error: "",
-  reaction: { phase: "idle", goAt: null, myPoints: null, myMs: null, timer: null },
   trivia: { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null },
-  bar: { phase: "idle", pos: 50, target: 50, raf: null, myPoints: null },
   revealStarted: false,
 };
 
@@ -114,7 +108,6 @@ function subscribeToRoom(code) {
       { event: "UPDATE", schema: "public", table: "rooms", filter: `code=eq.${code}` },
       (payload) => {
         room = payload.new;
-        resetLocalGamePhaseIfNeeded();
         render();
       }
     )
@@ -137,13 +130,6 @@ function subscribeToRoom(code) {
     .subscribe();
 }
 
-function resetLocalGamePhaseIfNeeded() {
-  // when the room moves to a new stage, reset the relevant local mini-game state
-  if (room.status === "game1" && local.reaction.phase !== "idle-reset") {
-    // handled inside renderGame1 via game_state watch
-  }
-}
-
 // ── helpers ──────────────────────────────────────────────────
 function genRoomCode() {
   let out = "";
@@ -160,9 +146,6 @@ function totalsByPlayer() {
   return players
     .map((p) => ({ player: p, total: totals[p.id] || 0 }))
     .sort((a, b) => b.total - a.total);
-}
-function scoresFor(gameIndex) {
-  return scores.filter((s) => s.game_index === gameIndex);
 }
 async function updateRoom(patch) {
   const { data } = await sb.from("rooms").update(patch).eq("code", room.code).select().maybeSingle();
@@ -184,17 +167,9 @@ async function onClick(e) {
   if (action === "create-room") return createRoom();
   if (action === "join-room") return joinRoom();
   if (action === "copy-link") return copyInviteLink();
-  if (action === "start-game1") return updateRoom({ status: "game1", game_state: {} });
-  if (action === "reaction-arm") return armReaction();
-  if (action === "reaction-tap") return tapReaction();
-  if (action === "show-leaderboard1") return updateRoom({ status: "leaderboard1" });
-  if (action === "start-game2") return startTrivia();
+  if (action === "start-trivia") return startTrivia();
   if (action === "trivia-answer") return answerTrivia(Number(btn.dataset.choice));
   if (action === "trivia-next") return triviaNext();
-  if (action === "show-leaderboard2") return updateRoom({ status: "leaderboard2" });
-  if (action === "start-game3") return startBar();
-  if (action === "bar-tap") return tapBar();
-  if (action === "show-leaderboard3") return updateRoom({ status: "leaderboard3" });
   if (action === "reveal") return updateRoom({ status: "reveal" });
   if (action === "leave") return leaveRoom();
   if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
@@ -288,55 +263,7 @@ function setError(msg) {
   render();
 }
 
-// ── game 1: reaction tap ───────────────────────────────────
-async function armReaction() {
-  const goAt = Date.now() + REACTION_MIN_DELAY + Math.random() * (REACTION_MAX_DELAY - REACTION_MIN_DELAY);
-  await updateRoom({ game_state: { ...room.game_state, phase: "armed", goAt } });
-}
-
-function scheduleReactionGoIfNeeded() {
-  const gs = room.game_state || {};
-  if (gs.phase === "armed" && local.reaction.goAt !== gs.goAt) {
-    local.reaction.goAt = gs.goAt;
-    local.reaction.phase = "waiting";
-    local.reaction.myPoints = null;
-    local.reaction.myMs = null;
-    clearTimeout(local.reaction.timer);
-    const delay = gs.goAt - Date.now();
-    local.reaction.timer = setTimeout(() => {
-      local.reaction.phase = "go";
-      render();
-    }, Math.max(0, delay));
-  }
-  if (gs.phase !== "armed" && local.reaction.goAt !== null) {
-    local.reaction.goAt = null;
-    local.reaction.phase = "idle";
-  }
-}
-
-async function tapReaction() {
-  const me = myPlayer();
-  if (!me || local.reaction.myPoints !== null) return;
-  if (local.reaction.phase === "waiting") {
-    // false start
-    local.reaction.phase = "falseStart";
-    local.reaction.myPoints = 0;
-    render();
-    await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, points: 0 });
-    return;
-  }
-  if (local.reaction.phase === "go") {
-    const ms = Date.now() - local.reaction.goAt;
-    const points = Math.max(0, Math.round(100 - ms / 10));
-    local.reaction.myMs = ms;
-    local.reaction.myPoints = points;
-    local.reaction.phase = "done";
-    render();
-    await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, points });
-  }
-}
-
-// ── game 2: trivia ─────────────────────────────────────────
+// ── trivia ───────────────────────────────────────────────────
 function randomTriviaOrder() {
   const pool = window.TRIVIA_QUESTIONS.map((_, i) => i);
   for (let i = pool.length - 1; i > 0; i--) {
@@ -347,7 +274,7 @@ function randomTriviaOrder() {
 }
 
 async function startTrivia() {
-  await updateRoom({ status: "game2", game_state: { order: randomTriviaOrder(), qIndex: 0 } });
+  await updateRoom({ status: "trivia", game_state: { order: randomTriviaOrder(), qIndex: 0 } });
 }
 
 function ensureTriviaTimer() {
@@ -382,44 +309,30 @@ async function submitTriviaAnswer(choice, qIndex) {
   const timeFraction = remaining / TRIVIA_TIME_MS;
   const points = correct ? Math.round(12 + 8 * timeFraction) : 0;
   render();
-  await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 2, points });
+  await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, points });
 }
 
 async function triviaNext() {
   const gs = room.game_state || {};
   const next = gs.qIndex + 1;
   if (next >= gs.order.length) {
-    await updateRoom({ status: "leaderboard2" });
+    await updateRoom({ status: "leaderboard" });
   } else {
     await updateRoom({ game_state: { ...gs, qIndex: next } });
   }
 }
 
-// ── game 3: stop the bar ───────────────────────────────────
-function randomBarTarget() {
-  return BAR_TARGET_MIN + Math.random() * (BAR_TARGET_MAX - BAR_TARGET_MIN);
-}
-
-async function startBar() {
-  await updateRoom({ status: "game3", game_state: { phase: "playing", target: randomBarTarget() } });
-}
-
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
-  clearTimeout(local.reaction.timer);
   clearTimeout(local.trivia.timer);
-  cancelAnimationFrame(local.bar.raf);
-  local.reaction = { phase: "idle", goAt: null, myPoints: null, myMs: null, timer: null };
   local.trivia = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null };
-  local.bar = { phase: "idle", pos: 50, target: 50, raf: null, myPoints: null };
   local.revealStarted = false;
 }
 
 async function devJump(status) {
   resetLocalGameState();
   let game_state = {};
-  if (status === "game2") game_state = { order: randomTriviaOrder(), qIndex: 0 };
-  if (status === "game3") game_state = { phase: "playing", target: randomBarTarget() };
+  if (status === "trivia") game_state = { order: randomTriviaOrder(), qIndex: 0 };
   await updateRoom({ status, game_state });
 }
 
@@ -429,39 +342,6 @@ async function devQuickStart(status) {
     await createRoomAs(name);
   }
   await devJump(status);
-}
-
-function ensureBarLoop() {
-  const gs = room.game_state || {};
-  if (gs.phase === "playing" && local.bar.phase !== "playing") {
-    local.bar.phase = "playing";
-    local.bar.target = gs.target;
-    local.bar.myPoints = null;
-    const cycleMs = 1600;
-    const start = Date.now();
-    const step = () => {
-      if (local.bar.phase !== "playing") return;
-      const t = (Date.now() - start) % cycleMs;
-      const frac = t / cycleMs; // 0..1
-      local.bar.pos = 50 + 50 * Math.sin(frac * Math.PI * 2);
-      const track = document.getElementById("bar-marker");
-      if (track) track.style.left = local.bar.pos + "%";
-      local.bar.raf = requestAnimationFrame(step);
-    };
-    local.bar.raf = requestAnimationFrame(step);
-  }
-}
-
-async function tapBar() {
-  const me = myPlayer();
-  if (!me || local.bar.myPoints !== null) return;
-  cancelAnimationFrame(local.bar.raf);
-  local.bar.phase = "stopped";
-  const distance = Math.abs(local.bar.pos - local.bar.target);
-  const points = Math.max(0, Math.round(100 - distance * 4));
-  local.bar.myPoints = points;
-  render();
-  await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 3, points });
 }
 
 // ── render ──────────────────────────────────────────────────
@@ -480,26 +360,12 @@ function render() {
     case "lobby":
       html += renderLobby();
       break;
-    case "game1":
-      scheduleReactionGoIfNeeded();
-      html += renderGame1();
-      break;
-    case "leaderboard1":
-      html += renderLeaderboard(1, "Reaction Tap", "start-game2", "🧠 Start Trivia Blitz");
-      break;
-    case "game2":
+    case "trivia":
       ensureTriviaTimer();
-      html += renderGame2();
+      html += renderTrivia();
       break;
-    case "leaderboard2":
-      html += renderLeaderboard(2, "Trivia Blitz", "start-game3", "🎯 Start Stop-the-Bar");
-      break;
-    case "game3":
-      ensureBarLoop();
-      html += renderGame3();
-      break;
-    case "leaderboard3":
-      html += renderLeaderboard(3, "Stop-the-Bar", "reveal", "🏆 Reveal Draft Order!");
+    case "leaderboard":
+      html += renderLeaderboard("Trivia Blitz", "reveal", "🏆 Reveal Draft Order!");
       break;
     case "reveal":
       html += renderReveal();
@@ -508,10 +374,6 @@ function render() {
       html += `<p>Unknown state.</p>`;
   }
   APP_EL.innerHTML = html;
-
-  if (room.status === "game3" && (room.game_state || {}).phase === "playing") {
-    ensureBarLoop();
-  }
 }
 
 function renderSetupNeeded() {
@@ -537,12 +399,8 @@ function renderTopBar() {
 function renderDevBar() {
   const stages = [
     ["lobby", "Lobby"],
-    ["game1", "Game 1"],
-    ["leaderboard1", "LB 1"],
-    ["game2", "Game 2"],
-    ["leaderboard2", "LB 2"],
-    ["game3", "Game 3"],
-    ["leaderboard3", "LB 3"],
+    ["trivia", "Trivia"],
+    ["leaderboard", "Leaderboard"],
     ["reveal", "Reveal"],
   ];
   return `
@@ -561,7 +419,7 @@ function renderHome() {
   return `
     <div class="card hero">
       <h1>🏆 Fantasy Draft Party</h1>
-      <p class="sub">Play a few quick games. Whoever wins goes first in the draft.</p>
+      <p class="sub">Answer some football trivia. Top score goes first in the draft.</p>
       ${local.error ? `<p class="error">${escapeHtml(local.error)}</p>` : ""}
       <label class="field">
         <span>Your name</span>
@@ -588,9 +446,7 @@ function renderDevQuickStart() {
       <p class="dev-label">🔧 Dev preview — only visible with ?dev=1 in the URL</p>
       <p class="sub">Jump straight into a game to test it solo. Creates a throwaway room if you don't have one open yet.</p>
       <div class="dev-grid">
-        <button class="dev-btn" data-action="dev-quickstart" data-status="game1">⚡ Reaction Tap</button>
-        <button class="dev-btn" data-action="dev-quickstart" data-status="game2">🧠 Trivia Blitz</button>
-        <button class="dev-btn" data-action="dev-quickstart" data-status="game3">🎯 Stop-the-Bar</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="trivia">🧠 Trivia Blitz</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="reveal">🏆 Reveal</button>
       </div>
     </div>`;
@@ -614,7 +470,7 @@ function renderLobby() {
 
       ${
         isHost
-          ? `<button class="btn primary" data-action="start-game1" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
+          ? `<button class="btn primary" data-action="start-trivia" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
               ${players.length < 2 && !DEV_MODE ? "Need at least 2 players" : "▶️ Start the party!"}
             </button>`
           : `<p class="waiting">Waiting for the host to start…</p>`
@@ -622,49 +478,13 @@ function renderLobby() {
     </div>`;
 }
 
-function renderGame1() {
-  const me = myPlayer();
-  const isHost = me?.is_host;
-  const gs = room.game_state || {};
-  const submitted = scoresFor(1);
-  const submittedIds = new Set(submitted.map((s) => s.player_id));
-
-  let stage;
-  if (gs.phase !== "armed") {
-    stage = `<p class="sub">Reflexes time. Tap as fast as you can once the screen turns green — but don't jump the gun.</p>`;
-  } else if (local.reaction.phase === "waiting") {
-    stage = `<div class="reaction-box waiting">Wait for it…</div>`;
-  } else if (local.reaction.phase === "go") {
-    stage = `<button class="reaction-box go" data-action="reaction-tap">TAP!</button>`;
-  } else if (local.reaction.phase === "falseStart") {
-    stage = `<div class="reaction-box fail">Too soon! 0 points.</div>`;
-  } else if (local.reaction.phase === "done") {
-    stage = `<div class="reaction-box done">${local.reaction.myMs}ms — ${local.reaction.myPoints} points!</div>`;
-  }
-
-  return `
-    <div class="card">
-      <h2>⚡ Reaction Tap</h2>
-      ${stage}
-      ${isHost && gs.phase !== "armed" ? `<button class="btn primary" data-action="reaction-arm">Start round</button>` : ""}
-      <h3>Submitted (${submittedIds.size}/${players.length})</h3>
-      <ul class="player-list">
-        ${players.map((p) => `<li>${submittedIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
-      </ul>
-      ${isHost ? `<button class="btn" data-action="show-leaderboard1">Show leaderboard</button>` : ""}
-    </div>`;
-}
-
-function renderGame2() {
+function renderTrivia() {
   const me = myPlayer();
   const isHost = me?.is_host;
   const gs = room.game_state || {};
   const qIndex = gs.qIndex ?? 0;
   const question = window.TRIVIA_QUESTIONS[gs.order[qIndex]];
   const answered = local.trivia.answeredQIndex === qIndex;
-  const submitted = scoresFor(2).filter((s) => true);
-  // count distinct players who've answered THIS question is hard without a q-index column;
-  // approximate using count of score rows for game 2 modulo — instead just show total answers so far this round.
   return `
     <div class="card">
       <h2>🧠 Trivia Blitz</h2>
@@ -687,35 +507,7 @@ function renderGame2() {
     </div>`;
 }
 
-function renderGame3() {
-  const me = myPlayer();
-  const isHost = me?.is_host;
-  const gs = room.game_state || {};
-  const submitted = scoresFor(3);
-  const submittedIds = new Set(submitted.map((s) => s.player_id));
-
-  return `
-    <div class="card">
-      <h2>🎯 Stop the Bar</h2>
-      <p class="sub">Tap STOP when the marker hits the golden zone.</p>
-      <div class="bar-track">
-        <div class="bar-target" style="left:${(room.game_state?.target ?? 50) - 5}%; width:10%"></div>
-        <div id="bar-marker" class="bar-marker" style="left:${local.bar.pos}%"></div>
-      </div>
-      ${
-        local.bar.myPoints !== null
-          ? `<div class="reaction-box done">${local.bar.myPoints} points!</div>`
-          : `<button class="btn primary big" data-action="bar-tap">STOP</button>`
-      }
-      <h3>Submitted (${submittedIds.size}/${players.length})</h3>
-      <ul class="player-list">
-        ${players.map((p) => `<li>${submittedIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
-      </ul>
-      ${isHost ? `<button class="btn" data-action="show-leaderboard3">Show leaderboard</button>` : ""}
-    </div>`;
-}
-
-function renderLeaderboard(gameIndex, gameName, nextAction, nextLabel) {
+function renderLeaderboard(gameName, nextAction, nextLabel) {
   const me = myPlayer();
   const isHost = me?.is_host;
   const totals = totalsByPlayer();
