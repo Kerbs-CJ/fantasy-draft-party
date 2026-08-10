@@ -503,10 +503,13 @@ function renderHome() {
         <input id="name-input" type="text" placeholder="e.g. Craig" maxlength="24" value="${escapeHtml(local.nameInput)}" />
       </label>
 
-      <div class="join-row">
-        <input id="code-input" type="text" placeholder="ROOM CODE" maxlength="4" value="${escapeHtml(local.joinCodeInput)}" style="text-transform:uppercase" />
-        <button class="btn" data-action="join-room">Join</button>
-      </div>
+      <label class="field">
+        <span>Room code</span>
+        <input id="code-input" class="code-input" type="text" placeholder="e.g. QK7T" maxlength="4"
+          value="${escapeHtml(local.joinCodeInput)}" autocapitalize="characters" autocomplete="off"
+          autocorrect="off" spellcheck="false" inputmode="text" />
+      </label>
+      <button class="btn" data-action="join-room">Join room</button>
 
       <div class="divider">or</div>
       <button class="btn primary" data-action="create-room">Create a new room</button>
