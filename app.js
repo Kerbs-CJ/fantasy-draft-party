@@ -26,7 +26,7 @@ let local = {
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
   botScheduledFor: null,
-  shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false },
+  shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false },
 };
 
 init();
@@ -495,6 +495,10 @@ function resolveKick(match) {
   match.shooterPick = null;
   match.keeperPick = null;
 
+  // This kick belonged to the initial best-of-5 phase if the round hadn't
+  // reached 5 yet (rounds 5+ are sudden death, one kick each, no cap).
+  const wasNormalPhase = match.roundIndex < 5;
+
   if (match.turn === "p1") {
     match.turn = "p2";
   } else {
@@ -502,10 +506,24 @@ function resolveKick(match) {
     match.roundIndex += 1;
   }
 
-  const equalKicks = match.kicksTaken[match.p1] === match.kicksTaken[match.p2];
-  const minRoundsDone = match.kicksTaken[match.p1] >= 5 && match.kicksTaken[match.p2] >= 5;
-  if (equalKicks && minRoundsDone && match.score[match.p1] !== match.score[match.p2]) {
-    match.winnerId = match.score[match.p1] > match.score[match.p2] ? match.p1 : match.p2;
+  // Real shootouts end the instant the result is mathematically certain —
+  // if the trailing player can't catch up even by scoring every kick they
+  // have left in the initial 5, there's no need to take the rest.
+  if (wasNormalPhase) {
+    const maxFinal = (pid) => match.score[pid] + Math.max(0, 5 - match.kicksTaken[pid]);
+    if (match.score[match.p1] > maxFinal(match.p2)) match.winnerId = match.p1;
+    else if (match.score[match.p2] > maxFinal(match.p1)) match.winnerId = match.p2;
+  }
+
+  // Otherwise, once both have taken an equal number of kicks and the
+  // initial 5 rounds are done (or we're in sudden death, which is always
+  // one-kick-each), a score difference decides it.
+  if (!match.winnerId) {
+    const equalKicks = match.kicksTaken[match.p1] === match.kicksTaken[match.p2];
+    const minRoundsDone = match.kicksTaken[match.p1] >= 5 && match.kicksTaken[match.p2] >= 5;
+    if (equalKicks && minRoundsDone && match.score[match.p1] !== match.score[match.p2]) {
+      match.winnerId = match.score[match.p1] > match.score[match.p2] ? match.p1 : match.p2;
+    }
   }
   return match;
 }
@@ -521,18 +539,31 @@ async function submitPick(role, zone) {
   if (updated.shooterPick !== null && updated.keeperPick !== null) {
     resolveKick(updated);
   }
-  if (updated.winnerId) {
-    const bracket = gs.bracket;
-    bracket.rounds[updated.bracketR][updated.bracketM].winner = updated.winnerId;
-    if (bracket.rounds[updated.bracketR + 1]) {
-      const next = bracket.rounds[updated.bracketR + 1][Math.floor(updated.bracketM / 2)];
-      if (updated.bracketM % 2 === 0) next.p1 = updated.winnerId;
-      else next.p2 = updated.winnerId;
-    }
-    await updateRoom({ status: "bracket", game_state: { bracket, match: null } });
-  } else {
-    await updateRoom({ game_state: { ...gs, match: updated } });
+  // Even a decisive kick just writes the match as normal — the winner flag
+  // rides along inside it. The bracket only gets finalized once every
+  // client has had a chance to play that final kick's animation; see
+  // finalizeMatchIfDecided(), called from ensureShootoutAnim().
+  await updateRoom({ game_state: { ...gs, match: updated } });
+}
+
+async function finalizeMatchIfDecided() {
+  const match = room.game_state?.match;
+  if (!match || !match.winnerId) return;
+  if (local.shootoutAnim.finalizing) return;
+  local.shootoutAnim.finalizing = true;
+  const { data: freshRoom } = await sb.from("rooms").select("*").eq("code", room.code).single();
+  if (freshRoom.status !== "shootout") return; // someone else already finalized it
+  const gs = freshRoom.game_state;
+  const m = gs.match;
+  if (!m || !m.winnerId) return;
+  const bracket = gs.bracket;
+  bracket.rounds[m.bracketR][m.bracketM].winner = m.winnerId;
+  if (bracket.rounds[m.bracketR + 1]) {
+    const next = bracket.rounds[m.bracketR + 1][Math.floor(m.bracketM / 2)];
+    if (m.bracketM % 2 === 0) next.p1 = m.winnerId;
+    else next.p2 = m.winnerId;
   }
+  await updateRoom({ status: "bracket", game_state: { bracket, match: null } });
 }
 
 function computeBracketPlacements(rounds) {
@@ -575,7 +606,7 @@ function resetLocalGameState() {
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
   local.botScheduledFor = null;
-  local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false };
+  local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false };
 }
 
 async function ensureDevBotIfNeeded() {
@@ -610,7 +641,7 @@ function ensureShootoutAnim() {
   if (!match) return;
   const matchKey = `${match.p1}-${match.p2}-${match.bracketR}-${match.bracketM}`;
   if (local.shootoutAnim.matchKey !== matchKey) {
-    local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false };
+    local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false };
   }
   if (match.log.length > local.shootoutAnim.lastLogLength && !local.shootoutAnim.phase) {
     local.shootoutAnim.lastLogLength = match.log.length;
@@ -623,6 +654,7 @@ function ensureShootoutAnim() {
       setTimeout(() => {
         local.shootoutAnim.phase = null;
         render();
+        if (match.winnerId) finalizeMatchIfDecided();
       }, SHOOTOUT_RESULT_MS);
     }, SHOOTOUT_KICK_MS);
   }
@@ -663,7 +695,7 @@ function renderPkGoal(entry, animate) {
 function ensureBotAutoPick() {
   if (!DEV_MODE) return;
   const match = room.game_state?.match;
-  if (!match) return;
+  if (!match || match.winnerId) return;
   const bot = players.find((p) => p.name === DEV_BOT_NAME);
   if (!bot) return;
   const shooterId = match.turn === "p1" ? match.p1 : match.p2;
@@ -1029,6 +1061,18 @@ function renderShootout() {
             ? `<p class="kick-result ${entry.scored ? "goal" : "save"}">${entry.scored ? "⚽ GOAL!" : "🧤 SAVED!"} — ${escapeHtml(nameOf(entry.shooter))} shot ${ZONE_LABEL[entry.shooterPick]}, ${escapeHtml(nameOf(entry.keeper))} dove ${ZONE_LABEL[entry.keeperPick]}</p>`
             : `<p class="sub" style="text-align:center">${escapeHtml(nameOf(entry.shooter))} steps up…</p>`
         }
+      </div>`;
+  }
+
+  // Decided but not yet finalized into the bracket (a brief gap right
+  // after the last kick's replay finishes) — avoid flashing the next
+  // shooter/keeper prompt for a match that's already over.
+  if (match.winnerId) {
+    return `
+      <div class="card">
+        <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
+        ${renderPkScoreboard(match)}
+        <p class="waiting">Match complete — updating bracket…</p>
       </div>`;
   }
 
