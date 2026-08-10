@@ -970,15 +970,12 @@ function renderBracket() {
     </div>`;
 }
 
-const ZONES = ["TL", "TC", "TR", "BL", "BC", "BR"];
-const ZONE_LABEL = { TL: "↖ Top Left", TC: "⬆ Top Center", TR: "↗ Top Right", BL: "↙ Bottom Left", BC: "⬇ Bottom Center", BR: "↘ Bottom Right" };
+const ZONES = ["L", "C", "R"];
+const ZONE_LABEL = { L: "⬅ Left", C: "⬆ Center", R: "➡ Right" };
 const ZONE_POS = {
-  TL: { x: 22, y: 32 },
-  TC: { x: 50, y: 24 },
-  TR: { x: 78, y: 32 },
-  BL: { x: 22, y: 82 },
-  BC: { x: 50, y: 90 },
-  BR: { x: 78, y: 82 },
+  L: { x: 20, y: 55 },
+  C: { x: 50, y: 45 },
+  R: { x: 80, y: 55 },
 };
 
 function renderShootout() {
