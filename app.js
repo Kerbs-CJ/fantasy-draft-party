@@ -4,7 +4,7 @@ const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 const TRIVIA_QUESTION_COUNT = 5;
 const TRIVIA_TIME_MS = 10000;
-const GUESS_PLAYER_COUNT = 10;
+const GUESS_PLAYER_COUNT = 7;
 const GUESS_CLUE_POINTS = [100, 80, 60, 40, 20]; // indexed by clueIndex (0 = only 1st clue shown)
 
 let sb = null; // supabase client
