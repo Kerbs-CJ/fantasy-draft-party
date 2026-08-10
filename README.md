@@ -1,10 +1,10 @@
 # 🏆 Fantasy League Bugaloo — Draft Party
 
 A tiny live multiplayer web app for deciding the Fantasy League Bugaloo draft
-order. Everyone joins a room from their own phone, plays a two-part quiz
-(hard football Trivia Blitz, then Guess the Footballer from progressive
-clues), and the final leaderboard becomes the draft order — with a dramatic
-reveal at the end.
+order. Everyone joins a room from their own device, plays through three
+rounds — hard football Trivia Blitz, Guess the Footballer from progressive
+clues, then a 1v1 penalty shootout bracket (winners play winners) — and the
+combined leaderboard becomes the draft order, with a dramatic reveal at the end.
 
 No app install needed — it's just a web page. It's a plain static site (no
 build step, no server to maintain) that uses [Supabase](https://supabase.com)
@@ -50,8 +50,13 @@ it updates automatically within a minute or two.
 3. Host clicks **Start the party!** when everyone's in.
 4. Trivia Blitz plays first (5 random hard questions), then Guess the
    Footballer (host reveals clues one at a time per round; guessing on
-   fewer clues scores more), with a leaderboard at the end.
-5. Host clicks **Reveal Draft Order!** for the big reveal.
+   fewer clues scores more), with a leaderboard at the end of each.
+5. Host clicks **Start Penalty Shootout** — a single-elimination bracket is
+   drawn (byes auto-fill if the group isn't a power of 2). Host starts each
+   match one at a time; the two players in it pick shot/dive zones blind and
+   simultaneous, best-of-5 then sudden death. Everyone else spectates live.
+   Placement (champion, runner-up, etc.) adds to the same combined leaderboard.
+6. Host clicks **Reveal Draft Order!** for the big reveal.
 
 **Staying anonymous as host:** the shared player list no longer shows who's
 hosting — the crown only appears on the host's own screen, never on other
@@ -59,19 +64,25 @@ players'. Join with any display name you like (there's no login/identity
 check at all) if you also want your name itself to not give you away.
 
 Notes:
-- Works best with everyone's phone screen brightness up and a decent wifi/data connection.
+- Works best with a decent wifi/data connection for everyone.
 - Trivia and Guess-the-Footballer answers are graded client-side (the
   question bank and correct answers live in `trivia.js`, which ships to
   every browser) — fine for a friendly league, not tamper-proof against
   someone digging through devtools.
+- The shootout's two simultaneous picks (shooter + keeper) are written to
+  the same shared room state; in the rare case both taps land within the
+  same instant, one write can clobber the other and the affected player
+  will just see their pick reset — a re-tap fixes it. Not built with a
+  lower-latency broadcast channel yet, since it's a mild, self-recovering
+  edge case rather than a broken one.
 - Room codes are a light gate, not real security — anyone with the link and
   code can join. Don't put sensitive info in it.
 
 ## Backlog / future ideas
 
-- **1v1 head-to-head mini-game** (e.g. a simple WASD-controlled volleyball-
-  style game), run as a single-elimination bracket — winners play winners —
-  as another section of the draft party. Not started yet.
+- **Volleyball-style 1v1 mini-game** — real-time WASD movement and live ball
+  physics, as an alternative/addition to the penalty shootout. Bigger build
+  (needs an actual real-time physics sync layer), not started yet.
 
 ## Local development
 

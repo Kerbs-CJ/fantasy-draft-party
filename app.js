@@ -183,6 +183,11 @@ async function onClick(e) {
   if (action === "guess-reveal-clue") return guessRevealClue();
   if (action === "guess-answer") return guessAnswer(btn.dataset.name);
   if (action === "guess-next") return guessNext();
+  if (action === "start-bracket") return startBracket();
+  if (action === "start-match") return startMatch(Number(btn.dataset.r), Number(btn.dataset.m));
+  if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
+  if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
+  if (action === "finish-bracket") return finishBracket();
   if (action === "reveal") return updateRoom({ status: "reveal" });
   if (action === "leave") return leaveRoom();
   if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
@@ -395,6 +400,171 @@ async function guessNext() {
   }
 }
 
+// ── penalty shootout bracket ───────────────────────────────
+// Bracket lives entirely in room.game_state.bracket — an array of rounds,
+// each round an array of { p1, p2, winner }. p2 is null for a bye, which
+// resolves immediately at bracket-generation time (a bye is unskilled luck,
+// but it still counts as tournament progress for placement points).
+function generateBracket(playerIds) {
+  if (playerIds.length <= 1) {
+    return [[{ p1: playerIds[0] || null, p2: null, winner: playerIds[0] || null }]];
+  }
+  const shuffled = shuffle(playerIds);
+  let size = 1;
+  while (size < shuffled.length) size *= 2;
+  const numByes = size - shuffled.length;
+  const matchCount = size / 2;
+  const round0 = [];
+  let idx = 0;
+  for (let i = 0; i < matchCount; i++) {
+    const p1 = shuffled[idx++];
+    const p2 = i < numByes ? null : shuffled[idx++];
+    round0.push({ p1, p2, winner: p2 ? null : p1 });
+  }
+  const rounds = [round0];
+  let prevCount = round0.length;
+  while (prevCount > 1) {
+    const nextRound = [];
+    for (let i = 0; i < prevCount / 2; i++) nextRound.push({ p1: null, p2: null, winner: null });
+    rounds.push(nextRound);
+    prevCount = nextRound.length;
+  }
+  // propagate round-0 bye winners into round 1 slots
+  rounds[0].forEach((match, i) => {
+    if (match.winner && rounds[1]) {
+      const next = rounds[1][Math.floor(i / 2)];
+      if (i % 2 === 0) next.p1 = match.winner;
+      else next.p2 = match.winner;
+    }
+  });
+  return rounds;
+}
+
+function findNextMatch(rounds) {
+  for (let r = 0; r < rounds.length; r++) {
+    for (let m = 0; m < rounds[r].length; m++) {
+      const match = rounds[r][m];
+      if (match.p1 && match.p2 && !match.winner) return { r, m };
+    }
+  }
+  return null;
+}
+
+function roundName(r, totalRounds) {
+  const fromEnd = totalRounds - 1 - r;
+  if (fromEnd === 0) return "Final";
+  if (fromEnd === 1) return "Semifinals";
+  if (fromEnd === 2) return "Quarterfinals";
+  return `Round ${r + 1}`;
+}
+
+async function startBracket() {
+  const rounds = generateBracket(players.map((p) => p.id));
+  await updateRoom({ status: "bracket", game_state: { bracket: { rounds } } });
+}
+
+async function startMatch(r, m) {
+  const gs = room.game_state;
+  const match = gs.bracket.rounds[r][m];
+  const newMatch = {
+    p1: match.p1,
+    p2: match.p2,
+    bracketR: r,
+    bracketM: m,
+    roundIndex: 0,
+    turn: "p1",
+    shooterPick: null,
+    keeperPick: null,
+    score: { [match.p1]: 0, [match.p2]: 0 },
+    kicksTaken: { [match.p1]: 0, [match.p2]: 0 },
+    log: [],
+  };
+  await updateRoom({ status: "shootout", game_state: { ...gs, match: newMatch } });
+}
+
+function resolveKick(match) {
+  const shooterId = match.turn === "p1" ? match.p1 : match.p2;
+  const keeperId = match.turn === "p1" ? match.p2 : match.p1;
+  const scored = match.shooterPick !== match.keeperPick;
+  if (scored) match.score[shooterId] = (match.score[shooterId] || 0) + 1;
+  match.kicksTaken[shooterId] = (match.kicksTaken[shooterId] || 0) + 1;
+  match.log.push({ shooter: shooterId, keeper: keeperId, shooterPick: match.shooterPick, keeperPick: match.keeperPick, scored });
+  match.shooterPick = null;
+  match.keeperPick = null;
+
+  if (match.turn === "p1") {
+    match.turn = "p2";
+  } else {
+    match.turn = "p1";
+    match.roundIndex += 1;
+  }
+
+  const equalKicks = match.kicksTaken[match.p1] === match.kicksTaken[match.p2];
+  const minRoundsDone = match.kicksTaken[match.p1] >= 5 && match.kicksTaken[match.p2] >= 5;
+  if (equalKicks && minRoundsDone && match.score[match.p1] !== match.score[match.p2]) {
+    match.winnerId = match.score[match.p1] > match.score[match.p2] ? match.p1 : match.p2;
+  }
+  return match;
+}
+
+async function submitPick(role, zone) {
+  const { data: freshRoom } = await sb.from("rooms").select("*").eq("code", room.code).single();
+  const gs = freshRoom.game_state;
+  const match = gs.match;
+  if (!match) return;
+  const key = role === "shooter" ? "shooterPick" : "keeperPick";
+  if (match[key] !== null) return;
+  const updated = { ...match, [key]: zone };
+  if (updated.shooterPick !== null && updated.keeperPick !== null) {
+    resolveKick(updated);
+  }
+  if (updated.winnerId) {
+    const bracket = gs.bracket;
+    bracket.rounds[updated.bracketR][updated.bracketM].winner = updated.winnerId;
+    if (bracket.rounds[updated.bracketR + 1]) {
+      const next = bracket.rounds[updated.bracketR + 1][Math.floor(updated.bracketM / 2)];
+      if (updated.bracketM % 2 === 0) next.p1 = updated.winnerId;
+      else next.p2 = updated.winnerId;
+    }
+    await updateRoom({ status: "bracket", game_state: { bracket, match: null } });
+  } else {
+    await updateRoom({ game_state: { ...gs, match: updated } });
+  }
+}
+
+function computeBracketPlacements(rounds) {
+  const totalRounds = rounds.length;
+  const placements = {};
+  rounds.forEach((round, r) => {
+    round.forEach((match) => {
+      [match.p1, match.p2].forEach((pid) => {
+        if (!pid) return;
+        if (match.winner === pid) {
+          if (r === totalRounds - 1) placements[pid] = totalRounds; // champion
+        } else {
+          placements[pid] = r; // eliminated here
+        }
+      });
+    });
+  });
+  return placements;
+}
+
+async function finishBracket() {
+  const rounds = room.game_state.bracket.rounds;
+  const totalRounds = rounds.length;
+  const placements = computeBracketPlacements(rounds);
+  const inserts = Object.entries(placements).map(([playerId, w]) => ({
+    room_code: room.code,
+    player_id: playerId,
+    game_index: 3,
+    round_index: 0,
+    points: Math.round(100 / Math.pow(2, totalRounds - w)),
+  }));
+  if (inserts.length) await sb.from("scores").insert(inserts);
+  await updateRoom({ status: "final-leaderboard" });
+}
+
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
   clearTimeout(local.trivia.timer);
@@ -408,6 +578,7 @@ async function devJump(status) {
   let game_state = {};
   if (status === "trivia") game_state = { order: randomTriviaOrder(), qIndex: 0 };
   if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
+  if (status === "bracket") game_state = { bracket: { rounds: generateBracket(players.map((p) => p.id)) } };
   await updateRoom({ status, game_state });
 }
 
@@ -444,7 +615,16 @@ function render() {
       html += renderGuess();
       break;
     case "leaderboard":
-      html += renderLeaderboard("the quiz", "reveal", "🏆 Reveal Draft Order!");
+      html += renderLeaderboard("the quiz", "start-bracket", "⚽ Start Penalty Shootout!");
+      break;
+    case "bracket":
+      html += renderBracket();
+      break;
+    case "shootout":
+      html += renderShootout();
+      break;
+    case "final-leaderboard":
+      html += renderLeaderboard("the shootout", "reveal", "🏆 Reveal Draft Order!");
       break;
     case "reveal":
       html += renderReveal();
@@ -481,6 +661,8 @@ function renderDevBar() {
     ["trivia", "Trivia"],
     ["guess", "Guess"],
     ["leaderboard", "Leaderboard"],
+    ["bracket", "Bracket"],
+    ["final-leaderboard", "Final LB"],
     ["reveal", "Reveal"],
   ];
   return `
@@ -499,7 +681,7 @@ function renderHome() {
   return `
     <div class="card hero">
       <h1>🏆 Fantasy League Bugaloo</h1>
-      <p class="sub">Answer some football trivia. Top score goes first in the draft.</p>
+      <p class="sub">Trivia, guesswork, and penalty kicks — three rounds to decide who drafts first.</p>
       ${local.error ? `<p class="error">${escapeHtml(local.error)}</p>` : ""}
       <label class="field">
         <span>Your name</span>
@@ -528,6 +710,7 @@ function renderDevQuickStart() {
       <div class="dev-grid">
         <button class="dev-btn" data-action="dev-quickstart" data-status="trivia">🧠 Trivia Blitz</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="guess">🕵️ Guess the Footballer</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="bracket">⚽ Shootout Bracket</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="reveal">🏆 Reveal</button>
       </div>
     </div>`;
@@ -645,6 +828,91 @@ function renderGuess() {
             </div>`
           : ""
       }
+    </div>`;
+}
+
+function renderBracket() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  const bracket = room.game_state.bracket;
+  const nameOf = (id) => (id ? players.find((p) => p.id === id)?.name || "?" : null);
+  const next = findNextMatch(bracket.rounds);
+  const totalRounds = bracket.rounds.length;
+  return `
+    <div class="card">
+      <h2>⚽ Penalty Shootout Bracket</h2>
+      ${bracket.rounds
+        .map(
+          (round, r) => `
+        <h3>${roundName(r, totalRounds)}</h3>
+        <ul class="bracket-round">
+          ${round
+            .map((match) => {
+              const p1Name = nameOf(match.p1);
+              const p2Name = nameOf(match.p2);
+              return `<li class="${match.winner ? "decided" : ""}">
+                <span class="${match.winner && match.winner === match.p1 ? "winner" : ""}">${p1Name ? escapeHtml(p1Name) : "TBD"}</span>
+                <span class="vs">vs</span>
+                <span class="${match.winner && match.winner === match.p2 ? "winner" : ""}">${p2Name ? escapeHtml(p2Name) : "BYE"}</span>
+              </li>`;
+            })
+            .join("")}
+        </ul>`
+        )
+        .join("")}
+      ${
+        isHost
+          ? next
+            ? `<button class="btn primary" data-action="start-match" data-r="${next.r}" data-m="${next.m}">▶️ ${escapeHtml(nameOf(bracket.rounds[next.r][next.m].p1))} vs ${escapeHtml(nameOf(bracket.rounds[next.r][next.m].p2))}</button>`
+            : `<button class="btn primary" data-action="finish-bracket">🏆 Show final leaderboard</button>`
+          : `<p class="waiting">Waiting for host…</p>`
+      }
+    </div>`;
+}
+
+const ZONES = ["TL", "TC", "TR", "BL", "BC", "BR"];
+const ZONE_LABEL = { TL: "↖ Top Left", TC: "⬆ Top Center", TR: "↗ Top Right", BL: "↙ Bottom Left", BC: "⬇ Bottom Center", BR: "↘ Bottom Right" };
+
+function renderShootout() {
+  const me = myPlayer();
+  const match = room.game_state.match;
+  const nameOf = (id) => players.find((p) => p.id === id)?.name || "?";
+  const shooterId = match.turn === "p1" ? match.p1 : match.p2;
+  const keeperId = match.turn === "p1" ? match.p2 : match.p1;
+  const iAmShooter = me?.id === shooterId;
+  const iAmKeeper = me?.id === keeperId;
+  const roundLabel = match.roundIndex >= 5 ? "Sudden death" : `Round ${match.roundIndex + 1} of 5`;
+  const lastKick = match.log[match.log.length - 1];
+
+  let actionArea;
+  if (iAmShooter && match.shooterPick === null) {
+    actionArea = `
+      <p class="sub">You're shooting! Pick your target:</p>
+      <div class="zone-grid">${ZONES.map((z) => `<button class="zone-btn" data-action="pick-shooter" data-zone="${z}">${ZONE_LABEL[z]}</button>`).join("")}</div>`;
+  } else if (iAmKeeper && match.keeperPick === null) {
+    actionArea = `
+      <p class="sub">You're in goal! Pick where to dive:</p>
+      <div class="zone-grid">${ZONES.map((z) => `<button class="zone-btn" data-action="pick-keeper" data-zone="${z}">${ZONE_LABEL[z]}</button>`).join("")}</div>`;
+  } else if (iAmShooter || iAmKeeper) {
+    actionArea = `<p class="waiting">Locked in — waiting on ${escapeHtml(iAmShooter ? nameOf(keeperId) : nameOf(shooterId))}…</p>`;
+  } else {
+    actionArea = `<p class="waiting">${escapeHtml(nameOf(shooterId))} is shooting, ${escapeHtml(nameOf(keeperId))} is in goal…</p>`;
+  }
+
+  return `
+    <div class="card">
+      <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
+      <p class="sub">${roundLabel}</p>
+      <div class="shootout-score">
+        <div><span>${escapeHtml(nameOf(match.p1))}</span><b>${match.score[match.p1] || 0}</b></div>
+        <div><span>${escapeHtml(nameOf(match.p2))}</span><b>${match.score[match.p2] || 0}</b></div>
+      </div>
+      ${
+        lastKick
+          ? `<p class="kick-result ${lastKick.scored ? "goal" : "save"}">${lastKick.scored ? "⚽ GOAL" : "🧤 SAVED"} — ${escapeHtml(nameOf(lastKick.shooter))} shot ${ZONE_LABEL[lastKick.shooterPick]}, ${escapeHtml(nameOf(lastKick.keeper))} dove ${ZONE_LABEL[lastKick.keeperPick]}</p>`
+          : ""
+      }
+      ${actionArea}
     </div>`;
 }
 

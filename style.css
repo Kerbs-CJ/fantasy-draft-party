@@ -261,6 +261,81 @@ code {
   border-radius: 6px;
 }
 
+.bracket-round {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bracket-round li {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  font-size: 14px;
+}
+.bracket-round li.decided { background: rgba(255,255,255,0.02); }
+.bracket-round .vs { color: var(--sub); font-size: 12px; }
+.bracket-round .winner { color: var(--accent2); font-weight: 700; }
+
+.shootout-score {
+  display: flex;
+  justify-content: space-around;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+.shootout-score div {
+  flex: 1;
+  text-align: center;
+  padding: 14px 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+}
+.shootout-score span {
+  display: block;
+  color: var(--sub);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.shootout-score b {
+  font-size: 32px;
+  color: var(--accent);
+}
+
+.kick-result {
+  text-align: center;
+  font-weight: 700;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+.kick-result.goal { background: rgba(6,214,160,0.18); color: var(--accent2); }
+.kick-result.save { background: rgba(239,71,111,0.18); color: var(--danger); }
+
+.zone-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+.zone-btn {
+  padding: 20px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.zone-btn:active { transform: scale(0.96); background: rgba(255,255,255,0.12); }
+
 /* dev-only testing affordances (?dev=1) */
 .dev-panel {
   margin-top: 16px;
