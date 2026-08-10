@@ -10,6 +10,7 @@ const BAR_TARGET_MIN = 30;
 const BAR_TARGET_MAX = 70;
 
 let sb = null; // supabase client
+let DEV_MODE = false; // ?dev=1 in the URL — shows solo game-testing shortcuts
 let session = loadSession(); // {roomCode, playerId, name, isHost}
 let room = null; // current row from `rooms`
 let players = []; // rows from `players`
@@ -34,6 +35,7 @@ function init() {
   const params = new URLSearchParams(location.search);
   const roomFromUrl = params.get("room");
   if (roomFromUrl) local.joinCodeInput = roomFromUrl.toUpperCase();
+  DEV_MODE = params.get("dev") === "1";
 
   if (
     !window.SUPABASE_URL ||
@@ -195,12 +197,18 @@ async function onClick(e) {
   if (action === "show-leaderboard3") return updateRoom({ status: "leaderboard3" });
   if (action === "reveal") return updateRoom({ status: "reveal" });
   if (action === "leave") return leaveRoom();
+  if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
+  if (action === "dev-jump") return devJump(btn.dataset.status);
 }
 
 // ── home / lobby ────────────────────────────────────────────
 async function createRoom() {
   const name = (document.getElementById("name-input")?.value || "").trim();
   if (!name) return setError("Enter your name first.");
+  await createRoomAs(name);
+}
+
+async function createRoomAs(name) {
   let code, existing;
   do {
     code = genRoomCode();
@@ -329,14 +337,17 @@ async function tapReaction() {
 }
 
 // ── game 2: trivia ─────────────────────────────────────────
-async function startTrivia() {
+function randomTriviaOrder() {
   const pool = window.TRIVIA_QUESTIONS.map((_, i) => i);
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  const order = pool.slice(0, TRIVIA_QUESTION_COUNT);
-  await updateRoom({ status: "game2", game_state: { order, qIndex: 0 } });
+  return pool.slice(0, TRIVIA_QUESTION_COUNT);
+}
+
+async function startTrivia() {
+  await updateRoom({ status: "game2", game_state: { order: randomTriviaOrder(), qIndex: 0 } });
 }
 
 function ensureTriviaTimer() {
@@ -385,9 +396,39 @@ async function triviaNext() {
 }
 
 // ── game 3: stop the bar ───────────────────────────────────
+function randomBarTarget() {
+  return BAR_TARGET_MIN + Math.random() * (BAR_TARGET_MAX - BAR_TARGET_MIN);
+}
+
 async function startBar() {
-  const target = BAR_TARGET_MIN + Math.random() * (BAR_TARGET_MAX - BAR_TARGET_MIN);
-  await updateRoom({ status: "game3", game_state: { phase: "playing", target } });
+  await updateRoom({ status: "game3", game_state: { phase: "playing", target: randomBarTarget() } });
+}
+
+// ── dev mode: solo-test any screen without a full lobby ────
+function resetLocalGameState() {
+  clearTimeout(local.reaction.timer);
+  clearTimeout(local.trivia.timer);
+  cancelAnimationFrame(local.bar.raf);
+  local.reaction = { phase: "idle", goAt: null, myPoints: null, myMs: null, timer: null };
+  local.trivia = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null };
+  local.bar = { phase: "idle", pos: 50, target: 50, raf: null, myPoints: null };
+  local.revealStarted = false;
+}
+
+async function devJump(status) {
+  resetLocalGameState();
+  let game_state = {};
+  if (status === "game2") game_state = { order: randomTriviaOrder(), qIndex: 0 };
+  if (status === "game3") game_state = { phase: "playing", target: randomBarTarget() };
+  await updateRoom({ status, game_state });
+}
+
+async function devQuickStart(status) {
+  if (!room) {
+    const name = (document.getElementById("name-input")?.value || "").trim() || "Dev Tester";
+    await createRoomAs(name);
+  }
+  await devJump(status);
 }
 
 function ensureBarLoop() {
@@ -489,6 +530,30 @@ function renderTopBar() {
     <div class="topbar">
       <span class="room-pill">Room <b>${code}</b></span>
       <button class="link-btn" data-action="leave">Leave</button>
+    </div>
+    ${DEV_MODE ? renderDevBar() : ""}`;
+}
+
+function renderDevBar() {
+  const stages = [
+    ["lobby", "Lobby"],
+    ["game1", "Game 1"],
+    ["leaderboard1", "LB 1"],
+    ["game2", "Game 2"],
+    ["leaderboard2", "LB 2"],
+    ["game3", "Game 3"],
+    ["leaderboard3", "LB 3"],
+    ["reveal", "Reveal"],
+  ];
+  return `
+    <div class="dev-bar">
+      <span class="dev-label">🔧 dev</span>
+      ${stages
+        .map(
+          ([status, label]) =>
+            `<button class="dev-chip${room?.status === status ? " active" : ""}" data-action="dev-jump" data-status="${status}">${label}</button>`
+        )
+        .join("")}
     </div>`;
 }
 
@@ -513,6 +578,21 @@ function renderHome() {
 
       <div class="divider">or</div>
       <button class="btn primary" data-action="create-room">Create a new room</button>
+    </div>
+    ${DEV_MODE ? renderDevQuickStart() : ""}`;
+}
+
+function renderDevQuickStart() {
+  return `
+    <div class="dev-panel">
+      <p class="dev-label">🔧 Dev preview — only visible with ?dev=1 in the URL</p>
+      <p class="sub">Jump straight into a game to test it solo. Creates a throwaway room if you don't have one open yet.</p>
+      <div class="dev-grid">
+        <button class="dev-btn" data-action="dev-quickstart" data-status="game1">⚡ Reaction Tap</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="game2">🧠 Trivia Blitz</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="game3">🎯 Stop-the-Bar</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="reveal">🏆 Reveal</button>
+      </div>
     </div>`;
 }
 
@@ -534,8 +614,8 @@ function renderLobby() {
 
       ${
         isHost
-          ? `<button class="btn primary" data-action="start-game1" ${players.length < 2 ? "disabled" : ""}>
-              ${players.length < 2 ? "Need at least 2 players" : "▶️ Start the party!"}
+          ? `<button class="btn primary" data-action="start-game1" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
+              ${players.length < 2 && !DEV_MODE ? "Need at least 2 players" : "▶️ Start the party!"}
             </button>`
           : `<p class="waiting">Waiting for the host to start…</p>`
       }
