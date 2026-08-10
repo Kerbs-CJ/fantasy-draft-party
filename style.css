@@ -147,6 +147,16 @@ input::placeholder { color: #6c9b83; }
   border-radius: 10px;
   margin-bottom: 6px;
 }
+.player-list.compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.player-list.compact li {
+  padding: 6px 10px;
+  margin-bottom: 0;
+  font-size: 13px;
+}
 .waiting { color: var(--sub); text-align: center; margin-top: 16px; }
 
 .question { font-size: 18px; font-weight: 600; margin: 8px 0 16px; }

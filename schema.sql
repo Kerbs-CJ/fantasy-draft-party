@@ -23,6 +23,7 @@ create table if not exists scores (
   room_code text not null references rooms(code) on delete cascade,
   player_id uuid not null references players(id) on delete cascade,
   game_index int not null,
+  round_index int, -- which question/round within the game (e.g. trivia question #, guess player #)
   points numeric not null default 0,
   created_at timestamptz not null default now()
 );

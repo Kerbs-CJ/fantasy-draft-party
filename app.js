@@ -4,7 +4,7 @@ const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 const TRIVIA_QUESTION_COUNT = 5;
 const TRIVIA_TIME_MS = 10000;
-const GUESS_PLAYER_COUNT = 4;
+const GUESS_PLAYER_COUNT = 10;
 const GUESS_CLUE_POINTS = [100, 80, 60, 40, 20]; // indexed by clueIndex (0 = only 1st clue shown)
 
 let sb = null; // supabase client
@@ -149,6 +149,13 @@ function totalsByPlayer() {
   return players
     .map((p) => ({ player: p, total: totals[p.id] || 0 }))
     .sort((a, b) => b.total - a.total);
+}
+function answeredPlayerIds(gameIndex, roundIndex) {
+  return new Set(
+    scores
+      .filter((s) => s.game_index === gameIndex && s.round_index === roundIndex)
+      .map((s) => s.player_id)
+  );
 }
 async function updateRoom(patch) {
   const { data } = await sb.from("rooms").update(patch).eq("code", room.code).select().maybeSingle();
@@ -327,7 +334,7 @@ async function submitTriviaAnswer(choice, qIndex) {
   const timeFraction = remaining / TRIVIA_TIME_MS;
   const points = correct ? Math.round(12 + 8 * timeFraction) : 0;
   render();
-  await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, points });
+  await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, round_index: qIndex, points });
 }
 
 async function triviaNext() {
@@ -373,7 +380,7 @@ async function guessAnswer(name) {
   local.guess.answeredPIndex = local.guess.pIndex;
   local.guess.myChoice = name;
   render();
-  await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 2, points });
+  await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 2, round_index: gs.pIndex, points });
 }
 
 async function guessNext() {
@@ -557,6 +564,7 @@ function renderTrivia() {
   const qIndex = gs.qIndex ?? 0;
   const question = window.TRIVIA_QUESTIONS[gs.order[qIndex]];
   const answered = local.trivia.answeredQIndex === qIndex;
+  const answeredIds = answeredPlayerIds(1, qIndex);
   return `
     <div class="card">
       <h2>🧠 Trivia Blitz</h2>
@@ -575,6 +583,10 @@ function renderTrivia() {
           .join("")}
       </div>
       ${answered ? `<p class="waiting">Answer locked in. ${isHost ? "" : "Waiting for host to continue…"}</p>` : ""}
+      <h3>Answered (${answeredIds.size}/${players.length})</h3>
+      <ul class="player-list compact">
+        ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+      </ul>
       ${isHost ? `<button class="btn primary" data-action="trivia-next">${qIndex + 1 >= gs.order.length ? "🕵️ Next: Guess the Footballer" : "Next question"}</button>` : ""}
     </div>`;
 }
@@ -590,6 +602,7 @@ function renderGuess() {
   const cluesShown = entry.clues.slice(0, clueIndex + 1);
   const isLastClue = clueIndex >= entry.clues.length - 1;
   const isLastPlayer = pIndex + 1 >= gs.order.length;
+  const answeredIds = answeredPlayerIds(2, pIndex);
   return `
     <div class="card">
       <h2>🕵️ Guess the Footballer</h2>
@@ -610,6 +623,10 @@ function renderGuess() {
           .join("")}
       </div>
       ${answered ? `<p class="waiting">Guess locked in. ${isHost ? "" : "Waiting for host to continue…"}</p>` : ""}
+      <h3>Guessed (${answeredIds.size}/${players.length})</h3>
+      <ul class="player-list compact">
+        ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+      </ul>
       ${
         isHost
           ? `<div class="guess-host-controls">
