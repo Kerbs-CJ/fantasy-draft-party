@@ -159,6 +159,16 @@ input::placeholder { color: #6c9b83; }
 }
 .waiting { color: var(--sub); text-align: center; margin-top: 16px; }
 
+.lock-msg {
+  text-align: center;
+  font-weight: 700;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 0 0 12px;
+}
+.lock-correct { background: rgba(6,214,160,0.18); color: var(--accent2); }
+.lock-wrong { background: rgba(239,71,111,0.18); color: var(--danger); }
+
 .question { font-size: 18px; font-weight: 600; margin: 8px 0 16px; }
 .choices { display: grid; gap: 10px; }
 .choice {

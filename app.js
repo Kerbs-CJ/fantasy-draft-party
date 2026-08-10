@@ -22,7 +22,7 @@ let local = {
   nameInput: "",
   error: "",
   trivia: { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null },
-  guess: { pIndex: null, answeredPIndex: null, myChoice: null, choices: null },
+  guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
 };
 
@@ -311,6 +311,7 @@ function ensureGuessReady() {
   if (local.guess.pIndex !== gs.pIndex) {
     local.guess.pIndex = gs.pIndex;
     local.guess.answeredPIndex = null;
+    local.guess.answeredClueIndex = null;
     local.guess.myChoice = null;
     const entry = window.GUESS_PLAYERS[gs.order[gs.pIndex]];
     local.guess.choices = shuffle([entry.name, ...entry.decoys]);
@@ -378,6 +379,7 @@ async function guessAnswer(name) {
   const correct = name === entry.name;
   const points = correct ? GUESS_CLUE_POINTS[gs.clueIndex] : 0;
   local.guess.answeredPIndex = local.guess.pIndex;
+  local.guess.answeredClueIndex = gs.clueIndex;
   local.guess.myChoice = name;
   render();
   await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 2, round_index: gs.pIndex, points });
@@ -397,7 +399,7 @@ async function guessNext() {
 function resetLocalGameState() {
   clearTimeout(local.trivia.timer);
   local.trivia = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null };
-  local.guess = { pIndex: null, answeredPIndex: null, myChoice: null, choices: null };
+  local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
 }
 
@@ -599,6 +601,7 @@ function renderGuess() {
   const clueIndex = gs.clueIndex ?? 0;
   const entry = window.GUESS_PLAYERS[gs.order[pIndex]];
   const answered = local.guess.answeredPIndex === pIndex;
+  const myCorrect = answered && local.guess.myChoice === entry.name;
   const cluesShown = entry.clues.slice(0, clueIndex + 1);
   const isLastClue = clueIndex >= entry.clues.length - 1;
   const isLastPlayer = pIndex + 1 >= gs.order.length;
@@ -622,7 +625,14 @@ function renderGuess() {
           })
           .join("")}
       </div>
-      ${answered ? `<p class="waiting">Guess locked in. ${isHost ? "" : "Waiting for host to continue…"}</p>` : ""}
+      ${
+        answered
+          ? myCorrect
+            ? `<p class="lock-msg lock-correct">🔒 Locked in — correct! ${GUESS_CLUE_POINTS[local.guess.answeredClueIndex]} points.</p>`
+            : `<p class="lock-msg lock-wrong">🥶 Wrong — you're frozen out for this one. 0 points.</p>`
+          : ""
+      }
+      ${answered && !isHost ? `<p class="waiting">Waiting for host to continue…</p>` : ""}
       <h3>Guessed (${answeredIds.size}/${players.length})</h3>
       <ul class="player-list compact">
         ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
