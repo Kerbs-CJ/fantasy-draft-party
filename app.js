@@ -186,7 +186,8 @@ async function onClick(e) {
   if (action === "guess-reveal-clue") return guessRevealClue();
   if (action === "guess-answer") return guessAnswer(btn.dataset.name);
   if (action === "guess-next") return guessNext();
-  if (action === "start-bracket") return startBracket();
+  if (action === "show-shootout-intro") return updateRoom({ status: "shootout-intro" });
+  if (action === "create-tournament") return startBracket();
   if (action === "start-match") return startMatch(Number(btn.dataset.r), Number(btn.dataset.m));
   if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
   if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
@@ -746,7 +747,10 @@ function render() {
       html += renderGuess();
       break;
     case "leaderboard":
-      html += renderLeaderboard("the quiz", "start-bracket", "⚽ Start Penalty Shootout!");
+      html += renderLeaderboard("the quiz", "show-shootout-intro", "⚽ Continue to Penalty Shootout →");
+      break;
+    case "shootout-intro":
+      html += renderShootoutIntro();
       break;
     case "bracket":
       html += renderBracket();
@@ -794,6 +798,7 @@ function renderDevBar() {
     ["trivia", "Trivia"],
     ["guess", "Guess"],
     ["leaderboard", "Leaderboard"],
+    ["shootout-intro", "PK Intro"],
     ["bracket", "Bracket"],
     ["final-leaderboard", "Final LB"],
     ["reveal", "Reveal"],
@@ -960,6 +965,25 @@ function renderGuess() {
               <button class="btn primary" data-action="guess-next">${isLastPlayer ? "Show leaderboard" : "Next player"}</button>
             </div>`
           : ""
+      }
+    </div>`;
+}
+
+function renderShootoutIntro() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  return `
+    <div class="card">
+      <h2>⚽ Penalty Shootout</h2>
+      <p class="sub">The final round. A single-elimination bracket — winners play winners — decides the last bit of draft order. Each match is a best-of-5 shootout: shooter picks Left, Center, or Right, keeper picks a dive at the same time, blind. Still level after 5? Sudden death, one kick each, until someone blinks.</p>
+      <h3>Players (${players.length})</h3>
+      <ul class="player-list">
+        ${players.map((p) => `<li>${escapeHtml(p.name)}</li>`).join("")}
+      </ul>
+      ${
+        isHost
+          ? `<button class="btn primary" data-action="create-tournament" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>🏆 Create Tournament</button>`
+          : `<p class="waiting">Waiting for host to create the tournament…</p>`
       }
     </div>`;
 }

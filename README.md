@@ -51,7 +51,8 @@ it updates automatically within a minute or two.
 4. Trivia Blitz plays first (5 random hard questions), then Guess the
    Footballer (host reveals clues one at a time per round; guessing on
    fewer clues scores more), with a leaderboard at the end of each.
-5. Host clicks **Start Penalty Shootout** — a single-elimination bracket is
+5. Host clicks through to the shootout intro screen (players + a quick
+   explainer), then **Create Tournament** — a single-elimination bracket is
    drawn (byes auto-fill if the group isn't a power of 2). Host starts each
    match one at a time; the two players in it pick shot/dive zones blind and
    simultaneous, best-of-5 then sudden death. Everyone else spectates live.
