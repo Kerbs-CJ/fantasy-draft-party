@@ -1,9 +1,10 @@
 # 🏆 Fantasy Draft Party
 
 A tiny live multiplayer web app for deciding your fantasy football draft order.
-Everyone joins a room from their own phone, plays three quick mini-games
-(Reaction Tap, Football Trivia Blitz, Stop-the-Bar), and the final leaderboard
-becomes the draft order — with a dramatic reveal at the end.
+Everyone joins a room from their own phone, plays a two-part quiz
+(hard football Trivia Blitz, then Guess the Footballer from progressive
+clues), and the final leaderboard becomes the draft order — with a dramatic
+reveal at the end.
 
 No app install needed — it's just a web page. It's a plain static site (no
 build step, no server to maintain) that uses [Supabase](https://supabase.com)
@@ -47,18 +48,30 @@ it updates automatically within a minute or two.
    shares the 4-letter code (or the "Copy invite link" button) with the group.
 2. Everyone else opens the link, types their name, and joins.
 3. Host clicks **Start the party!** when everyone's in.
-4. Three mini-games play out, with a live leaderboard between each.
-5. Host clicks **Reveal Draft Order!** at the end for the big reveal.
+4. Trivia Blitz plays first (5 random hard questions), then Guess the
+   Footballer (host reveals clues one at a time per round; guessing on
+   fewer clues scores more), with a leaderboard at the end.
+5. Host clicks **Reveal Draft Order!** for the big reveal.
+
+**Staying anonymous as host:** the shared player list no longer shows who's
+hosting — the crown only appears on the host's own screen, never on other
+players'. Join with any display name you like (there's no login/identity
+check at all) if you also want your name itself to not give you away.
 
 Notes:
 - Works best with everyone's phone screen brightness up and a decent wifi/data connection.
-- Reaction Tap timing depends a little on each phone's network latency —
-  it's meant to be fun and fast, not esports-grade fair.
-- Trivia answers are graded client-side (correctness lives in `trivia.js`,
-  which ships to every browser) — fine for a friendly league, not
-  tamper-proof against someone digging through devtools.
+- Trivia and Guess-the-Footballer answers are graded client-side (the
+  question bank and correct answers live in `trivia.js`, which ships to
+  every browser) — fine for a friendly league, not tamper-proof against
+  someone digging through devtools.
 - Room codes are a light gate, not real security — anyone with the link and
   code can join. Don't put sensitive info in it.
+
+## Backlog / future ideas
+
+- **1v1 head-to-head mini-game** (e.g. a simple WASD-controlled volleyball-
+  style game), run as a single-elimination bracket — winners play winners —
+  as another section of the draft party. Not started yet.
 
 ## Local development
 

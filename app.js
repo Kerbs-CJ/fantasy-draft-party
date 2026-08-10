@@ -4,6 +4,8 @@ const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 const TRIVIA_QUESTION_COUNT = 5;
 const TRIVIA_TIME_MS = 10000;
+const GUESS_PLAYER_COUNT = 4;
+const GUESS_CLUE_POINTS = [100, 80, 60, 40, 20]; // indexed by clueIndex (0 = only 1st clue shown)
 
 let sb = null; // supabase client
 let DEV_MODE = false; // ?dev=1 in the URL — shows solo game-testing shortcuts
@@ -20,6 +22,7 @@ let local = {
   nameInput: "",
   error: "",
   trivia: { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null },
+  guess: { pIndex: null, answeredPIndex: null, myChoice: null, choices: null },
   revealStarted: false,
 };
 
@@ -170,6 +173,9 @@ async function onClick(e) {
   if (action === "start-trivia") return startTrivia();
   if (action === "trivia-answer") return answerTrivia(Number(btn.dataset.choice));
   if (action === "trivia-next") return triviaNext();
+  if (action === "guess-reveal-clue") return guessRevealClue();
+  if (action === "guess-answer") return guessAnswer(btn.dataset.name);
+  if (action === "guess-next") return guessNext();
   if (action === "reveal") return updateRoom({ status: "reveal" });
   if (action === "leave") return leaveRoom();
   if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
@@ -292,6 +298,18 @@ function ensureTriviaTimer() {
   }
 }
 
+function ensureGuessReady() {
+  const gs = room.game_state || {};
+  if (gs.pIndex === undefined) return;
+  if (local.guess.pIndex !== gs.pIndex) {
+    local.guess.pIndex = gs.pIndex;
+    local.guess.answeredPIndex = null;
+    local.guess.myChoice = null;
+    const entry = window.GUESS_PLAYERS[gs.order[gs.pIndex]];
+    local.guess.choices = shuffle([entry.name, ...entry.decoys]);
+  }
+}
+
 async function answerTrivia(choice) {
   if (local.trivia.answeredQIndex === local.trivia.qIndex) return;
   await submitTriviaAnswer(choice, local.trivia.qIndex);
@@ -316,9 +334,55 @@ async function triviaNext() {
   const gs = room.game_state || {};
   const next = gs.qIndex + 1;
   if (next >= gs.order.length) {
-    await updateRoom({ status: "leaderboard" });
+    await updateRoom({ status: "guess", game_state: { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 } });
   } else {
     await updateRoom({ game_state: { ...gs, qIndex: next } });
+  }
+}
+
+// ── guess the footballer ────────────────────────────────────
+function shuffle(arr) {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function randomGuessOrder() {
+  const pool = window.GUESS_PLAYERS.map((_, i) => i);
+  return shuffle(pool).slice(0, GUESS_PLAYER_COUNT);
+}
+
+async function guessRevealClue() {
+  const gs = room.game_state || {};
+  const entry = window.GUESS_PLAYERS[gs.order[gs.pIndex]];
+  const next = Math.min(entry.clues.length - 1, gs.clueIndex + 1);
+  await updateRoom({ game_state: { ...gs, clueIndex: next } });
+}
+
+async function guessAnswer(name) {
+  if (local.guess.answeredPIndex === local.guess.pIndex) return;
+  const me = myPlayer();
+  if (!me) return;
+  const gs = room.game_state || {};
+  const entry = window.GUESS_PLAYERS[gs.order[gs.pIndex]];
+  const correct = name === entry.name;
+  const points = correct ? GUESS_CLUE_POINTS[gs.clueIndex] : 0;
+  local.guess.answeredPIndex = local.guess.pIndex;
+  local.guess.myChoice = name;
+  render();
+  await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 2, points });
+}
+
+async function guessNext() {
+  const gs = room.game_state || {};
+  const next = gs.pIndex + 1;
+  if (next >= gs.order.length) {
+    await updateRoom({ status: "leaderboard" });
+  } else {
+    await updateRoom({ game_state: { ...gs, pIndex: next, clueIndex: 0 } });
   }
 }
 
@@ -326,6 +390,7 @@ async function triviaNext() {
 function resetLocalGameState() {
   clearTimeout(local.trivia.timer);
   local.trivia = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null };
+  local.guess = { pIndex: null, answeredPIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
 }
 
@@ -333,6 +398,7 @@ async function devJump(status) {
   resetLocalGameState();
   let game_state = {};
   if (status === "trivia") game_state = { order: randomTriviaOrder(), qIndex: 0 };
+  if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
   await updateRoom({ status, game_state });
 }
 
@@ -364,8 +430,12 @@ function render() {
       ensureTriviaTimer();
       html += renderTrivia();
       break;
+    case "guess":
+      ensureGuessReady();
+      html += renderGuess();
+      break;
     case "leaderboard":
-      html += renderLeaderboard("Trivia Blitz", "reveal", "🏆 Reveal Draft Order!");
+      html += renderLeaderboard("the quiz", "reveal", "🏆 Reveal Draft Order!");
       break;
     case "reveal":
       html += renderReveal();
@@ -400,6 +470,7 @@ function renderDevBar() {
   const stages = [
     ["lobby", "Lobby"],
     ["trivia", "Trivia"],
+    ["guess", "Guess"],
     ["leaderboard", "Leaderboard"],
     ["reveal", "Reveal"],
   ];
@@ -447,6 +518,7 @@ function renderDevQuickStart() {
       <p class="sub">Jump straight into a game to test it solo. Creates a throwaway room if you don't have one open yet.</p>
       <div class="dev-grid">
         <button class="dev-btn" data-action="dev-quickstart" data-status="trivia">🧠 Trivia Blitz</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="guess">🕵️ Guess the Footballer</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="reveal">🏆 Reveal</button>
       </div>
     </div>`;
@@ -465,7 +537,7 @@ function renderLobby() {
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
-        ${players.map((p) => `<li>${p.is_host ? "👑 " : ""}${escapeHtml(p.name)}</li>`).join("")}
+        ${players.map((p) => `<li>${p.id === me?.id && p.is_host ? "👑 " : ""}${escapeHtml(p.name)}</li>`).join("")}
       </ul>
 
       ${
@@ -503,7 +575,49 @@ function renderTrivia() {
           .join("")}
       </div>
       ${answered ? `<p class="waiting">Answer locked in. ${isHost ? "" : "Waiting for host to continue…"}</p>` : ""}
-      ${isHost ? `<button class="btn primary" data-action="trivia-next">${qIndex + 1 >= gs.order.length ? "Show leaderboard" : "Next question"}</button>` : ""}
+      ${isHost ? `<button class="btn primary" data-action="trivia-next">${qIndex + 1 >= gs.order.length ? "🕵️ Next: Guess the Footballer" : "Next question"}</button>` : ""}
+    </div>`;
+}
+
+function renderGuess() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  const gs = room.game_state || {};
+  const pIndex = gs.pIndex ?? 0;
+  const clueIndex = gs.clueIndex ?? 0;
+  const entry = window.GUESS_PLAYERS[gs.order[pIndex]];
+  const answered = local.guess.answeredPIndex === pIndex;
+  const cluesShown = entry.clues.slice(0, clueIndex + 1);
+  const isLastClue = clueIndex >= entry.clues.length - 1;
+  const isLastPlayer = pIndex + 1 >= gs.order.length;
+  return `
+    <div class="card">
+      <h2>🕵️ Guess the Footballer</h2>
+      <p class="sub">Player ${pIndex + 1} of ${gs.order.length} — guess earlier for more points</p>
+      <ol class="clue-list">
+        ${cluesShown.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}
+      </ol>
+      <div class="choices">
+        ${local.guess.choices
+          .map((name) => {
+            let cls = "choice";
+            if (answered) {
+              if (name === entry.name) cls += " correct";
+              else if (name === local.guess.myChoice) cls += " wrong";
+            }
+            return `<button class="${cls}" data-action="guess-answer" data-name="${escapeHtml(name)}" ${answered ? "disabled" : ""}>${escapeHtml(name)}</button>`;
+          })
+          .join("")}
+      </div>
+      ${answered ? `<p class="waiting">Guess locked in. ${isHost ? "" : "Waiting for host to continue…"}</p>` : ""}
+      ${
+        isHost
+          ? `<div class="guess-host-controls">
+              ${!isLastClue ? `<button class="btn" data-action="guess-reveal-clue">Reveal next clue</button>` : ""}
+              <button class="btn primary" data-action="guess-next">${isLastPlayer ? "Show leaderboard" : "Next player"}</button>
+            </div>`
+          : ""
+      }
     </div>`;
 }
 
