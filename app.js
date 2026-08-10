@@ -6,6 +6,7 @@ const TRIVIA_QUESTION_COUNT = 5;
 const TRIVIA_TIME_MS = 10000;
 const GUESS_PLAYER_COUNT = 7;
 const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
+const DEV_BOT_NAME = "🤖 Dev Bot";
 
 let sb = null; // supabase client
 let DEV_MODE = false; // ?dev=1 in the URL — shows solo game-testing shortcuts
@@ -24,6 +25,7 @@ let local = {
   trivia: { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null },
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
+  botScheduledFor: null,
 };
 
 init();
@@ -571,6 +573,14 @@ function resetLocalGameState() {
   local.trivia = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null };
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
+  local.botScheduledFor = null;
+}
+
+async function ensureDevBotIfNeeded() {
+  if (players.length >= 2) return;
+  if (players.find((p) => p.name === DEV_BOT_NAME)) return;
+  await sb.from("players").insert({ id: crypto.randomUUID(), room_code: room.code, name: DEV_BOT_NAME, is_host: false });
+  await loadPlayers();
 }
 
 async function devJump(status) {
@@ -578,8 +588,34 @@ async function devJump(status) {
   let game_state = {};
   if (status === "trivia") game_state = { order: randomTriviaOrder(), qIndex: 0 };
   if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
-  if (status === "bracket") game_state = { bracket: { rounds: generateBracket(players.map((p) => p.id)) } };
+  if (status === "bracket") {
+    await ensureDevBotIfNeeded();
+    game_state = { bracket: { rounds: generateBracket(players.map((p) => p.id)) } };
+  }
   await updateRoom({ status, game_state });
+}
+
+// While solo-testing a shootout in dev mode, auto-play the bot's turn a
+// beat after it comes up, so a lone developer can play a full match.
+function ensureBotAutoPick() {
+  if (!DEV_MODE) return;
+  const match = room.game_state?.match;
+  if (!match) return;
+  const bot = players.find((p) => p.name === DEV_BOT_NAME);
+  if (!bot) return;
+  const shooterId = match.turn === "p1" ? match.p1 : match.p2;
+  const keeperId = match.turn === "p1" ? match.p2 : match.p1;
+  let role = null;
+  if (shooterId === bot.id && match.shooterPick === null) role = "shooter";
+  else if (keeperId === bot.id && match.keeperPick === null) role = "keeper";
+  if (!role) return;
+  const pickKey = `${match.roundIndex}-${match.turn}-${role}`;
+  if (local.botScheduledFor === pickKey) return;
+  local.botScheduledFor = pickKey;
+  setTimeout(() => {
+    const zone = ZONES[Math.floor(Math.random() * ZONES.length)];
+    submitPick(role, zone);
+  }, 500 + Math.random() * 900);
 }
 
 async function devQuickStart(status) {
@@ -621,6 +657,7 @@ function render() {
       html += renderBracket();
       break;
     case "shootout":
+      ensureBotAutoPick();
       html += renderShootout();
       break;
     case "final-leaderboard":
