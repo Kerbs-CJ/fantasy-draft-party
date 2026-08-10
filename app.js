@@ -26,6 +26,7 @@ let local = {
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
   botScheduledFor: null,
+  shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null },
 };
 
 init();
@@ -574,6 +575,7 @@ function resetLocalGameState() {
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
   local.botScheduledFor = null;
+  local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null };
 }
 
 async function ensureDevBotIfNeeded() {
@@ -593,6 +595,66 @@ async function devJump(status) {
     game_state = { bracket: { rounds: generateBracket(players.map((p) => p.id)) } };
   }
   await updateRoom({ status, game_state });
+}
+
+// Plays a short animated replay whenever a new kick lands in match.log —
+// every connected client (both players and spectators) detects the same
+// new log entry via the realtime subscription and plays the same replay
+// independently, so the room shares roughly the same moment without
+// needing any extra server-side orchestration.
+const SHOOTOUT_KICK_MS = 750;
+const SHOOTOUT_RESULT_MS = 1300;
+
+function ensureShootoutAnim() {
+  const match = room.game_state?.match;
+  if (!match) return;
+  const matchKey = `${match.p1}-${match.p2}-${match.bracketR}-${match.bracketM}`;
+  if (local.shootoutAnim.matchKey !== matchKey) {
+    local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null };
+  }
+  if (match.log.length > local.shootoutAnim.lastLogLength && !local.shootoutAnim.phase) {
+    local.shootoutAnim.lastLogLength = match.log.length;
+    local.shootoutAnim.entry = match.log[match.log.length - 1];
+    local.shootoutAnim.phase = "kicking";
+    setTimeout(() => {
+      local.shootoutAnim.phase = "result";
+      render();
+      setTimeout(() => {
+        local.shootoutAnim.phase = null;
+        render();
+      }, SHOOTOUT_RESULT_MS);
+    }, SHOOTOUT_KICK_MS);
+  }
+}
+
+function triggerShotAnimation(entry) {
+  const ball = document.getElementById("pk-ball");
+  const keeper = document.getElementById("pk-keeper");
+  if (!ball || !keeper) return;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const shooterPos = ZONE_POS[entry.shooterPick];
+      const keeperPos = ZONE_POS[entry.keeperPick];
+      ball.style.left = shooterPos.x + "%";
+      ball.style.top = shooterPos.y + "%";
+      keeper.style.left = keeperPos.x + "%";
+      keeper.style.top = keeperPos.y + "%";
+    });
+  });
+}
+
+function renderPkGoal(entry, animate) {
+  const ballStart = { x: 50, y: 116 };
+  const keeperStart = { x: 50, y: 58 };
+  const ballPos = animate ? ballStart : ZONE_POS[entry.shooterPick];
+  const keeperPos = animate ? keeperStart : ZONE_POS[entry.keeperPick];
+  if (animate) setTimeout(() => triggerShotAnimation(entry), 30);
+  return `
+    <div class="pk-goal">
+      <div class="pk-goal-frame"></div>
+      <div id="pk-keeper" class="pk-keeper" style="left:${keeperPos.x}%; top:${keeperPos.y}%;">🧤</div>
+      <div id="pk-ball" class="pk-ball" style="left:${ballPos.x}%; top:${ballPos.y}%;">⚽</div>
+    </div>`;
 }
 
 // While solo-testing a shootout in dev mode, auto-play the bot's turn a
@@ -657,6 +719,7 @@ function render() {
       html += renderBracket();
       break;
     case "shootout":
+      ensureShootoutAnim();
       ensureBotAutoPick();
       html += renderShootout();
       break;
@@ -909,17 +972,47 @@ function renderBracket() {
 
 const ZONES = ["TL", "TC", "TR", "BL", "BC", "BR"];
 const ZONE_LABEL = { TL: "↖ Top Left", TC: "⬆ Top Center", TR: "↗ Top Right", BL: "↙ Bottom Left", BC: "⬇ Bottom Center", BR: "↘ Bottom Right" };
+const ZONE_POS = {
+  TL: { x: 22, y: 32 },
+  TC: { x: 50, y: 24 },
+  TR: { x: 78, y: 32 },
+  BL: { x: 22, y: 82 },
+  BC: { x: 50, y: 90 },
+  BR: { x: 78, y: 82 },
+};
 
 function renderShootout() {
   const me = myPlayer();
   const match = room.game_state.match;
   const nameOf = (id) => players.find((p) => p.id === id)?.name || "?";
+  const roundLabel = match.roundIndex >= 5 ? "Sudden death" : `Round ${match.roundIndex + 1} of 5`;
+  const anim = local.shootoutAnim;
+
+  // A kick just landed — play the animated replay instead of the normal
+  // controls, regardless of whose turn it already is underneath.
+  if (anim.phase) {
+    const entry = anim.entry;
+    return `
+      <div class="card">
+        <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
+        <p class="sub">${roundLabel}</p>
+        <div class="shootout-score">
+          <div><span>${escapeHtml(nameOf(match.p1))}</span><b>${match.score[match.p1] || 0}</b></div>
+          <div><span>${escapeHtml(nameOf(match.p2))}</span><b>${match.score[match.p2] || 0}</b></div>
+        </div>
+        ${renderPkGoal(entry, anim.phase === "kicking")}
+        ${
+          anim.phase === "result"
+            ? `<p class="kick-result ${entry.scored ? "goal" : "save"}">${entry.scored ? "⚽ GOAL!" : "🧤 SAVED!"} — ${escapeHtml(nameOf(entry.shooter))} shot ${ZONE_LABEL[entry.shooterPick]}, ${escapeHtml(nameOf(entry.keeper))} dove ${ZONE_LABEL[entry.keeperPick]}</p>`
+            : `<p class="sub" style="text-align:center">${escapeHtml(nameOf(entry.shooter))} steps up…</p>`
+        }
+      </div>`;
+  }
+
   const shooterId = match.turn === "p1" ? match.p1 : match.p2;
   const keeperId = match.turn === "p1" ? match.p2 : match.p1;
   const iAmShooter = me?.id === shooterId;
   const iAmKeeper = me?.id === keeperId;
-  const roundLabel = match.roundIndex >= 5 ? "Sudden death" : `Round ${match.roundIndex + 1} of 5`;
-  const lastKick = match.log[match.log.length - 1];
 
   let actionArea;
   if (iAmShooter && match.shooterPick === null) {
@@ -944,11 +1037,6 @@ function renderShootout() {
         <div><span>${escapeHtml(nameOf(match.p1))}</span><b>${match.score[match.p1] || 0}</b></div>
         <div><span>${escapeHtml(nameOf(match.p2))}</span><b>${match.score[match.p2] || 0}</b></div>
       </div>
-      ${
-        lastKick
-          ? `<p class="kick-result ${lastKick.scored ? "goal" : "save"}">${lastKick.scored ? "⚽ GOAL" : "🧤 SAVED"} — ${escapeHtml(nameOf(lastKick.shooter))} shot ${ZONE_LABEL[lastKick.shooterPick]}, ${escapeHtml(nameOf(lastKick.keeper))} dove ${ZONE_LABEL[lastKick.keeperPick]}</p>`
-          : ""
-      }
       ${actionArea}
     </div>`;
 }
