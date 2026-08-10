@@ -5,7 +5,7 @@ const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 const TRIVIA_QUESTION_COUNT = 5;
 const TRIVIA_TIME_MS = 10000;
 const GUESS_PLAYER_COUNT = 7;
-const GUESS_CLUE_POINTS = [100, 80, 60, 40, 20]; // indexed by clueIndex (0 = only 1st clue shown)
+const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
 
 let sb = null; // supabase client
 let DEV_MODE = false; // ?dev=1 in the URL — shows solo game-testing shortcuts
