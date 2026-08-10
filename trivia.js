@@ -230,7 +230,7 @@ window.GUESS_PLAYERS = [
     name: "Marco van Basten",
     clues: [
       "His career was cut short in his late 20s by chronic ankle injuries.",
-      "Starred for AC Milan alongside fellow Dutchmen Frank Rijkaard and Ruud Gullit.",
+      "Formed a fearsome AC Milan strikeforce alongside two other Dutch internationals, Ruud Gullit and Frank Rijkaard — only one of whom shared his three Ballon d'Or wins.",
       "Won the Ballon d'Or three times, in 1988, 1989, and 1992.",
       "Part of the Dutch side, captained by Ruud Gullit, that won the Netherlands' only major trophy at Euro 1988.",
       "Scored a famous volleyed goal from an almost impossible angle in that tournament's final in 1988.",
@@ -263,7 +263,7 @@ window.GUESS_PLAYERS = [
     name: "Ferenc Puskás",
     clues: [
       "Scored 84 goals in just 85 appearances for Hungary, one of the best goals-per-game ratios in international football history.",
-      "Star forward of Hungary's 'Mighty Magyars', who inflicted England's first-ever home defeat to opposition from outside the British Isles in 1953.",
+      "Scored a famous drag-back to leave an England defender for dead during Hungary's 6-3 win at Wembley in 1953, still cited as one of the great individual moments in the sport's history.",
       "Fled Hungary after the 1956 revolution and eventually joined Real Madrid.",
       "Formed a devastating attacking partnership with Alfredo Di Stéfano at Real Madrid.",
       "FIFA later named an award for the best goal of the year after him.",
@@ -285,7 +285,7 @@ window.GUESS_PLAYERS = [
     name: "Andrés Iniesta",
     clues: [
       "Made his senior Barcelona debut in 2002 after progressing through La Masia, the club's youth academy.",
-      "Formed one of the most celebrated central-midfield partnerships in history alongside a teammate with the same first initial.",
+      "Formed one of the most celebrated central-midfield partnerships in history, playing for over a decade alongside Barcelona and Spain teammate Xavi.",
       "Spent almost his entire senior career at Barcelona, admired for his elegant dribbling and vision.",
       "Won the World Cup (2010) and two European Championships (2008, 2012) with Spain's dominant 'tiki-taka' generation.",
       "Scored the extra-time winning goal in the 2010 World Cup final for Spain.",
@@ -427,10 +427,10 @@ window.GUESS_PLAYERS = [
   {
     name: "David Beckham",
     clues: [
-      "Won the treble — league, FA Cup, and Champions League — with Manchester United in 1999.",
       "Scored from inside his own half against Wimbledon in 1996, an early sign of his famous range of passing.",
       "Curled a famous last-minute free kick against Greece in 2001 to send England to the World Cup.",
       "Later moved to Real Madrid as part of their 'Galácticos' era, then to LA Galaxy to help popularize football in the United States.",
+      "Won the treble — league, FA Cup, and Champions League — with Manchester United in 1999.",
       "One of the most famous footballers in the world off the pitch as much as on it, known for his crossing and free-kick technique.",
     ],
     decoys: ["Steven Gerrard", "Ryan Giggs", "Paul Scholes", "Frank Lampard", "Luís Figo", "Robert Pirès"],
