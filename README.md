@@ -1,7 +1,7 @@
-# 🏆 Fantasy Draft Party
+# 🏆 Fantasy League Bugaloo — Draft Party
 
-A tiny live multiplayer web app for deciding your fantasy football draft order.
-Everyone joins a room from their own phone, plays a two-part quiz
+A tiny live multiplayer web app for deciding the Fantasy League Bugaloo draft
+order. Everyone joins a room from their own phone, plays a two-part quiz
 (hard football Trivia Blitz, then Guess the Footballer from progressive
 clues), and the final leaderboard becomes the draft order — with a dramatic
 reveal at the end.

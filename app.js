@@ -498,7 +498,7 @@ function renderDevBar() {
 function renderHome() {
   return `
     <div class="card hero">
-      <h1>🏆 Fantasy Draft Party</h1>
+      <h1>🏆 Fantasy League Bugaloo</h1>
       <p class="sub">Answer some football trivia. Top score goes first in the draft.</p>
       ${local.error ? `<p class="error">${escapeHtml(local.error)}</p>` : ""}
       <label class="field">
