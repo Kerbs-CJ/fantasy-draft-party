@@ -1105,7 +1105,6 @@ function renderShootoutIntro() {
       </ol>
 
       <h3>Points on offer</h3>
-      <p class="sub">Your final shootout placement adds points to the same combined leaderboard as Trivia Blitz and Guess the Footballer:</p>
       <div class="standings-wrap">
         <table class="standings-table">
           <thead><tr><th>Place</th><th>Points</th></tr></thead>
