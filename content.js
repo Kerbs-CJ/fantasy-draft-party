@@ -7,7 +7,7 @@
 // (simplified to one entry per club — return spells are collapsed into
 // their first stint so every club in the list is unique and unambiguous
 // as a "missing" answer). `missingIndex` is the club hidden from the
-// timeline; `decoys` are two plausible-but-wrong clubs — deliberately
+// timeline; `decoys` are four plausible-but-wrong clubs — deliberately
 // picked from the same league/country as the real answer so process of
 // elimination by "that league doesn't fit" doesn't give it away.
 //
@@ -22,79 +22,79 @@ window.MISSING_CLUB_PLAYERS = [
     name: "Zlatan Ibrahimović",
     clubs: ["Malmö FF", "Ajax", "Juventus", "Inter Milan", "Barcelona", "AC Milan", "Paris Saint-Germain", "Manchester United", "LA Galaxy"],
     missingIndex: 0,
-    decoys: ["IFK Göteborg", "Helsingborgs IF"],
+    decoys: ["IFK Göteborg", "Helsingborgs IF", "Djurgårdens IF", "AIK"],
   },
   {
     name: "David Beckham",
     clubs: ["Manchester United", "Real Madrid", "LA Galaxy", "AC Milan", "Paris Saint-Germain"],
     missingIndex: 3,
-    decoys: ["Fiorentina", "Napoli"],
+    decoys: ["Fiorentina", "Napoli", "Inter Milan", "Juventus"],
   },
   {
     name: "Thierry Henry",
     clubs: ["Monaco", "Juventus", "Arsenal", "Barcelona", "New York Red Bulls"],
     missingIndex: 1,
-    decoys: ["Parma", "Fiorentina"],
+    decoys: ["Parma", "Fiorentina", "AC Milan", "Napoli"],
   },
   {
     name: "Ronaldinho",
     clubs: ["Grêmio", "Paris Saint-Germain", "Barcelona", "AC Milan", "Flamengo"],
     missingIndex: 1,
-    decoys: ["AS Monaco", "Olympique Marseille"],
+    decoys: ["AS Monaco", "Olympique Marseille", "Olympique Lyonnais", "Lille"],
   },
   {
     name: "Didier Drogba",
     clubs: ["Le Mans", "Guingamp", "Marseille", "Chelsea", "Galatasaray"],
     missingIndex: 1,
-    decoys: ["Nantes", "Rennes"],
+    decoys: ["Nantes", "Rennes", "Lorient", "Bastia"],
   },
   {
     name: "Luis Suárez",
     clubs: ["Nacional", "Groningen", "Ajax", "Liverpool", "Barcelona", "Atlético Madrid", "Inter Miami"],
     missingIndex: 1,
-    decoys: ["Heerenveen", "Twente"],
+    decoys: ["Heerenveen", "Twente", "Utrecht", "AZ Alkmaar"],
   },
   {
     name: "Andrea Pirlo",
     clubs: ["Brescia", "Inter Milan", "AC Milan", "Juventus", "New York City FC"],
     missingIndex: 1,
-    decoys: ["Napoli", "Fiorentina"],
+    decoys: ["Napoli", "Fiorentina", "Roma", "Lazio"],
   },
   {
     name: "Xabi Alonso",
     clubs: ["Real Sociedad", "Liverpool", "Real Madrid", "Bayern Munich"],
     missingIndex: 0,
-    decoys: ["Athletic Bilbao", "Osasuna"],
+    decoys: ["Athletic Bilbao", "Osasuna", "Real Betis", "Real Valladolid"],
   },
   {
     name: "Ronaldo Nazário",
     clubs: ["Cruzeiro", "PSV Eindhoven", "Barcelona", "Inter Milan", "Real Madrid", "AC Milan", "Corinthians"],
     missingIndex: 1,
-    decoys: ["Feyenoord", "Ajax"],
+    decoys: ["Feyenoord", "Ajax", "Twente", "AZ Alkmaar"],
   },
   {
     name: "Kaká",
     clubs: ["São Paulo", "AC Milan", "Real Madrid", "Orlando City"],
     missingIndex: 0,
-    decoys: ["Palmeiras", "Corinthians"],
+    decoys: ["Palmeiras", "Corinthians", "Santos", "Flamengo"],
   },
   {
     name: "Samuel Eto'o",
     clubs: ["Real Madrid", "Mallorca", "Barcelona", "Inter Milan", "Chelsea"],
     missingIndex: 1,
-    decoys: ["Espanyol", "Valencia"],
+    decoys: ["Espanyol", "Valencia", "Real Sociedad", "Deportivo La Coruña"],
   },
   {
     name: "Clarence Seedorf",
     clubs: ["Ajax", "Sampdoria", "Real Madrid", "Inter Milan", "AC Milan", "Botafogo"],
     missingIndex: 1,
-    decoys: ["Parma", "Fiorentina"],
+    decoys: ["Parma", "Fiorentina", "Napoli", "Lazio"],
   },
   {
     name: "David Villa",
     clubs: ["Sporting Gijón", "Valencia", "Barcelona", "Atlético Madrid", "New York City FC"],
     missingIndex: 0,
-    decoys: ["Real Oviedo", "Racing Santander"],
+    decoys: ["Real Oviedo", "Racing Santander", "Celta Vigo", "Deportivo La Coruña"],
   },
 ];
 
