@@ -31,7 +31,7 @@ let local = {
   revealStarted: false,
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
-  shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false },
+  shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
 };
 
 init();
@@ -709,7 +709,7 @@ function resetLocalGameState() {
   local.revealStarted = false;
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
-  local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false };
+  local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
 }
 
 async function ensureDevBotIfNeeded() {
@@ -750,13 +750,14 @@ function ensureShootoutAnim() {
   if (!match) return;
   const matchKey = `${match.p1}-${match.p2}-${match.rrIndex}`;
   if (local.shootoutAnim.matchKey !== matchKey) {
-    local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false };
+    local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   }
   if (match.log.length > local.shootoutAnim.lastLogLength && !local.shootoutAnim.phase) {
     local.shootoutAnim.lastLogLength = match.log.length;
     local.shootoutAnim.entry = match.log[match.log.length - 1];
     local.shootoutAnim.phase = "kicking";
     local.shootoutAnim.kickAnimTriggered = false;
+    local.shootoutAnim.impactShown = false;
     setTimeout(() => {
       local.shootoutAnim.phase = "result";
       render();
@@ -769,27 +770,100 @@ function ensureShootoutAnim() {
   }
 }
 
+const PK_BALL_START = { x: 50, y: 122 };
+const PK_KEEPER_START = { x: 50, y: 66 };
+
+function prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+function easeOutQuad(t) {
+  return 1 - (1 - t) * (1 - t);
+}
+
+// Flies the ball along a quadratic bezier arc (instead of a straight CSS
+// slide) — a control point lifted above the midpoint gives it a proper
+// curved trajectory, plus a shrink (depth) and a full-blooded spin as it
+// travels. Driven by requestAnimationFrame rather than a CSS transition so
+// the curve and spin can be computed per-kick.
+function animateBallFlight(ball, start, end, durationMs) {
+  const control = { x: (start.x + end.x) / 2 + (Math.random() * 14 - 7), y: Math.min(start.y, end.y) - 36 };
+  const spinDeg = (Math.random() < 0.5 ? -1 : 1) * (600 + Math.random() * 260);
+  const t0 = performance.now();
+  function frame(now) {
+    const raw = Math.min(1, (now - t0) / durationMs);
+    const t = easeOutQuad(raw);
+    const u = 1 - t;
+    const x = u * u * start.x + 2 * u * t * control.x + t * t * end.x;
+    const y = u * u * start.y + 2 * u * t * control.y + t * t * end.y;
+    const scale = 1 - 0.3 * t;
+    ball.style.left = x + "%";
+    ball.style.top = y + "%";
+    ball.style.transform = `translate(-50%, -50%) scale(${scale}) rotate(${spinDeg * t}deg)`;
+    if (raw < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// The keeper dives in a straight line (real keepers don't arc), but leans
+// into the direction of the dive for a bit of weight — no lean for a
+// straight-down center save.
+function animateKeeperDive(keeper, start, end, durationMs) {
+  const dir = end.x - start.x;
+  const tiltMax = dir === 0 ? 0 : dir > 0 ? 24 : -24;
+  const t0 = performance.now();
+  function frame(now) {
+    const raw = Math.min(1, (now - t0) / durationMs);
+    const t = easeOutQuad(raw);
+    const x = start.x + (end.x - start.x) * t;
+    const y = start.y + (end.y - start.y) * t;
+    keeper.style.left = x + "%";
+    keeper.style.top = y + "%";
+    keeper.style.transform = `translate(-50%, -50%) rotate(${tiltMax * t}deg)`;
+    if (raw < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
 function triggerShotAnimation(entry) {
   const ball = document.getElementById("pk-ball");
   const keeper = document.getElementById("pk-keeper");
   if (!ball || !keeper) return;
+  const shooterPos = ZONE_POS[entry.shooterPick];
+  const keeperPos = ZONE_POS[entry.keeperPick];
+  if (prefersReducedMotion()) {
+    ball.style.left = shooterPos.x + "%";
+    ball.style.top = shooterPos.y + "%";
+    keeper.style.left = keeperPos.x + "%";
+    keeper.style.top = keeperPos.y + "%";
+    return;
+  }
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const shooterPos = ZONE_POS[entry.shooterPick];
-      const keeperPos = ZONE_POS[entry.keeperPick];
-      ball.style.left = shooterPos.x + "%";
-      ball.style.top = shooterPos.y + "%";
-      keeper.style.left = keeperPos.x + "%";
-      keeper.style.top = keeperPos.y + "%";
-    });
+    animateBallFlight(ball, PK_BALL_START, shooterPos, SHOOTOUT_KICK_MS);
+    animateKeeperDive(keeper, PK_KEEPER_START, keeperPos, SHOOTOUT_KICK_MS);
   });
 }
 
+// A smaller, quicker confetti burst than the big end-of-draft one — baked
+// straight into the render() output (rather than an imperative DOM append
+// like spawnConfetti) so it disappears for free the moment the next
+// render() replaces the DOM, no manual cleanup needed.
+function renderKickConfetti() {
+  if (prefersReducedMotion()) return "";
+  const colors = ["#ffd166", "#06d6a0", "#ef476f", "#118ab2", "#ffffff"];
+  let out = "";
+  for (let i = 0; i < 22; i++) {
+    const left = (Math.random() * 100).toFixed(1);
+    const bg = colors[Math.floor(Math.random() * colors.length)];
+    const delay = (Math.random() * 0.15).toFixed(2);
+    const dur = (1.1 + Math.random() * 0.7).toFixed(2);
+    out += `<div class="confetti" style="left:${left}vw;background:${bg};animation-delay:${delay}s;animation-duration:${dur}s;"></div>`;
+  }
+  return out;
+}
+
 function renderPkGoal(entry, animate) {
-  const ballStart = { x: 50, y: 116 };
-  const keeperStart = { x: 50, y: 58 };
-  const ballPos = animate ? ballStart : ZONE_POS[entry.shooterPick];
-  const keeperPos = animate ? keeperStart : ZONE_POS[entry.keeperPick];
+  const ballPos = animate ? PK_BALL_START : ZONE_POS[entry.shooterPick];
+  const keeperPos = animate ? PK_KEEPER_START : ZONE_POS[entry.keeperPick];
   if (animate) setTimeout(() => triggerShotAnimation(entry), 30);
   return `
     <div class="pk-goal">
@@ -1212,9 +1286,9 @@ function renderRoundRobin() {
 const ZONES = ["L", "C", "R"];
 const ZONE_LABEL = { L: "⬅ Left", C: "⬆ Center", R: "➡ Right" };
 const ZONE_POS = {
-  L: { x: 20, y: 55 },
-  C: { x: 50, y: 45 },
-  R: { x: 80, y: 55 },
+  L: { x: 20, y: 62 },
+  C: { x: 50, y: 54 },
+  R: { x: 80, y: 62 },
 };
 
 function renderPkScoreboard(match) {
@@ -1251,13 +1325,19 @@ function renderShootout() {
   // controls, regardless of whose turn it already is underneath.
   if (anim.phase) {
     const entry = anim.entry;
-    // Only actually kick off the CSS transition once per kick — a redundant
-    // re-render mid-flight (e.g. the realtime echo of our own DB write
-    // landing a beat later) must not replay it from the start position.
+    // Only actually kick off the flight animation once per kick — a
+    // redundant re-render mid-flight (e.g. the realtime echo of our own DB
+    // write landing a beat later) must not replay it from the start position.
     const doAnimate = anim.phase === "kicking" && !anim.kickAnimTriggered;
     if (doAnimate) anim.kickAnimTriggered = true;
+    // Same idea for the goal/save impact effects (shake, flash, confetti) —
+    // they should fire exactly once when the result first appears, not on
+    // every redundant re-render during the ~1.3s the result stays on screen.
+    const showImpact = anim.phase === "result" && !anim.impactShown;
+    if (anim.phase === "result") anim.impactShown = true;
+    const impactClass = showImpact ? (entry.scored ? " pk-impact-goal" : " pk-impact-save") : "";
     return `
-      <div class="card">
+      <div class="card${impactClass}">
         <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
         <p class="sub">${roundLabel}</p>
         ${renderPkScoreboard(match)}
@@ -1267,7 +1347,8 @@ function renderShootout() {
             ? `<p class="kick-result ${entry.scored ? "goal" : "save"}">${entry.scored ? "⚽ GOAL!" : "🧤 SAVED!"} — ${escapeHtml(nameOf(entry.shooter))} shot ${ZONE_LABEL[entry.shooterPick]}, ${escapeHtml(nameOf(entry.keeper))} dove ${ZONE_LABEL[entry.keeperPick]}</p>`
             : `<p class="sub" style="text-align:center">${escapeHtml(nameOf(entry.shooter))} steps up…</p>`
         }
-      </div>`;
+      </div>
+      ${showImpact && entry.scored ? `<div class="pk-flash"></div>${renderKickConfetti()}` : ""}`;
   }
 
   // Decided but not yet finalized into the standings (a brief gap right

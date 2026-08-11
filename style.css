@@ -422,9 +422,40 @@ code {
   border-radius: 10px;
   margin: 0 0 16px;
   font-size: 14px;
+  animation: pkResultPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 .kick-result.goal { background: rgba(6,214,160,0.18); color: var(--accent2); }
 .kick-result.save { background: rgba(239,71,111,0.18); color: var(--danger); }
+@keyframes pkResultPop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Goal/save impact — applied to .card for one render only (see the
+   showImpact guard in renderShootout) so a redundant re-render mid-result
+   doesn't restart it. */
+.pk-impact-goal, .pk-impact-save {
+  animation: pkShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes pkShake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-5px); }
+  40%, 60% { transform: translateX(5px); }
+}
+.pk-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 998;
+  background: radial-gradient(circle at 50% 30%, rgba(255,224,140,0.9), rgba(255,209,102,0.25) 55%, transparent 78%);
+  animation: pkFlash 0.5s ease-out forwards;
+}
+@keyframes pkFlash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 .zone-grid {
   display: grid;
@@ -447,37 +478,56 @@ code {
 .pk-goal {
   position: relative;
   width: 100%;
-  height: 150px;
+  height: 180px;
   margin: 4px 0 16px;
   border-radius: 10px;
   overflow: hidden;
-  background: linear-gradient(180deg, #1a4d33, #0f3a26);
+  background:
+    radial-gradient(ellipse 130px 90px at 4% -8%, rgba(255,241,199,0.4), transparent 65%),
+    radial-gradient(ellipse 130px 90px at 96% -8%, rgba(255,241,199,0.4), transparent 65%),
+    repeating-linear-gradient(115deg, #1c5735 0 22px, #164a2c 22px 44px);
+}
+/* A thin band of crowd-silhouette dots along the top, dimly lit — turns
+   the flat backdrop into "a stand behind the goal" instead of empty space. */
+.pk-goal::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 22%;
+  background:
+    linear-gradient(rgba(5,12,9,0.8), rgba(5,12,9,0.15)),
+    repeating-radial-gradient(circle at 5px 5px, rgba(234,246,239,0.22) 0 1.5px, transparent 1.5px 9px);
+  z-index: 0;
 }
 .pk-goal-frame {
   position: absolute;
   left: 6%;
   right: 6%;
-  top: 12%;
+  top: 26%;
   bottom: 0;
-  border: 5px solid rgba(234,246,239,0.9);
+  border: 5px solid rgba(234,246,239,0.92);
   border-bottom: none;
   background-image:
-    repeating-linear-gradient(0deg, rgba(234,246,239,0.14) 0 1px, transparent 1px 13px),
-    repeating-linear-gradient(90deg, rgba(234,246,239,0.14) 0 1px, transparent 1px 13px);
+    repeating-linear-gradient(45deg, rgba(234,246,239,0.16) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(-45deg, rgba(234,246,239,0.16) 0 1px, transparent 1px 12px);
+  box-shadow: inset 0 0 26px rgba(255,241,199,0.12);
+  z-index: 1;
 }
 .pk-keeper,
 .pk-ball {
   position: absolute;
   transform: translate(-50%, -50%);
-  transition: left 0.7s cubic-bezier(0.22, 0.8, 0.25, 1), top 0.7s cubic-bezier(0.22, 0.8, 0.25, 1);
   filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45));
   line-height: 1;
+  will-change: left, top, transform;
 }
-.pk-keeper { font-size: 34px; z-index: 1; }
-.pk-ball { font-size: 24px; z-index: 2; }
+.pk-keeper { font-size: 34px; z-index: 2; }
+.pk-ball { font-size: 24px; z-index: 3; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pk-keeper, .pk-ball { transition: none; }
+  .pk-impact-goal, .pk-impact-save, .pk-flash, .kick-result, .confetti { animation: none !important; }
 }
 
 /* dev-only testing affordances (?dev=1) */
