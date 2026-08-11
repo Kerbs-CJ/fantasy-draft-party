@@ -150,6 +150,9 @@ function genRoomCode() {
 function myPlayer() {
   return players.find((p) => p.id === session?.playerId);
 }
+function isMeHost() {
+  return !!myPlayer()?.is_host;
+}
 function totalsByPlayer() {
   const totals = {};
   for (const p of players) totals[p.id] = 0;
@@ -185,21 +188,28 @@ async function onClick(e) {
   if (action === "create-room") return createRoom();
   if (action === "join-room") return joinRoom();
   if (action === "copy-link") return copyInviteLink();
-  if (action === "start-trivia") return startTrivia();
   if (action === "trivia-answer") return answerTrivia(Number(btn.dataset.choice));
+  if (action === "guess-answer") return guessAnswer(btn.dataset.name);
+  if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
+  if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
+  if (action === "leave") return leaveRoom();
+  if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
+
+  // Everything below drives the shared room state for the whole group —
+  // only the host may trigger it. The corresponding buttons are already
+  // hidden from non-hosts in the UI, but that alone only stops normal
+  // clicking; this is the actual enforcement (e.g. against someone firing
+  // the action straight from devtools).
+  if (!isMeHost()) return;
+  if (action === "start-trivia") return startTrivia();
   if (action === "trivia-next") return triviaNext();
   if (action === "guess-reveal-clue") return guessRevealClue();
-  if (action === "guess-answer") return guessAnswer(btn.dataset.name);
   if (action === "guess-next") return guessNext();
   if (action === "show-shootout-intro") return updateRoom({ status: "shootout-intro" });
   if (action === "start-round-robin") return startRoundRobin();
   if (action === "start-rr-match") return startRRMatch(Number(btn.dataset.i));
-  if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
-  if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
   if (action === "finish-round-robin") return finishRoundRobin();
   if (action === "reveal") return updateRoom({ status: "reveal" });
-  if (action === "leave") return leaveRoom();
-  if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
   if (action === "dev-jump") return devJump(btn.dataset.status);
 }
 
@@ -640,6 +650,14 @@ async function submitPick(role, zone) {
   const gs = freshRoom.game_state;
   const match = gs.match;
   if (!match) return;
+  // Only the actual shooter/keeper for this turn may submit their pick —
+  // spectators (and anyone poking at the console) can't hijack a kick that
+  // isn't theirs. The one exception is dev mode, where a solo tester
+  // deliberately plays bot roles on their own device; see
+  // ensureBotAutoPick/scheduleBotPick.
+  const targetId = role === "shooter" ? (match.turn === "p1" ? match.p1 : match.p2) : match.turn === "p1" ? match.p2 : match.p1;
+  const targetIsBot = isDevBot(players.find((p) => p.id === targetId));
+  if (myPlayer()?.id !== targetId && !(DEV_MODE && targetIsBot)) return;
   const key = role === "shooter" ? "shooterPick" : "keeperPick";
   if (match[key] !== null) return;
   const updated = { ...match, [key]: zone };
@@ -892,7 +910,7 @@ function renderTopBar() {
       <span class="room-pill">Room <b>${code}</b></span>
       <button class="link-btn" data-action="leave">Leave</button>
     </div>
-    ${DEV_MODE ? renderDevBar() : ""}`;
+    ${DEV_MODE && isMeHost() ? renderDevBar() : ""}`;
 }
 
 function renderDevBar() {

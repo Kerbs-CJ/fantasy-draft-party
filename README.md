@@ -78,6 +78,15 @@ hosting — the crown only appears on the host's own screen, never on other
 players'. Join with any display name you like (there's no login/identity
 check at all) if you also want your name itself to not give you away.
 
+**Driving the room:** only the host can advance stages (start trivia, reveal
+clues, start matches, move to the next screen, etc.) — non-host players
+just don't get those controls, so nobody but the host can push the group
+forward or back. This is enforced in the app logic itself, not just by
+hiding buttons, so it holds even against someone poking at devtools. Same
+idea for penalty kicks: only the two players actually in a match (the
+current shooter and keeper) can submit a pick — everyone else is a pure
+spectator for that match.
+
 Notes:
 - Works best with a decent wifi/data connection for everyone.
 - Trivia and Guess-the-Footballer answers are graded client-side (the
