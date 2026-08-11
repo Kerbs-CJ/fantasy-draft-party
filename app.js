@@ -461,7 +461,7 @@ function nextEmptySlot(firstRound) {
 }
 
 // Drops a player into the next open slot. If that completes a bye match,
-// resolves and propagates it immediately.
+// resolves it immediately and checks whether the whole round is now done.
 function placeNextDrawnPlayer(rounds, playerId) {
   const slot = nextEmptySlot(rounds[0]);
   if (!slot) return;
@@ -469,7 +469,7 @@ function placeNextDrawnPlayer(rounds, playerId) {
   match[slot.slot] = playerId;
   if (match.isBye) {
     match.winner = playerId;
-    propagateBracketWinner(rounds, 0, slot.m, playerId);
+    tryAdvanceRound(rounds, 0);
   }
 }
 
@@ -486,18 +486,55 @@ function generateBracket(playerIds) {
   return rounds;
 }
 
-// Places a winner into their next-round slot, and — if that slot is itself
-// a designated bye (no p2 ever coming) — immediately resolves it too and
-// keeps propagating, so a chain of byes doesn't need separate handling.
-function propagateBracketWinner(rounds, r, i, winnerId) {
-  if (!rounds[r + 1]) return;
-  const next = rounds[r + 1][Math.floor(i / 2)];
-  if (i % 2 === 0) next.p1 = winnerId;
-  else next.p2 = winnerId;
-  if (next.isBye && next.p1 && !next.winner) {
-    next.winner = next.p1;
-    propagateBracketWinner(rounds, r + 1, rounds[r + 1].indexOf(next), next.winner);
+function isRoundComplete(round) {
+  return round.every((match) => match.winner);
+}
+
+// Once every match in a round has a winner (including any bye), fill the
+// next round from a FRESH shuffle of those winners — never a fixed slot
+// carried over from the previous round. That's the actual fix for byes
+// chaining together: the old version routed round 1's bye to whoever had
+// round 0's bye by raw slot position, every single time. Now the bye
+// recipient is re-picked at random each round, and is explicitly excluded
+// from getting picked again immediately next round if any other advancing
+// player is available — a bye is meant to be a lucky round, not a
+// guaranteed free ride to the final.
+function tryAdvanceRound(rounds, r) {
+  const round = rounds[r];
+  if (!round || !isRoundComplete(round)) return;
+  const next = rounds[r + 1];
+  if (!next) return; // this round was the final
+  if (next.some((m) => m.p1 !== null)) return; // already filled, don't redo
+
+  const winners = round.map((m) => m.winner);
+  const nextHasBye = next.some((m) => m.isBye);
+  const prevByeWinner = round.find((m) => m.isBye)?.winner || null;
+
+  let byePlayer = null;
+  let rest = winners;
+  if (nextHasBye) {
+    let pool = winners;
+    if (prevByeWinner && winners.length > 1) {
+      const withoutRepeat = winners.filter((w) => w !== prevByeWinner);
+      if (withoutRepeat.length > 0) pool = withoutRepeat;
+    }
+    byePlayer = pool[Math.floor(Math.random() * pool.length)];
+    rest = shuffle(winners.filter((w) => w !== byePlayer));
+  } else {
+    rest = shuffle(winners);
   }
+
+  let idx = 0;
+  next.forEach((match) => {
+    if (match.isBye) {
+      match.p1 = byePlayer;
+      match.winner = byePlayer;
+    } else {
+      match.p1 = rest[idx++];
+      match.p2 = rest[idx++];
+    }
+  });
+  tryAdvanceRound(rounds, r + 1); // in case that also completes immediately
 }
 
 function findNextMatch(rounds) {
@@ -632,7 +669,7 @@ async function finalizeMatchIfDecided() {
   if (!m || !m.winnerId) return;
   const bracket = gs.bracket;
   bracket.rounds[m.bracketR][m.bracketM].winner = m.winnerId;
-  propagateBracketWinner(bracket.rounds, m.bracketR, m.bracketM, m.winnerId);
+  tryAdvanceRound(bracket.rounds, m.bracketR);
   await updateRoom({ status: "bracket", game_state: { bracket, match: null } });
 }
 
@@ -1085,37 +1122,56 @@ function renderShootoutIntro() {
     </div>`;
 }
 
+// Shared tournament-tree layout used by both the live draw and the match-
+// play bracket screen: rounds as side-by-side columns (horizontally
+// scrollable), matches as boxed cards, winners highlighted, losers dimmed —
+// the classic bracket look, rather than a plain stacked list.
+function renderBracketTree(rounds, nameOf, emptyLabel) {
+  const totalRounds = rounds.length;
+  return `
+    <div class="bracket-tree">
+      ${rounds
+        .map(
+          (round, r) => `
+        <div class="bracket-col">
+          <h4 class="bracket-col-title">${roundName(r, totalRounds)}</h4>
+          <div class="bracket-col-matches">
+            ${round
+              .map((match) => {
+                const p1Name = nameOf(match.p1);
+                const p2Name = nameOf(match.p2);
+                const p1Won = !!(match.winner && match.winner === match.p1);
+                const p2Won = !!(match.winner && match.winner === match.p2);
+                const p1Cls = p1Won ? "winner" : match.winner ? "loser" : "";
+                let p2Cls = p2Won ? "winner" : match.winner && !match.isBye ? "loser" : "";
+                if (match.isBye) p2Cls += " bye-slot";
+                const p2Display = match.isBye ? (p1Name ? "BYE" : emptyLabel) : p2Name ? escapeHtml(p2Name) : emptyLabel;
+                return `
+                <div class="bracket-match${match.winner ? " decided" : ""}">
+                  <div class="bracket-slot ${p1Cls}">${p1Name ? escapeHtml(p1Name) : emptyLabel}</div>
+                  <div class="bracket-slot ${p2Cls}">${p2Display}</div>
+                </div>`;
+              })
+              .join("")}
+          </div>
+        </div>`
+        )
+        .join('<div class="bracket-arrow">→</div>')}
+    </div>`;
+}
+
 function renderBracketDraw() {
   const me = myPlayer();
   const isHost = me?.is_host;
   const gs = room.game_state;
   const bracket = gs.bracket;
-  const totalRounds = bracket.rounds.length;
   const remaining = gs.drawOrder.length - gs.drawnCount;
   const nameOf = (id) => (id ? players.find((p) => p.id === id)?.name || "?" : null);
   return `
     <div class="card">
       <h2>🎲 Drawing the Bracket…</h2>
       <p class="sub">${remaining > 0 ? `${remaining} player${remaining === 1 ? "" : "s"} left to draw` : "Draw complete!"}</p>
-      ${bracket.rounds
-        .map(
-          (round, r) => `
-        <h3>${roundName(r, totalRounds)}</h3>
-        <ul class="bracket-round">
-          ${round
-            .map((match) => {
-              const p1Name = nameOf(match.p1);
-              const p2Name = nameOf(match.p2);
-              return `<li class="${match.winner ? "decided" : ""}">
-                <span class="${match.winner && match.winner === match.p1 ? "winner" : ""}">${p1Name ? escapeHtml(p1Name) : "?"}</span>
-                <span class="vs">vs</span>
-                <span class="${match.winner && match.winner === match.p2 ? "winner" : ""}">${match.isBye ? (p1Name ? "BYE" : "?") : p2Name ? escapeHtml(p2Name) : "?"}</span>
-              </li>`;
-            })
-            .join("")}
-        </ul>`
-        )
-        .join("")}
+      ${renderBracketTree(bracket.rounds, nameOf, "?")}
       ${
         isHost
           ? remaining > 0
@@ -1132,29 +1188,10 @@ function renderBracket() {
   const bracket = room.game_state.bracket;
   const nameOf = (id) => (id ? players.find((p) => p.id === id)?.name || "?" : null);
   const next = findNextMatch(bracket.rounds);
-  const totalRounds = bracket.rounds.length;
   return `
     <div class="card">
       <h2>⚽ Penalty Shootout Bracket</h2>
-      ${bracket.rounds
-        .map(
-          (round, r) => `
-        <h3>${roundName(r, totalRounds)}</h3>
-        <ul class="bracket-round">
-          ${round
-            .map((match) => {
-              const p1Name = nameOf(match.p1);
-              const p2Name = nameOf(match.p2);
-              return `<li class="${match.winner ? "decided" : ""}">
-                <span class="${match.winner && match.winner === match.p1 ? "winner" : ""}">${p1Name ? escapeHtml(p1Name) : "TBD"}</span>
-                <span class="vs">vs</span>
-                <span class="${match.winner && match.winner === match.p2 ? "winner" : ""}">${match.isBye ? "BYE" : p2Name ? escapeHtml(p2Name) : "TBD"}</span>
-              </li>`;
-            })
-            .join("")}
-        </ul>`
-        )
-        .join("")}
+      ${renderBracketTree(bracket.rounds, nameOf, "TBD")}
       ${
         isHost
           ? next
