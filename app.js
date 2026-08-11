@@ -209,9 +209,11 @@ async function onClick(e) {
   // clicking; this is the actual enforcement (e.g. against someone firing
   // the action straight from devtools).
   if (!isMeHost()) return;
+  if (action === "show-missing-club-intro") return updateRoom({ status: "missing-club-intro" });
   if (action === "start-missing-club") return startMissingClub();
   if (action === "reveal-missing-club") return revealMissingClub();
   if (action === "missing-club-next") return missingClubNext();
+  if (action === "start-guess-round") return startGuessRound();
   if (action === "guess-reveal-clue") return guessRevealClue();
   if (action === "guess-next") return guessNext();
   if (action === "show-shootout-intro") return updateRoom({ status: "shootout-intro" });
@@ -390,10 +392,14 @@ async function missingClubNext() {
   const gs = room.game_state || {};
   const next = gs.qIndex + 1;
   if (next >= gs.order.length) {
-    await updateRoom({ status: "guess", game_state: { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 } });
+    await updateRoom({ status: "guess-intro" });
   } else {
     await updateRoom({ game_state: { ...gs, qIndex: next, revealed: false } });
   }
+}
+
+async function startGuessRound() {
+  await updateRoom({ status: "guess", game_state: { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 } });
 }
 
 // ── guess the footballer ────────────────────────────────────
@@ -972,9 +978,15 @@ function render() {
     case "lobby":
       html += renderLobby();
       break;
+    case "missing-club-intro":
+      html += renderMissingClubIntro();
+      break;
     case "missing-club":
       ensureMissingClubReady();
       html += renderMissingClub();
+      break;
+    case "guess-intro":
+      html += renderGuessIntro();
       break;
     case "guess":
       ensureGuessReady();
@@ -1029,7 +1041,9 @@ function renderTopBar() {
 function renderDevBar() {
   const stages = [
     ["lobby", "Lobby"],
+    ["missing-club-intro", "MC Intro"],
     ["missing-club", "Missing Club"],
+    ["guess-intro", "Guess Intro"],
     ["guess", "Guess"],
     ["leaderboard", "Leaderboard"],
     ["shootout-intro", "PK Intro"],
@@ -1106,10 +1120,38 @@ function renderLobby() {
 
       ${
         isHost
-          ? `<button class="btn primary" data-action="start-missing-club" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
+          ? `<button class="btn primary" data-action="show-missing-club-intro" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
               ${players.length < 2 && !DEV_MODE ? "Need at least 2 players" : "▶️ Start the party!"}
             </button>`
           : `<p class="waiting">Waiting for the host to start…</p>`
+      }
+    </div>`;
+}
+
+function renderMissingClubIntro() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  return `
+    <div class="card">
+      <h2>⚽ Guess the Missing Club</h2>
+
+      <h3>The format</h3>
+      <p>${MISSING_CLUB_COUNT} rounds, each a real footballer's club career shown as a timeline — with one club blanked out.</p>
+
+      <h3>How it works</h3>
+      <p>Tap the club you think is missing, then hit Confirm to lock it in — no rush, answer whenever you're ready. A side panel shows who's still deciding. Once everyone's locked in, the host reveals the correct club and how many people got it right, to everyone at once.</p>
+
+      <h3>Scoring</h3>
+      <p>Guess right and you score a flat <b>${MISSING_CLUB_POINTS} points</b> — get it wrong, or don't answer before the reveal, and it's 0. No bonus for speed, no penalty for taking your time.</p>
+
+      <h3>Players (${players.length})</h3>
+      <ul class="player-list">
+        ${players.map((p) => `<li>${escapeHtml(p.name)}</li>`).join("")}
+      </ul>
+      ${
+        isHost
+          ? `<button class="btn primary" data-action="start-missing-club" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>▶️ Start Guess the Missing Club</button>`
+          : `<p class="waiting">Waiting for host to start…</p>`
       }
     </div>`;
 }
@@ -1181,6 +1223,41 @@ function renderMissingClub() {
             ? `<button class="btn primary" data-action="missing-club-next">${qIndex + 1 >= gs.order.length ? "🕵️ Next: Guess the Footballer" : "Next journey"}</button>`
             : `<button class="btn primary" data-action="reveal-missing-club">🔍 Reveal answer</button>`
           : ""
+      }
+    </div>`;
+}
+
+function renderGuessIntro() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  return `
+    <div class="card">
+      <h2>🕵️ Guess the Footballer</h2>
+
+      <h3>The format</h3>
+      <p>${GUESS_PLAYER_COUNT} rounds, each a mystery footballer revealed one clue at a time — clues run from most obscure to most obvious.</p>
+
+      <h3>How it works</h3>
+      <p>Host reveals clues one at a time. Guess whenever you like — you don't have to wait for the last clue. Get it right and you're locked in for the round; get it wrong and you're frozen out (0 points), so only guess when you're confident.</p>
+
+      <h3>Scoring — guess earlier for more points</h3>
+      <div class="standings-wrap">
+        <table class="standings-table">
+          <thead><tr><th>Guessed on clue</th><th>Points</th></tr></thead>
+          <tbody>
+            ${GUESS_CLUE_POINTS.map((pts, i) => `<tr><td>${i + 1}</td><td>${pts}</td></tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Players (${players.length})</h3>
+      <ul class="player-list">
+        ${players.map((p) => `<li>${escapeHtml(p.name)}</li>`).join("")}
+      </ul>
+      ${
+        isHost
+          ? `<button class="btn primary" data-action="start-guess-round" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>▶️ Start Guess the Footballer</button>`
+          : `<p class="waiting">Waiting for host to start…</p>`
       }
     </div>`;
 }
