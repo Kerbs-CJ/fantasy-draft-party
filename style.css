@@ -184,7 +184,20 @@ input::placeholder { color: #6c9b83; }
 .choice.correct { background: rgba(6,214,160,0.25); border-color: var(--accent2); }
 .choice.wrong { background: rgba(239,71,111,0.25); border-color: var(--danger); }
 .choice.selected { background: rgba(255,209,102,0.18); border-color: var(--accent); }
+.choice.pending { border: 1px dashed var(--accent); background: rgba(255,209,102,0.08); }
 .choice:disabled { cursor: default; }
+
+.mc-layout { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 12px; }
+.mc-main { flex: 1 1 240px; min-width: 0; }
+.mc-roster { flex: 0 0 120px; }
+.mc-roster h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.mc-roster .player-list.compact { flex-direction: column; }
 
 .clue-list {
   margin: 0 0 16px;

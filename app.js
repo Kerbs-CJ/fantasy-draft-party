@@ -26,7 +26,7 @@ let local = {
   joinCodeInput: "",
   nameInput: "",
   error: "",
-  missingClub: { qIndex: null, answeredQIndex: null, myChoice: null, choices: null },
+  missingClub: { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null },
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
   botShooterScheduledFor: null,
@@ -195,7 +195,8 @@ async function onClick(e) {
   if (action === "create-room") return createRoom();
   if (action === "join-room") return joinRoom();
   if (action === "copy-link") return copyInviteLink();
-  if (action === "missing-club-answer") return answerMissingClub(btn.dataset.club);
+  if (action === "missing-club-select") return selectMissingClub(btn.dataset.club);
+  if (action === "missing-club-confirm") return confirmMissingClub();
   if (action === "guess-answer") return guessAnswer(btn.dataset.name);
   if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
   if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
@@ -329,6 +330,7 @@ function ensureMissingClubReady() {
     local.missingClub.qIndex = gs.qIndex;
     local.missingClub.answeredQIndex = null;
     local.missingClub.myChoice = null;
+    local.missingClub.pending = null;
     const entry = window.MISSING_CLUB_PLAYERS[gs.order[gs.qIndex]];
     local.missingClub.choices = shuffle([entry.clubs[entry.missingIndex], ...entry.decoys]);
   }
@@ -347,9 +349,19 @@ function ensureGuessReady() {
   }
 }
 
-async function answerMissingClub(club) {
+// Clicking a choice just stages it locally — nothing is written or locked
+// in until the player hits Confirm, so a stray/misclick doesn't cost them
+// their answer.
+function selectMissingClub(club) {
   if (local.missingClub.answeredQIndex === local.missingClub.qIndex) return;
-  await submitMissingClubAnswer(club, local.missingClub.qIndex);
+  local.missingClub.pending = club;
+  render();
+}
+
+async function confirmMissingClub() {
+  if (local.missingClub.answeredQIndex === local.missingClub.qIndex) return;
+  if (!local.missingClub.pending) return;
+  await submitMissingClubAnswer(local.missingClub.pending, local.missingClub.qIndex);
 }
 
 async function submitMissingClubAnswer(club, qIndex) {
@@ -715,7 +727,7 @@ async function finishRoundRobin() {
 
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
-  local.missingClub = { qIndex: null, answeredQIndex: null, myChoice: null, choices: null };
+  local.missingClub = { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null };
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
   local.botShooterScheduledFor = null;
@@ -1110,6 +1122,7 @@ function renderMissingClub() {
   const entry = window.MISSING_CLUB_PLAYERS[gs.order[qIndex]];
   const missingClub = entry.clubs[entry.missingIndex];
   const answered = local.missingClub.answeredQIndex === qIndex;
+  const pending = local.missingClub.pending;
   const revealed = !!gs.revealed;
   const myCorrect = local.missingClub.myChoice === missingClub;
   const answeredIds = answeredPlayerIds(1, qIndex);
@@ -1118,37 +1131,50 @@ function renderMissingClub() {
     <div class="card">
       <h2>⚽ Guess the Missing Club</h2>
       <p class="sub">Journey ${qIndex + 1} of ${gs.order.length} — answer in your own time, the reveal happens once the host calls it</p>
-      <p class="question">${escapeHtml(entry.name)}'s career:</p>
-      <ol class="club-timeline">
-        ${entry.clubs
-          .map((c, i) => (i === entry.missingIndex ? `<li class="missing-slot">❓ ???</li>` : `<li>${escapeHtml(c)}</li>`))
-          .join("")}
-      </ol>
-      <div class="choices">
-        ${(local.missingClub.choices || [])
-          .map((c) => {
-            let cls = "choice";
-            if (revealed) {
-              if (c === missingClub) cls += " correct";
-              else if (c === local.missingClub.myChoice) cls += " wrong";
-            } else if (answered && c === local.missingClub.myChoice) {
-              cls += " selected";
-            }
-            return `<button class="${cls}" data-action="missing-club-answer" data-club="${escapeHtml(c)}" ${answered ? "disabled" : ""}>${escapeHtml(c)}</button>`;
-          })
-          .join("")}
+      <div class="mc-layout">
+        <div class="mc-main">
+          <p class="question">${escapeHtml(entry.name)}'s career:</p>
+          <ol class="club-timeline">
+            ${entry.clubs
+              .map((c, i) => (i === entry.missingIndex ? `<li class="missing-slot">❓ ???</li>` : `<li>${escapeHtml(c)}</li>`))
+              .join("")}
+          </ol>
+          <div class="choices">
+            ${(local.missingClub.choices || [])
+              .map((c) => {
+                let cls = "choice";
+                if (revealed) {
+                  if (c === missingClub) cls += " correct";
+                  else if (c === local.missingClub.myChoice) cls += " wrong";
+                } else if (answered) {
+                  if (c === local.missingClub.myChoice) cls += " selected";
+                } else if (c === pending) {
+                  cls += " pending";
+                }
+                return `<button class="${cls}" data-action="missing-club-select" data-club="${escapeHtml(c)}" ${answered ? "disabled" : ""}>${escapeHtml(c)}</button>`;
+              })
+              .join("")}
+          </div>
+          ${
+            !revealed && !answered
+              ? `<button class="btn primary" data-action="missing-club-confirm" ${pending ? "" : "disabled"}>✅ Confirm answer</button>`
+              : ""
+          }
+          ${
+            revealed
+              ? `<p class="lock-msg ${answered && myCorrect ? "lock-correct" : "lock-wrong"}">The missing club was <b>${escapeHtml(missingClub)}</b> — ${answered ? (myCorrect ? `you got it! ${MISSING_CLUB_POINTS} points.` : "you didn't get it. 0 points.") : "you didn't answer before the reveal. 0 points."} ${correctIds.size}/${players.length} got it right.</p>`
+              : answered
+                ? `<p class="waiting">Answer locked in. ${isHost ? "" : "Waiting for the reveal…"}</p>`
+                : ""
+          }
+        </div>
+        <div class="mc-roster">
+          <h3>Locked in (${answeredIds.size}/${players.length})</h3>
+          <ul class="player-list compact">
+            ${players.map((p) => `<li>${answeredIds.has(p.id) ? "🔒" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+          </ul>
+        </div>
       </div>
-      ${
-        revealed
-          ? `<p class="lock-msg ${answered && myCorrect ? "lock-correct" : "lock-wrong"}">The missing club was <b>${escapeHtml(missingClub)}</b> — ${answered ? (myCorrect ? `you got it! ${MISSING_CLUB_POINTS} points.` : "you didn't get it. 0 points.") : "you didn't answer before the reveal. 0 points."} ${correctIds.size}/${players.length} got it right.</p>`
-          : answered
-            ? `<p class="waiting">Answer locked in. ${isHost ? "" : "Waiting for the reveal…"}</p>`
-            : ""
-      }
-      <h3>Answered (${answeredIds.size}/${players.length})</h3>
-      <ul class="player-list compact">
-        ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
-      </ul>
       ${
         isHost
           ? revealed

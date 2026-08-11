@@ -10,36 +10,31 @@
 // timeline; `decoys` are two plausible-but-wrong clubs — deliberately
 // picked from the same league/country as the real answer so process of
 // elimination by "that league doesn't fit" doesn't give it away.
+//
+// Difficulty is tuned two ways: the roster leans away from the handful of
+// names literally everyone knows (no Messi/Ronaldo/Zidane — save those for
+// Guess the Footballer), and the hidden club is deliberately the early,
+// short, or loan stop rather than the marquee, most-remembered one — the
+// club someone would only get right by actually knowing the journey, not
+// by recalling the one club they're famous for.
 window.MISSING_CLUB_PLAYERS = [
-  {
-    name: "Cristiano Ronaldo",
-    clubs: ["Sporting CP", "Manchester United", "Real Madrid", "Juventus", "Al-Nassr"],
-    missingIndex: 3,
-    decoys: ["AC Milan", "Inter Milan"],
-  },
-  {
-    name: "Lionel Messi",
-    clubs: ["Barcelona", "Paris Saint-Germain", "Inter Miami"],
-    missingIndex: 1,
-    decoys: ["Olympique Marseille", "AS Monaco"],
-  },
   {
     name: "Zlatan Ibrahimović",
     clubs: ["Malmö FF", "Ajax", "Juventus", "Inter Milan", "Barcelona", "AC Milan", "Paris Saint-Germain", "Manchester United", "LA Galaxy"],
-    missingIndex: 4,
-    decoys: ["Real Madrid", "Atlético Madrid"],
+    missingIndex: 0,
+    decoys: ["IFK Göteborg", "Helsingborgs IF"],
   },
   {
     name: "David Beckham",
     clubs: ["Manchester United", "Real Madrid", "LA Galaxy", "AC Milan", "Paris Saint-Germain"],
     missingIndex: 3,
-    decoys: ["Juventus", "Inter Milan"],
+    decoys: ["Fiorentina", "Napoli"],
   },
   {
     name: "Thierry Henry",
     clubs: ["Monaco", "Juventus", "Arsenal", "Barcelona", "New York Red Bulls"],
-    missingIndex: 3,
-    decoys: ["Real Madrid", "Atlético Madrid"],
+    missingIndex: 1,
+    decoys: ["Parma", "Fiorentina"],
   },
   {
     name: "Ronaldinho",
@@ -50,38 +45,56 @@ window.MISSING_CLUB_PLAYERS = [
   {
     name: "Didier Drogba",
     clubs: ["Le Mans", "Guingamp", "Marseille", "Chelsea", "Galatasaray"],
-    missingIndex: 3,
-    decoys: ["Arsenal", "Manchester City"],
+    missingIndex: 1,
+    decoys: ["Nantes", "Rennes"],
   },
   {
     name: "Luis Suárez",
     clubs: ["Nacional", "Groningen", "Ajax", "Liverpool", "Barcelona", "Atlético Madrid", "Inter Miami"],
-    missingIndex: 3,
-    decoys: ["Manchester City", "Arsenal"],
+    missingIndex: 1,
+    decoys: ["Heerenveen", "Twente"],
   },
   {
     name: "Andrea Pirlo",
     clubs: ["Brescia", "Inter Milan", "AC Milan", "Juventus", "New York City FC"],
-    missingIndex: 2,
+    missingIndex: 1,
     decoys: ["Napoli", "Fiorentina"],
   },
   {
     name: "Xabi Alonso",
     clubs: ["Real Sociedad", "Liverpool", "Real Madrid", "Bayern Munich"],
-    missingIndex: 2,
-    decoys: ["Atlético Madrid", "Barcelona"],
-  },
-  {
-    name: "Zinedine Zidane",
-    clubs: ["Cannes", "Bordeaux", "Juventus", "Real Madrid"],
-    missingIndex: 2,
-    decoys: ["AC Milan", "Inter Milan"],
+    missingIndex: 0,
+    decoys: ["Athletic Bilbao", "Osasuna"],
   },
   {
     name: "Ronaldo Nazário",
     clubs: ["Cruzeiro", "PSV Eindhoven", "Barcelona", "Inter Milan", "Real Madrid", "AC Milan", "Corinthians"],
-    missingIndex: 4,
-    decoys: ["Atlético Madrid", "Valencia"],
+    missingIndex: 1,
+    decoys: ["Feyenoord", "Ajax"],
+  },
+  {
+    name: "Kaká",
+    clubs: ["São Paulo", "AC Milan", "Real Madrid", "Orlando City"],
+    missingIndex: 0,
+    decoys: ["Palmeiras", "Corinthians"],
+  },
+  {
+    name: "Samuel Eto'o",
+    clubs: ["Real Madrid", "Mallorca", "Barcelona", "Inter Milan", "Chelsea"],
+    missingIndex: 1,
+    decoys: ["Espanyol", "Valencia"],
+  },
+  {
+    name: "Clarence Seedorf",
+    clubs: ["Ajax", "Sampdoria", "Real Madrid", "Inter Milan", "AC Milan", "Botafogo"],
+    missingIndex: 1,
+    decoys: ["Parma", "Fiorentina"],
+  },
+  {
+    name: "David Villa",
+    clubs: ["Sporting Gijón", "Valencia", "Barcelona", "Atlético Madrid", "New York City FC"],
+    missingIndex: 0,
+    decoys: ["Real Oviedo", "Racing Santander"],
   },
 ];
 
