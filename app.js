@@ -411,19 +411,70 @@ async function guessNext() {
 
 // ── penalty shootout round robin ────────────────────────────
 // The whole mini-tournament lives in room.game_state.roundRobin — a flat,
-// shuffled list of every possible pairing (all N*(N-1)/2 of them, one
+// ordered list of every possible pairing (all N*(N-1)/2 of them, one
 // match each), no byes or brackets involved at all. That sidesteps the
 // bye-fairness problem entirely: with 5 players a knockout bracket always
 // has to concentrate byes somewhere (round 1, a later round, or both) —
 // round robin just has everyone play everyone, once each, full stop.
 function generateRoundRobinMatches(playerIds) {
-  const matches = [];
+  const pairs = [];
   for (let i = 0; i < playerIds.length; i++) {
     for (let j = i + 1; j < playerIds.length; j++) {
-      matches.push({ p1: playerIds[i], p2: playerIds[j], winner: null, score: null });
+      pairs.push({ p1: playerIds[i], p2: playerIds[j], winner: null, score: null });
     }
   }
-  return shuffle(matches);
+  return orderRoundRobinMatches(pairs);
+}
+
+// A plain shuffle of every pairing can easily land the same player in 3+
+// matches back to back (they just have to stand around and shoot again).
+// This orders the matches with a simple "least recently played" scheduler
+// instead: at each step, it picks whichever remaining pairing's most-
+// recently-active player has rested longest since their last match — and
+// it hard-forbids any pick that would give a player a 3rd straight
+// appearance, unless literally every remaining option would do that (which
+// only happens right at the tail end, if ever).
+function orderRoundRobinMatches(pairs) {
+  const remaining = shuffle(pairs.slice());
+  const ordered = [];
+
+  function lastPlayedIndex(pid) {
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      if (ordered[i].p1 === pid || ordered[i].p2 === pid) return i;
+    }
+    return -1;
+  }
+  function restGap(pid) {
+    const idx = lastPlayedIndex(pid);
+    return idx === -1 ? Infinity : ordered.length - 1 - idx;
+  }
+  function inMatch(pid, match) {
+    return match.p1 === pid || match.p2 === pid;
+  }
+  function wouldMakeThreeInARow(m) {
+    if (ordered.length < 2) return false;
+    const last = ordered[ordered.length - 1];
+    const prev = ordered[ordered.length - 2];
+    return (inMatch(m.p1, last) && inMatch(m.p1, prev)) || (inMatch(m.p2, last) && inMatch(m.p2, prev));
+  }
+
+  while (remaining.length) {
+    let candidates = remaining.filter((m) => !wouldMakeThreeInARow(m));
+    if (candidates.length === 0) candidates = remaining; // forced — no safe option left
+
+    let best = candidates[0];
+    let bestScore = -Infinity;
+    for (const m of candidates) {
+      const score = Math.min(restGap(m.p1), restGap(m.p2));
+      if (score > bestScore) {
+        bestScore = score;
+        best = m;
+      }
+    }
+    ordered.push(best);
+    remaining.splice(remaining.indexOf(best), 1);
+  }
+  return ordered;
 }
 
 function findNextRRMatch(matches) {

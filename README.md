@@ -52,10 +52,13 @@ it updates automatically within a minute or two.
 4. Trivia Blitz plays first (5 random hard questions), then Guess the
    Footballer (host reveals clues one at a time per round; guessing on
    fewer clues scores more), with a leaderboard at the end of each.
-5. Host clicks through to the shootout intro screen (players + a quick
-   explainer), then **Start Round Robin**. This generates every possible
-   pairing once each (10 matches for 5 players — no byes, no bracket, no
-   elimination) in a shuffled order. Host starts each match one at a time
+5. Host clicks through to the shootout intro screen (full explainer: format,
+   how a match works, how standings/tiebreaks are decided, and a table of
+   exactly how many points each final placement is worth), then **Start
+   Round Robin**. This generates every possible pairing once each (10
+   matches for 5 players — no byes, no bracket, no elimination), ordered so
+   no one plays three matches in a row back-to-back. Host starts each match
+   one at a time
    from the standings screen; the two players in it pick shot/dive zones
    blind and simultaneous, best-of-5 then sudden death. Everyone else
    spectates live. Each finished match updates a live standings table
