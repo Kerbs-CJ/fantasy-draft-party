@@ -54,11 +54,13 @@ it updates automatically within a minute or two.
 5. Host clicks through to the shootout intro screen (players + a quick
    explainer), then **Create Tournament**. The bracket is drawn live, one
    player at a time — host clicks **Draw Next Player** to reveal each name
-   into its slot (each round pairs up as many players as it can, giving a
-   bye to at most one leftover per round). Once everyone's drawn, host clicks
-   **Start the Tournament** to move into match play: host starts each match
-   one at a time; the two players in it pick shot/dive zones blind and
-   simultaneous, best-of-5 then sudden death. Everyone else spectates live.
+   into its slot. Round 1 is padded up to the next power of 2, so any byes
+   a non-power-of-2 field needs (e.g. 3 byes for 5 players) all land there —
+   every round after that is guaranteed a clean, bye-free 2-vs-2 all the way
+   to the final. Once everyone's drawn, host clicks **Start the Tournament**
+   to move into match play: host starts each match one at a time; the two
+   players in it pick shot/dive zones blind and simultaneous, best-of-5 then
+   sudden death. Everyone else spectates live.
    Placement (champion, runner-up, etc.) adds to the same combined leaderboard.
 6. Host clicks **Reveal Draft Order!** for the big reveal.
 

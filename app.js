@@ -413,37 +413,34 @@ async function guessNext() {
 
 // ── penalty shootout bracket ───────────────────────────────
 // Bracket lives entirely in room.game_state.bracket — an array of rounds,
-// each round an array of { p1, p2, winner, isBye }. Each round pairs up as
-// many players as possible (floor(n/2) matches) and, only if the round has
-// an odd number of entrants, gives exactly one of them a bye — rather than
-// padding the whole tournament up to a power of 2 and dumping every bye
-// into round 1. With 5 players that means round 1 is 2 real matches + 1
-// bye (not 1 match + 3 byes), and it still takes the same number of total
-// rounds to reach a champion either way.
-// Builds the empty SHAPE of the bracket — how many matches and byes each
-// round has — which is fully predictable from the player count alone, long
-// before we know who's actually standing in any given slot.
+// each round an array of { p1, p2, winner, isBye }. Round 1 is padded up to
+// the next power of 2, so every bye needed for a non-power-of-2 field is
+// concentrated there — e.g. 5 players means round 1 is 1 real match + 3
+// byes. That's more people sitting out round 1 than a "pack it tight"
+// approach would need, but it guarantees every later round is a clean,
+// bye-free 2-vs-2 all the way to the final — no round past the first can
+// ever produce an odd number advancing, so a semifinal or final bye is
+// mathematically impossible, not just unlikely.
 function buildBracketRounds(playerCount) {
   if (playerCount <= 1) {
     return [[{ p1: null, p2: null, winner: null, isBye: true }]];
   }
-  const rounds = [];
-  const matchCount0 = Math.floor(playerCount / 2);
-  const hasBye0 = playerCount % 2 === 1;
+  let size = 1;
+  while (size < playerCount) size *= 2;
+  const numByes = size - playerCount;
+  const matchCount0 = size / 2;
   const firstRound = [];
-  for (let i = 0; i < matchCount0; i++) firstRound.push({ p1: null, p2: null, winner: null, isBye: false });
-  if (hasBye0) firstRound.push({ p1: null, p2: null, winner: null, isBye: true });
-  rounds.push(firstRound);
+  for (let i = 0; i < matchCount0; i++) {
+    firstRound.push({ p1: null, p2: null, winner: null, isBye: i < numByes });
+  }
+  const rounds = [firstRound];
 
-  let prevCount = matchCount0 + (hasBye0 ? 1 : 0);
+  let prevCount = matchCount0;
   while (prevCount > 1) {
-    const matchCount = Math.floor(prevCount / 2);
-    const hasBye = prevCount % 2 === 1;
     const round = [];
-    for (let i = 0; i < matchCount; i++) round.push({ p1: null, p2: null, winner: null, isBye: false });
-    if (hasBye) round.push({ p1: null, p2: null, winner: null, isBye: true });
+    for (let i = 0; i < prevCount / 2; i++) round.push({ p1: null, p2: null, winner: null, isBye: false });
     rounds.push(round);
-    prevCount = matchCount + (hasBye ? 1 : 0);
+    prevCount = round.length;
   }
   return rounds;
 }
@@ -473,12 +470,9 @@ function placeNextDrawnPlayer(rounds, playerId) {
   }
 }
 
-// Each round pairs up as many players as possible (floor(n/2) matches) and,
-// only if the round has an odd number of entrants, gives exactly one of
-// them a bye — rather than padding the whole tournament up to a power of 2
-// and dumping every bye into round 1. With 5 players that means round 1 is
-// 2 real matches + 1 bye (not 1 match + 3 byes), and it still takes the
-// same number of total rounds to reach a champion either way.
+// Instant-fill version of the bracket (used by dev-mode quickstarts to
+// skip the live draw ceremony) — same slot-filling logic, just done for
+// every player in one pass instead of one at a time.
 function generateBracket(playerIds) {
   const rounds = buildBracketRounds(playerIds.length);
   const shuffled = shuffle(playerIds);
