@@ -850,12 +850,11 @@ const PK_AD_TEXT = "Fantasy League Bugaloo";
 // static/lines. Generated once at load (not per-render, or it'd visibly
 // reshuffle on every re-render) and reused as a fixed HTML string.
 function generateCrowdDots() {
-  const colors = [
-    "#f4d9b0", "#e8b98a", "#c98b5e", "#8a5a3c", "#4a3324", "#efe6da",
-    "#ffd166", "#4b8bf0", "#ef476f", "#06d6a0", "#8892a6", "#c94f4f",
-  ];
-  const rows = 5;
-  const perRow = 22;
+  // Two rival ends, red vs blue — a couple of shades of each for a little
+  // depth without muddying the two-team read.
+  const colors = ["#ef476f", "#c94f4f", "#4b8bf0", "#2f5fc4"];
+  const rows = 8;
+  const perRow = 25;
   let out = "";
   for (let r = 0; r < rows; r++) {
     for (let i = 0; i < perRow; i++) {
