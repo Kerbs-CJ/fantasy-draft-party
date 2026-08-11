@@ -1109,7 +1109,11 @@ async function ensureDevBotIfNeeded() {
 async function devJump(status) {
   resetLocalGameState();
   let game_state = {};
-  if (status === "missing-club") game_state = { order: randomMissingClubOrder(), qIndex: 0, revealed: false };
+  if (status === "missing-club-intro") await ensureDevBotIfNeeded();
+  if (status === "missing-club") {
+    await ensureDevBotIfNeeded();
+    game_state = { order: randomMissingClubOrder(), qIndex: 0, revealed: false };
+  }
   if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
   if (status === "shootout-intro") await ensureDevBotIfNeeded();
   if (status === "round-robin") {
