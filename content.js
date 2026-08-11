@@ -1,98 +1,93 @@
-// Football trivia + "Guess the Footballer" content. Deliberately hand-curated
+// Football content for the draft party rounds. Deliberately hand-curated
 // from well-established, historical facts (not recent/live stats) so nothing
 // here goes stale or depends on results after this was written.
 
-window.TRIVIA_QUESTIONS = [
+// ── Guess the Missing Club ──────────────────────────────────
+// Each entry is a player's senior club career, in chronological order
+// (simplified to one entry per club — return spells are collapsed into
+// their first stint so every club in the list is unique and unambiguous
+// as a "missing" answer). `missingIndex` is the club hidden from the
+// timeline; `decoys` are two plausible-but-wrong clubs — deliberately
+// picked from the same league/country as the real answer so process of
+// elimination by "that league doesn't fit" doesn't give it away.
+window.MISSING_CLUB_PLAYERS = [
   {
-    q: "Which club did a 13-year-old Lionel Messi join, moving from Argentina to Spain, after Newell's Old Boys?",
-    choices: ["Real Madrid", "Barcelona", "Atlético Madrid", "Espanyol"],
-    correct: 1,
+    name: "Cristiano Ronaldo",
+    clubs: ["Sporting CP", "Manchester United", "Real Madrid", "Juventus", "Al-Nassr"],
+    missingIndex: 3,
+    decoys: ["AC Milan", "Inter Milan"],
   },
   {
-    q: "Which country lost the very first World Cup final, in 1930?",
-    choices: ["Brazil", "Argentina", "Uruguay", "Chile"],
-    correct: 1,
+    name: "Lionel Messi",
+    clubs: ["Barcelona", "Paris Saint-Germain", "Inter Miami"],
+    missingIndex: 1,
+    decoys: ["Olympique Marseille", "AS Monaco"],
   },
   {
-    q: "Who is the only person to have won the World Cup as both captain and head coach?",
-    choices: ["Franz Beckenbauer", "Mario Zagallo", "Didier Deschamps", "Zinedine Zidane"],
-    correct: 0,
+    name: "Zlatan Ibrahimović",
+    clubs: ["Malmö FF", "Ajax", "Juventus", "Inter Milan", "Barcelona", "AC Milan", "Paris Saint-Germain", "Manchester United", "LA Galaxy"],
+    missingIndex: 4,
+    decoys: ["Real Madrid", "Atlético Madrid"],
   },
   {
-    q: "Real Madrid won every European Cup from the competition's 1956 launch through which year, five in a row?",
-    choices: ["1958", "1959", "1960", "1961"],
-    correct: 2,
+    name: "David Beckham",
+    clubs: ["Manchester United", "Real Madrid", "LA Galaxy", "AC Milan", "Paris Saint-Germain"],
+    missingIndex: 3,
+    decoys: ["Juventus", "Inter Milan"],
   },
   {
-    q: "In what year was the offside law changed from requiring three defenders between attacker and goal down to two?",
-    choices: ["1912", "1925", "1938", "1949"],
-    correct: 1,
+    name: "Thierry Henry",
+    clubs: ["Monaco", "Juventus", "Arsenal", "Barcelona", "New York Red Bulls"],
+    missingIndex: 3,
+    decoys: ["Real Madrid", "Atlético Madrid"],
   },
   {
-    q: "Which country won the first-ever European Championship, in 1960?",
-    choices: ["West Germany", "Soviet Union", "Yugoslavia", "Czechoslovakia"],
-    correct: 1,
+    name: "Ronaldinho",
+    clubs: ["Grêmio", "Paris Saint-Germain", "Barcelona", "AC Milan", "Flamengo"],
+    missingIndex: 1,
+    decoys: ["AS Monaco", "Olympique Marseille"],
   },
   {
-    q: "Who was sent off after just 56 seconds — the fastest red card in a World Cup final — in 1986?",
-    choices: ["Diego Maradona", "José Batista", "Harald Schumacher", "Lothar Matthäus"],
-    correct: 1,
+    name: "Didier Drogba",
+    clubs: ["Le Mans", "Guingamp", "Marseille", "Chelsea", "Galatasaray"],
+    missingIndex: 3,
+    decoys: ["Arsenal", "Manchester City"],
   },
   {
-    q: "Which two clubs met in the first-ever European Cup final in 1956?",
-    choices: [
-      "Real Madrid & AC Milan",
-      "Real Madrid & Stade de Reims",
-      "Benfica & Real Madrid",
-      "Honvéd & Real Madrid",
-    ],
-    correct: 1,
+    name: "Luis Suárez",
+    clubs: ["Nacional", "Groningen", "Ajax", "Liverpool", "Barcelona", "Atlético Madrid", "Inter Miami"],
+    missingIndex: 3,
+    decoys: ["Manchester City", "Arsenal"],
   },
   {
-    q: "After winning the 2024 Copa América, which country holds the outright record for most Copa América titles?",
-    choices: ["Uruguay", "Brazil", "Argentina", "Chile"],
-    correct: 2,
+    name: "Andrea Pirlo",
+    clubs: ["Brescia", "Inter Milan", "AC Milan", "Juventus", "New York City FC"],
+    missingIndex: 2,
+    decoys: ["Napoli", "Fiorentina"],
   },
   {
-    q: "Who managed the Netherlands' 'Total Football' side at the 1974 World Cup?",
-    choices: ["Johan Cruyff", "Rinus Michels", "Guus Hiddink", "Louis van Gaal"],
-    correct: 1,
+    name: "Xabi Alonso",
+    clubs: ["Real Sociedad", "Liverpool", "Real Madrid", "Bayern Munich"],
+    missingIndex: 2,
+    decoys: ["Atlético Madrid", "Barcelona"],
   },
   {
-    q: "Which stadium hosted the famous 1950 World Cup deciding match known as the 'Maracanazo'?",
-    choices: ["Estádio do Pacaembu", "Estádio Mineirão", "Maracanã Stadium", "Estádio da Luz"],
-    correct: 2,
+    name: "Zinedine Zidane",
+    clubs: ["Cannes", "Bordeaux", "Juventus", "Real Madrid"],
+    missingIndex: 2,
+    decoys: ["AC Milan", "Inter Milan"],
   },
   {
-    q: "Alfredo Di Stéfano played full international football for three different countries. Argentina and Spain were two — what's the third?",
-    choices: ["Uruguay", "Colombia", "Chile", "Peru"],
-    correct: 1,
-  },
-  {
-    q: "Which English club did Brian Clough manage to back-to-back European Cup titles, in 1979 and 1980?",
-    choices: ["Derby County", "Leeds United", "Nottingham Forest", "Aston Villa"],
-    correct: 2,
-  },
-  {
-    q: "What nickname is given to the fixture between Barcelona and Real Madrid?",
-    choices: ["El Derbi", "El Clásico", "La Liga Grande", "El Superclásico"],
-    correct: 1,
-  },
-  {
-    q: "Which goalkeeper became a penalty-shootout hero for Argentina at the 1990 World Cup, saving key spot-kicks in both the quarter-final and semi-final?",
-    choices: ["Sergio Goycochea", "Nery Pumpido", "Carlos Roa", "Ubaldo Fillol"],
-    correct: 0,
-  },
-  {
-    q: "Which country did West Germany beat in the 1954 World Cup final, an upset remembered as the 'Miracle of Bern'?",
-    choices: ["Hungary", "Austria", "Uruguay", "Yugoslavia"],
-    correct: 0,
+    name: "Ronaldo Nazário",
+    clubs: ["Cruzeiro", "PSV Eindhoven", "Barcelona", "Inter Milan", "Real Madrid", "AC Milan", "Corinthians"],
+    missingIndex: 4,
+    decoys: ["Atlético Madrid", "Valencia"],
   },
 ];
 
 // ── Guess the Footballer ────────────────────────────────────
 // clues[] run from most obscure (revealed first) to most obvious (revealed
-// last) — guessing correctly on fewer clues scores more points.
+// last) — guessing correctly on fewer clues scores more.
 window.GUESS_PLAYERS = [
   {
     name: "Diego Maradona",

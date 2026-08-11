@@ -2,10 +2,11 @@
 
 A tiny live multiplayer web app for deciding the Fantasy League Bugaloo draft
 order. Everyone joins a room from their own device, plays through three
-rounds — hard football Trivia Blitz, Guess the Footballer from progressive
-clues, then a 1v1 penalty shootout round robin (everyone plays everyone once,
-standings by wins/goal difference) — and the combined leaderboard becomes the
-draft order, with a dramatic reveal at the end.
+rounds — Guess the Missing Club from a player's career timeline, Guess the
+Footballer from progressive clues, then a 1v1 penalty shootout round robin
+(everyone plays everyone once, standings by wins/goal difference) — and the
+combined leaderboard becomes the draft order, with a dramatic reveal at the
+end.
 
 No app install needed — it's just a web page. It's a plain static site (no
 build step, no server to maintain) that uses [Supabase](https://supabase.com)
@@ -49,9 +50,11 @@ it updates automatically within a minute or two.
    shares the 4-letter code (or the "Copy invite link" button) with the group.
 2. Everyone else opens the link, types their name, and joins.
 3. Host clicks **Start the party!** when everyone's in.
-4. Trivia Blitz plays first (5 random hard questions), then Guess the
-   Footballer (host reveals clues one at a time per round; guessing on
-   fewer clues scores more), with a leaderboard at the end of each.
+4. Guess the Missing Club plays first (5 random player career timelines,
+   one club redacted — everyone answers at once on their own device, and
+   the fastest correct guess scores most), then Guess the Footballer (host
+   reveals clues one at a time per round; guessing on fewer clues scores
+   more), with a leaderboard at the end of each.
 5. Host clicks through to the shootout intro screen (full explainer: format,
    how a match works, how standings/tiebreaks are decided, and a table of
    exactly how many points each final placement is worth), then **Start
@@ -78,8 +81,8 @@ hosting — the crown only appears on the host's own screen, never on other
 players'. Join with any display name you like (there's no login/identity
 check at all) if you also want your name itself to not give you away.
 
-**Driving the room:** only the host can advance stages (start trivia, reveal
-clues, start matches, move to the next screen, etc.) — non-host players
+**Driving the room:** only the host can advance stages (start the missing-club
+round, reveal clues, start matches, move to the next screen, etc.) — non-host players
 just don't get those controls, so nobody but the host can push the group
 forward or back. This is enforced in the app logic itself, not just by
 hiding buttons, so it holds even against someone poking at devtools. Same
@@ -89,10 +92,10 @@ spectator for that match.
 
 Notes:
 - Works best with a decent wifi/data connection for everyone.
-- Trivia and Guess-the-Footballer answers are graded client-side (the
-  question bank and correct answers live in `trivia.js`, which ships to
-  every browser) — fine for a friendly league, not tamper-proof against
-  someone digging through devtools.
+- Guess the Missing Club and Guess-the-Footballer answers are graded
+  client-side (the content bank and correct answers live in `content.js`,
+  which ships to every browser) — fine for a friendly league, not
+  tamper-proof against someone digging through devtools.
 - The shootout's two simultaneous picks (shooter + keeper) are written to
   the same shared room state; in the rare case both taps land within the
   same instant, one write can clobber the other and the affected player
@@ -104,6 +107,9 @@ Notes:
 
 ## Backlog / future ideas
 
+- **A 4th round** — the plan is at least 4 rounds total; currently there are
+  3 (Guess the Missing Club, Guess the Footballer, Penalty Shootout). No
+  concrete idea chosen yet for the 4th.
 - **Volleyball-style 1v1 mini-game** — real-time WASD movement and live ball
   physics, as an alternative/addition to the penalty shootout. Bigger build
   (needs an actual real-time physics sync layer), not started yet.
@@ -117,6 +123,7 @@ with any static file server (`npx serve .`, VS Code Live Server, etc).
 
 - `index.html` / `style.css` — page shell and styling
 - `app.js` — all game logic and Supabase realtime wiring
-- `trivia.js` — the trivia question bank (add/edit questions here)
+- `content.js` — the Guess the Missing Club and Guess the Footballer content
+  banks (add/edit entries here)
 - `config.js` — your Supabase project URL + anon key
 - `schema.sql` — database schema to run once in Supabase

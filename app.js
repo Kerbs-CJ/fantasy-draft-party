@@ -2,8 +2,8 @@
 
 const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
-const TRIVIA_QUESTION_COUNT = 5;
-const TRIVIA_TIME_MS = 10000;
+const MISSING_CLUB_COUNT = 5;
+const MISSING_CLUB_TIME_MS = 12000;
 const GUESS_PLAYER_COUNT = 7;
 const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
 const DEV_BOT_PREFIX = "🤖 ";
@@ -26,7 +26,7 @@ let local = {
   joinCodeInput: "",
   nameInput: "",
   error: "",
-  trivia: { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null },
+  missingClub: { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, choices: null, timer: null },
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
   botShooterScheduledFor: null,
@@ -188,7 +188,7 @@ async function onClick(e) {
   if (action === "create-room") return createRoom();
   if (action === "join-room") return joinRoom();
   if (action === "copy-link") return copyInviteLink();
-  if (action === "trivia-answer") return answerTrivia(Number(btn.dataset.choice));
+  if (action === "missing-club-answer") return answerMissingClub(btn.dataset.club);
   if (action === "guess-answer") return guessAnswer(btn.dataset.name);
   if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
   if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
@@ -201,8 +201,8 @@ async function onClick(e) {
   // clicking; this is the actual enforcement (e.g. against someone firing
   // the action straight from devtools).
   if (!isMeHost()) return;
-  if (action === "start-trivia") return startTrivia();
-  if (action === "trivia-next") return triviaNext();
+  if (action === "start-missing-club") return startMissingClub();
+  if (action === "missing-club-next") return missingClubNext();
   if (action === "guess-reveal-clue") return guessRevealClue();
   if (action === "guess-next") return guessNext();
   if (action === "show-shootout-intro") return updateRoom({ status: "shootout-intro" });
@@ -300,32 +300,34 @@ function setError(msg) {
   render();
 }
 
-// ── trivia ───────────────────────────────────────────────────
-function randomTriviaOrder() {
-  const pool = window.TRIVIA_QUESTIONS.map((_, i) => i);
+// ── guess the missing club ──────────────────────────────────
+function randomMissingClubOrder() {
+  const pool = window.MISSING_CLUB_PLAYERS.map((_, i) => i);
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  return pool.slice(0, TRIVIA_QUESTION_COUNT);
+  return pool.slice(0, MISSING_CLUB_COUNT);
 }
 
-async function startTrivia() {
-  await updateRoom({ status: "trivia", game_state: { order: randomTriviaOrder(), qIndex: 0 } });
+async function startMissingClub() {
+  await updateRoom({ status: "missing-club", game_state: { order: randomMissingClubOrder(), qIndex: 0 } });
 }
 
-function ensureTriviaTimer() {
+function ensureMissingClubTimer() {
   const gs = room.game_state || {};
   if (gs.qIndex === undefined) return;
-  if (local.trivia.qIndex !== gs.qIndex) {
-    local.trivia.qIndex = gs.qIndex;
-    local.trivia.answeredQIndex = null;
-    local.trivia.myChoice = null;
-    local.trivia.deadline = Date.now() + TRIVIA_TIME_MS;
-    clearTimeout(local.trivia.timer);
-    local.trivia.timer = setTimeout(() => {
-      if (local.trivia.answeredQIndex !== gs.qIndex) submitTriviaAnswer(-1, gs.qIndex);
-    }, TRIVIA_TIME_MS + 50);
+  if (local.missingClub.qIndex !== gs.qIndex) {
+    local.missingClub.qIndex = gs.qIndex;
+    local.missingClub.answeredQIndex = null;
+    local.missingClub.myChoice = null;
+    local.missingClub.deadline = Date.now() + MISSING_CLUB_TIME_MS;
+    const entry = window.MISSING_CLUB_PLAYERS[gs.order[gs.qIndex]];
+    local.missingClub.choices = shuffle([entry.clubs[entry.missingIndex], ...entry.decoys]);
+    clearTimeout(local.missingClub.timer);
+    local.missingClub.timer = setTimeout(() => {
+      if (local.missingClub.answeredQIndex !== gs.qIndex) submitMissingClubAnswer(null, gs.qIndex);
+    }, MISSING_CLUB_TIME_MS + 50);
   }
 }
 
@@ -342,27 +344,27 @@ function ensureGuessReady() {
   }
 }
 
-async function answerTrivia(choice) {
-  if (local.trivia.answeredQIndex === local.trivia.qIndex) return;
-  await submitTriviaAnswer(choice, local.trivia.qIndex);
+async function answerMissingClub(club) {
+  if (local.missingClub.answeredQIndex === local.missingClub.qIndex) return;
+  await submitMissingClubAnswer(club, local.missingClub.qIndex);
 }
 
-async function submitTriviaAnswer(choice, qIndex) {
+async function submitMissingClubAnswer(club, qIndex) {
   const me = myPlayer();
   if (!me) return;
-  local.trivia.answeredQIndex = qIndex;
-  local.trivia.myChoice = choice;
+  local.missingClub.answeredQIndex = qIndex;
+  local.missingClub.myChoice = club;
   const gs = room.game_state || {};
-  const question = window.TRIVIA_QUESTIONS[gs.order[qIndex]];
-  const correct = choice === question.correct;
-  const remaining = Math.max(0, local.trivia.deadline - Date.now());
-  const timeFraction = remaining / TRIVIA_TIME_MS;
+  const entry = window.MISSING_CLUB_PLAYERS[gs.order[qIndex]];
+  const correct = club === entry.clubs[entry.missingIndex];
+  const remaining = Math.max(0, local.missingClub.deadline - Date.now());
+  const timeFraction = remaining / MISSING_CLUB_TIME_MS;
   const points = correct ? Math.round(12 + 8 * timeFraction) : 0;
   render();
   await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, round_index: qIndex, points });
 }
 
-async function triviaNext() {
+async function missingClubNext() {
   const gs = room.game_state || {};
   const next = gs.qIndex + 1;
   if (next >= gs.order.length) {
@@ -570,8 +572,8 @@ function resolveHeadToHead(group, matches) {
 
 // 100/80/60/40/20 for a 5-player field (a clean 20-point step per place),
 // scaled to whatever the actual player count is. That keeps the shootout's
-// max swing (80, top to bottom) in the same ballpark as Trivia Blitz's max
-// swing (100 — 5 questions at up to 20pts each), noticeably gentler than
+// max swing (80, top to bottom) in the same ballpark as Guess the Missing
+// Club's max swing (100 — 5 rounds at up to 20pts each), noticeably gentler than
 // Guess the Footballer's (210 — 7 rounds at up to 30pts each), since the
 // shootout is one placement rather than several independently-scored
 // rounds. rank is 0-indexed (0 = 1st place).
@@ -703,8 +705,8 @@ async function finishRoundRobin() {
 
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
-  clearTimeout(local.trivia.timer);
-  local.trivia = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, timer: null };
+  clearTimeout(local.missingClub.timer);
+  local.missingClub = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, choices: null, timer: null };
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
   local.botShooterScheduledFor = null;
@@ -727,7 +729,7 @@ async function ensureDevBotIfNeeded() {
 async function devJump(status) {
   resetLocalGameState();
   let game_state = {};
-  if (status === "trivia") game_state = { order: randomTriviaOrder(), qIndex: 0 };
+  if (status === "missing-club") game_state = { order: randomMissingClubOrder(), qIndex: 0 };
   if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
   if (status === "shootout-intro") await ensureDevBotIfNeeded();
   if (status === "round-robin") {
@@ -940,8 +942,8 @@ function render() {
 
   // Confetti pieces are appended straight to <body> (see spawnConfetti),
   // outside the #app subtree this function replaces on every render — so
-  // navigating away from the reveal screen (e.g. jumping back to Trivia
-  // mid-testing) wouldn't otherwise clear ones still mid-fall.
+  // navigating away from the reveal screen (e.g. jumping back to Missing
+  // Club mid-testing) wouldn't otherwise clear ones still mid-fall.
   if (room.status !== "reveal") clearConfetti();
 
   let html = renderTopBar();
@@ -949,9 +951,9 @@ function render() {
     case "lobby":
       html += renderLobby();
       break;
-    case "trivia":
-      ensureTriviaTimer();
-      html += renderTrivia();
+    case "missing-club":
+      ensureMissingClubTimer();
+      html += renderMissingClub();
       break;
     case "guess":
       ensureGuessReady();
@@ -1006,7 +1008,7 @@ function renderTopBar() {
 function renderDevBar() {
   const stages = [
     ["lobby", "Lobby"],
-    ["trivia", "Trivia"],
+    ["missing-club", "Missing Club"],
     ["guess", "Guess"],
     ["leaderboard", "Leaderboard"],
     ["shootout-intro", "PK Intro"],
@@ -1030,7 +1032,7 @@ function renderHome() {
   return `
     <div class="card hero">
       <h1>🏆 Fantasy League Bugaloo</h1>
-      <p class="sub">Trivia, guesswork, and penalty kicks — three rounds to decide who drafts first.</p>
+      <p class="sub">Guess the missing club, guess the footballer, and penalty kicks — rounds to decide who drafts first.</p>
       ${local.error ? `<p class="error">${escapeHtml(local.error)}</p>` : ""}
       <label class="field">
         <span>Your name</span>
@@ -1057,7 +1059,7 @@ function renderDevQuickStart() {
       <p class="dev-label">🔧 Dev preview — only visible with ?dev=1 in the URL</p>
       <p class="sub">Jump straight into a game to test it solo. Creates a throwaway room if you don't have one open yet.</p>
       <div class="dev-grid">
-        <button class="dev-btn" data-action="dev-quickstart" data-status="trivia">🧠 Trivia Blitz</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="missing-club">⚽ Guess the Missing Club</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="guess">🕵️ Guess the Footballer</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="round-robin">⚽ PK Round Robin</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="reveal">🏆 Reveal</button>
@@ -1083,7 +1085,7 @@ function renderLobby() {
 
       ${
         isHost
-          ? `<button class="btn primary" data-action="start-trivia" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
+          ? `<button class="btn primary" data-action="start-missing-club" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
               ${players.length < 2 && !DEV_MODE ? "Need at least 2 players" : "▶️ Start the party!"}
             </button>`
           : `<p class="waiting">Waiting for the host to start…</p>`
@@ -1091,28 +1093,34 @@ function renderLobby() {
     </div>`;
 }
 
-function renderTrivia() {
+function renderMissingClub() {
   const me = myPlayer();
   const isHost = me?.is_host;
   const gs = room.game_state || {};
   const qIndex = gs.qIndex ?? 0;
-  const question = window.TRIVIA_QUESTIONS[gs.order[qIndex]];
-  const answered = local.trivia.answeredQIndex === qIndex;
+  const entry = window.MISSING_CLUB_PLAYERS[gs.order[qIndex]];
+  const missingClub = entry.clubs[entry.missingIndex];
+  const answered = local.missingClub.answeredQIndex === qIndex;
   const answeredIds = answeredPlayerIds(1, qIndex);
   return `
     <div class="card">
-      <h2>🧠 Trivia Blitz</h2>
-      <p class="sub">Question ${qIndex + 1} of ${gs.order.length}</p>
-      <p class="question">${escapeHtml(question.q)}</p>
+      <h2>⚽ Guess the Missing Club</h2>
+      <p class="sub">Journey ${qIndex + 1} of ${gs.order.length} — everyone answers at once, fastest correct guess scores most</p>
+      <p class="question">${escapeHtml(entry.name)}'s career:</p>
+      <ol class="club-timeline">
+        ${entry.clubs
+          .map((c, i) => (i === entry.missingIndex ? `<li class="missing-slot">❓ ???</li>` : `<li>${escapeHtml(c)}</li>`))
+          .join("")}
+      </ol>
       <div class="choices">
-        ${question.choices
-          .map((c, i) => {
+        ${(local.missingClub.choices || [])
+          .map((c) => {
             let cls = "choice";
             if (answered) {
-              if (i === question.correct) cls += " correct";
-              else if (i === local.trivia.myChoice) cls += " wrong";
+              if (c === missingClub) cls += " correct";
+              else if (c === local.missingClub.myChoice) cls += " wrong";
             }
-            return `<button class="${cls}" data-action="trivia-answer" data-choice="${i}" ${answered ? "disabled" : ""}>${escapeHtml(c)}</button>`;
+            return `<button class="${cls}" data-action="missing-club-answer" data-club="${escapeHtml(c)}" ${answered ? "disabled" : ""}>${escapeHtml(c)}</button>`;
           })
           .join("")}
       </div>
@@ -1121,7 +1129,7 @@ function renderTrivia() {
       <ul class="player-list compact">
         ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
       </ul>
-      ${isHost ? `<button class="btn primary" data-action="trivia-next">${qIndex + 1 >= gs.order.length ? "🕵️ Next: Guess the Footballer" : "Next question"}</button>` : ""}
+      ${isHost ? `<button class="btn primary" data-action="missing-club-next">${qIndex + 1 >= gs.order.length ? "🕵️ Next: Guess the Footballer" : "Next journey"}</button>` : ""}
     </div>`;
 }
 

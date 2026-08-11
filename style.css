@@ -195,6 +195,27 @@ input::placeholder { color: #6c9b83; }
 .clue-list li {
   line-height: 1.4;
 }
+
+.club-timeline {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.club-timeline li {
+  line-height: 1.4;
+}
+.club-timeline li.missing-slot {
+  list-style: none;
+  margin-left: -20px;
+  padding: 6px 10px;
+  border: 1px dashed var(--card-border);
+  border-radius: 8px;
+  color: var(--sub);
+  font-weight: 700;
+  width: fit-content;
+}
 .guess-host-controls {
   display: flex;
   flex-direction: column;
