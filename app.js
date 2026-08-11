@@ -770,8 +770,8 @@ function ensureShootoutAnim() {
   }
 }
 
-const PK_BALL_START = { x: 50, y: 122 };
-const PK_KEEPER_START = { x: 50, y: 66 };
+const PK_BALL_START = { x: 50, y: 126 };
+const PK_KEEPER_START = { x: 50, y: 69 };
 
 function prefersReducedMotion() {
   return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -843,12 +843,16 @@ function triggerShotAnimation(entry) {
   });
 }
 
+const PK_AD_TEXT = "Fantasy League Bugaloo";
+
 function renderPkGoal(entry, animate) {
   const ballPos = animate ? PK_BALL_START : ZONE_POS[entry.shooterPick];
   const keeperPos = animate ? PK_KEEPER_START : ZONE_POS[entry.keeperPick];
   if (animate) setTimeout(() => triggerShotAnimation(entry), 180);
   return `
     <div class="pk-goal">
+      <div class="pk-crowd"></div>
+      <div class="pk-adboard">${Array(3).fill(`<span>${escapeHtml(PK_AD_TEXT)}</span>`).join("")}</div>
       <div class="pk-goal-frame"></div>
       <div id="pk-keeper" class="pk-keeper" style="left:${keeperPos.x}%; top:${keeperPos.y}%;">🧤</div>
       <div id="pk-ball" class="pk-ball" style="left:${ballPos.x}%; top:${ballPos.y}%;">⚽</div>
@@ -1236,7 +1240,7 @@ function renderRoundRobin() {
   const nextIndex = findNextRRMatch(matches);
   return `
     <div class="card">
-      <h2>🏁 Round Robin Standings</h2>
+      <h2>🏁 Standings</h2>
       <p class="sub">${played} of ${matches.length} matches played</p>
       ${renderStandingsTable(standings)}
       <h3>Matches</h3>
@@ -1268,9 +1272,9 @@ function renderRoundRobin() {
 const ZONES = ["L", "C", "R"];
 const ZONE_LABEL = { L: "⬅ Left", C: "⬆ Center", R: "➡ Right" };
 const ZONE_POS = {
-  L: { x: 20, y: 62 },
-  C: { x: 50, y: 54 },
-  R: { x: 80, y: 62 },
+  L: { x: 20, y: 66 },
+  C: { x: 50, y: 58 },
+  R: { x: 80, y: 66 },
 };
 
 function renderPkScoreboard(match) {

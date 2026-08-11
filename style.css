@@ -484,7 +484,7 @@ code {
 .pk-goal {
   position: relative;
   width: 100%;
-  height: 180px;
+  height: 210px;
   margin: 4px 0 16px;
   border-radius: 10px;
   overflow: hidden;
@@ -493,25 +493,58 @@ code {
     radial-gradient(ellipse 130px 90px at 96% -8%, rgba(255,241,199,0.4), transparent 65%),
     repeating-linear-gradient(115deg, #1c5735 0 22px, #164a2c 22px 44px);
 }
-/* A thin band of crowd-silhouette dots along the top, dimly lit — turns
-   the flat backdrop into "a stand behind the goal" instead of empty space. */
-.pk-goal::before {
-  content: "";
+/* Tiered stand packed with a crowd, rendered as two overlapping dot
+   patterns (slightly different colors/spacing so it doesn't read as a
+   uniform grid) under a dark gradient for depth, plus faint horizontal
+   seating-row lines. */
+.pk-crowd {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
-  height: 22%;
-  background:
-    linear-gradient(rgba(5,12,9,0.8), rgba(5,12,9,0.15)),
-    repeating-radial-gradient(circle at 5px 5px, rgba(234,246,239,0.22) 0 1.5px, transparent 1.5px 9px);
+  height: 21%;
   z-index: 0;
+  background:
+    repeating-linear-gradient(180deg, rgba(255,255,255,0.045) 0 3px, transparent 3px 7px),
+    repeating-radial-gradient(circle at 4px 4px, rgba(234,246,239,0.26) 0 1.3px, transparent 1.3px 8px),
+    repeating-radial-gradient(circle at 9px 1px, rgba(255,209,102,0.16) 0 1.1px, transparent 1.1px 10px),
+    linear-gradient(rgba(4,10,7,0.94), rgba(4,10,7,0.55));
 }
+/* Pitch-side sponsor hoarding — the one bit of branding a real broadcast
+   shot always lingers on. */
+.pk-adboard {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 21%;
+  height: 11%;
+  z-index: 0;
+  display: flex;
+  justify-content: space-evenly;
+  align-items: center;
+  overflow: hidden;
+  background: linear-gradient(180deg, #0e2118, #0a1712);
+  border-top: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 2px solid rgba(0,0,0,0.45);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+}
+.pk-adboard span {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 0 14px;
+  border-left: 1px solid rgba(255,255,255,0.12);
+}
+.pk-adboard span:first-child { border-left: none; }
 .pk-goal-frame {
   position: absolute;
   left: 6%;
   right: 6%;
-  top: 26%;
+  top: 33%;
   bottom: 0;
   border: 5px solid rgba(234,246,239,0.92);
   border-bottom: none;
