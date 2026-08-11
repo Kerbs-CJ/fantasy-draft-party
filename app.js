@@ -1129,7 +1129,29 @@ async function devQuickStart(status) {
 }
 
 // ── render ──────────────────────────────────────────────────
+// Wraps the real render logic so a bad/stale room state (e.g. a
+// game_state shape left over from a previous version of the app, or any
+// other unexpected render-time error) can never leave the page stuck on
+// the static "Loading…" placeholder forever with no way out — instead it
+// falls back to a recovery screen that clears the broken session.
 function render() {
+  try {
+    renderInner();
+  } catch (err) {
+    console.error("Render failed — resetting session.", err);
+    clearSession();
+    room = null;
+    players = [];
+    scores = [];
+    if (channel) {
+      sb?.removeChannel(channel);
+      channel = null;
+    }
+    APP_EL.innerHTML = `${renderHome()}<p class="error" style="margin-top:12px">Something went wrong loading your last session, so it's been reset — sorry! Try creating or joining a room again.</p>`;
+  }
+}
+
+function renderInner() {
   if (!sb) {
     APP_EL.innerHTML = renderSetupNeeded();
     return;
