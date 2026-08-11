@@ -76,14 +76,17 @@ it updates automatically within a minute or two.
    (ranked by wins, then goal difference, then head-to-head result) adds to the
    same combined leaderboard.
 6. Host clicks through to the Football Golf intro (format + scoring table),
-   then **Start Football Golf**. It's a fixed 3-hole course, played one
-   player at a time while everyone else watches: two taps per hole — a
-   power meter sweeps back and forth, tap to lock it in, then the same for
-   an aim meter. The closer both taps land to dead-center, the better the
-   shot (🎯 Bullseye down to ❌ a miss). A live side panel tracks every
-   player's running total as they each take their turn. Once everyone's
-   played all 3 holes, host clicks **Show final standings** — final
-   placement (highest total first) adds to the combined leaderboard.
+   then **Start Football Golf**. It's a fixed 3-hole course — everyone plays
+   the *same hole at once*, each in their own time on their own device, like
+   Guess the Missing Club: two taps — a power meter sweeps back and forth,
+   tap to lock it in, then the same for an aim meter. The closer both taps
+   land to dead-center, the better the shot (🎯 Bullseye down to ❌ a miss).
+   As each player finishes, their ball lands on a shared green everyone can
+   watch fill up live, with a side panel tracking who's in and running
+   totals. Host moves the group to the next hole whenever ready — no need
+   to wait on stragglers. After all 3 holes, host clicks **Show final
+   standings** — final placement (highest total first) adds to the
+   combined leaderboard.
 7. Host clicks **Reveal Draft Order!** for the big reveal.
 
 Heads up: round robin means more matches than a knockout bracket would (10

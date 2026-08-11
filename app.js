@@ -46,9 +46,13 @@ let local = {
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
-  golf: { subPhase: "ready", phaseStart: null, power: null },
+  golf: { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, answeredHoleIndex: null },
   golfAnim: { key: null, revealed: false },
 };
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
 
 init();
 
@@ -219,7 +223,6 @@ async function onClick(e) {
   if (action === "golf-begin-swing") return golfBeginSwing();
   if (action === "golf-lock-power") return golfLockPower();
   if (action === "golf-lock-aim") return golfLockAim();
-  if (action === "golf-advance-hole") return golfAdvanceHole();
   if (action === "leave") return leaveRoom();
   if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
 
@@ -243,7 +246,7 @@ async function onClick(e) {
   if (action === "finish-round-robin") return finishRoundRobin();
   if (action === "show-golf-intro") return updateRoom({ status: "golf-intro" });
   if (action === "start-golf") return startGolf();
-  if (action === "golf-next-player") return golfNextPlayer();
+  if (action === "golf-next-hole") return golfNextHole();
   if (action === "reveal") return updateRoom({ status: "reveal" });
   if (action === "dev-jump") return devJump(btn.dataset.status);
 }
@@ -756,12 +759,14 @@ async function finishRoundRobin() {
 }
 
 // ── football golf ───────────────────────────────────────────
-// A fixed 3-hole course, played one player at a time — no real-time
-// physics sync needed. The sweeping power/aim meters are purely local to
-// the active player's own device (nothing about mid-swing is shared);
-// only the resolved shot gets written to room state once both taps are
-// in, and every client — including spectators — animates that same
-// resolved result in independently, same idea as the shootout's kick log.
+// A fixed 3-hole course. Everyone plays the SAME hole at once, each on
+// their own device and own time (like Guess the Missing Club) — no
+// bracket, no turn order, so nobody's ever stuck waiting on one slow (or
+// unresponsive, e.g. a dev bot) player. The sweeping power/aim meters are
+// purely local to each player's own device (nothing mid-swing is shared);
+// only the resolved shot gets written to shared room state, and every
+// client independently renders whichever balls have landed on the shared
+// green so far, live, as more players finish.
 
 // Maps an elapsed time to where a linear-alternate CSS sweep animation
 // would currently sit — a triangle wave from 0 to 100 and back, matching
@@ -781,61 +786,70 @@ function scoreGolfShot(hole, power, aim) {
   return { power, aim, powerAcc, aimAcc, accuracy, ring, points: GOLF_RING_POINTS[ring] };
 }
 
-function golfActivePlayerId(gs) {
-  return gs?.order?.[gs.turnIndex];
+// How many players have a recorded shot for the current hole yet.
+function golfFinishedPlayers(gs) {
+  return players.filter((p) => (gs.results[p.id] || []).length > gs.holeIndex);
 }
 
 async function startGolf() {
-  const order = shuffle(players.map((p) => p.id));
-  await updateRoom({ status: "golf", game_state: { golf: { order, turnIndex: 0, results: {} } } });
+  await updateRoom({ status: "golf", game_state: { golf: { holeIndex: 0, results: {} } } });
+}
+
+function ensureGolfReady() {
+  const gs = room.game_state?.golf;
+  if (!gs) return;
+  if (local.golf.holeIndex !== gs.holeIndex) {
+    local.golf = { holeIndex: gs.holeIndex, subPhase: "ready", phaseStart: null, power: null, answeredHoleIndex: null };
+  }
+}
+
+function golfAlreadyAnswered(gs) {
+  const me = myPlayer();
+  if (!me) return true;
+  return (gs.results[me.id] || []).length > gs.holeIndex;
 }
 
 function golfBeginSwing() {
   const gs = room.game_state?.golf;
-  if (!gs || myPlayer()?.id !== golfActivePlayerId(gs)) return;
-  local.golf = { subPhase: "power", phaseStart: Date.now(), power: null };
+  if (!gs || golfAlreadyAnswered(gs)) return;
+  local.golf = { ...local.golf, subPhase: "power", phaseStart: Date.now(), power: null };
   render();
 }
 
 function golfLockPower() {
   const gs = room.game_state?.golf;
-  if (!gs || myPlayer()?.id !== golfActivePlayerId(gs)) return;
+  if (!gs || golfAlreadyAnswered(gs)) return;
   if (local.golf.subPhase !== "power") return;
   const power = sweepValue(Date.now() - local.golf.phaseStart, GOLF_SWEEP_PERIOD_MS);
-  local.golf = { subPhase: "aim", phaseStart: Date.now(), power };
+  local.golf = { ...local.golf, subPhase: "aim", phaseStart: Date.now(), power };
   render();
 }
 
 async function golfLockAim() {
+  const me = myPlayer();
   const gs = room.game_state?.golf;
-  const activeId = golfActivePlayerId(gs);
-  if (!gs || myPlayer()?.id !== activeId) return;
+  if (!me || !gs || golfAlreadyAnswered(gs)) return;
   if (local.golf.subPhase !== "aim") return;
   const aim = sweepValue(Date.now() - local.golf.phaseStart, GOLF_SWEEP_PERIOD_MS);
-  const holeIndex = (gs.results[activeId] || []).length;
-  const hole = GOLF_HOLES[holeIndex];
+  const hole = GOLF_HOLES[gs.holeIndex];
   if (!hole) return;
   const result = scoreGolfShot(hole, local.golf.power, aim);
-  const results = { ...gs.results, [activeId]: [...(gs.results[activeId] || []), result] };
-  local.golf = { subPhase: "result", phaseStart: null, power: null };
+  const results = { ...gs.results, [me.id]: [...(gs.results[me.id] || []), result] };
+  local.golf = { ...local.golf, subPhase: "ready", phaseStart: null, power: null, answeredHoleIndex: gs.holeIndex };
   await updateRoom({ game_state: { golf: { ...gs, results } } });
 }
 
-// Any player still on their turn (not yet finished all holes) uses this
-// to move from admiring their last result on to the next hole.
-function golfAdvanceHole() {
-  local.golf = { subPhase: "ready", phaseStart: null, power: null };
-  render();
-}
-
-async function golfNextPlayer() {
+// Host-triggered, same as Missing Club's reveal/next — doesn't require
+// every player to have finished, so a stuck or bot player never blocks
+// the group from moving on.
+async function golfNextHole() {
   const gs = room.game_state?.golf;
   if (!gs) return;
-  const next = gs.turnIndex + 1;
-  if (next >= gs.order.length) {
+  const next = gs.holeIndex + 1;
+  if (next >= GOLF_HOLES.length) {
     await finishGolf(gs);
   } else {
-    await updateRoom({ game_state: { golf: { ...gs, turnIndex: next } } });
+    await updateRoom({ game_state: { golf: { ...gs, holeIndex: next } } });
   }
 }
 
@@ -857,20 +871,16 @@ async function finishGolf(gs) {
   await updateRoom({ status: "golf-leaderboard" });
 }
 
-// Drives the pop-in reveal for whichever hole result is currently on
-// display (the active player's most recent shot) — mirrors
-// ensureShootoutAnim()'s "new data → brief delay → reveal" shape so both
-// the shooter and every spectator animate the same result in together.
+// Drives the pop-in reveal for the shared green — whenever the current
+// hole changes, or another ball lands on it, everyone's screen animates
+// the (possibly-updated) set of balls in together. Simpler than tracking
+// each ball's own reveal state individually: the whole green just
+// re-pops when its contents change, which is a fine trade for a casual
+// party game.
 function ensureGolfAnim() {
   const gs = room.game_state?.golf;
   if (!gs) return;
-  const activeId = golfActivePlayerId(gs);
-  const results = gs.results[activeId] || [];
-  if (results.length === 0) {
-    local.golfAnim = { key: null, revealed: false };
-    return;
-  }
-  const key = `${activeId}-${results.length}`;
+  const key = `${gs.holeIndex}-${golfFinishedPlayers(gs).length}`;
   if (local.golfAnim.key !== key) {
     local.golfAnim.key = key;
     local.golfAnim.revealed = false;
@@ -891,7 +901,7 @@ function resetLocalGameState() {
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
   local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
-  local.golf = { subPhase: "ready", phaseStart: null, power: null };
+  local.golf = { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, answeredHoleIndex: null };
   local.golfAnim = { key: null, revealed: false };
 }
 
@@ -917,11 +927,14 @@ async function devJump(status) {
     await ensureDevBotIfNeeded();
     game_state = { roundRobin: { matches: generateRoundRobinMatches(players.map((p) => p.id)) } };
   }
-  // No dev bots for golf — turns are sequential and there's no bot
-  // auto-play for it (unlike the shootout), so a bot landing in the turn
-  // order would just stall the host's "Next Player" button forever. Solo
-  // testing plays through your own turn only, which is what matters here.
-  if (status === "golf") game_state = { golf: { order: shuffle(players.map((p) => p.id)), turnIndex: 0, results: {} } };
+  // Dev bots are safe here (unlike the old turn-based design) — they just
+  // never submit a shot, which no longer blocks anyone since the host can
+  // advance holes without waiting on every player.
+  if (status === "golf-intro") await ensureDevBotIfNeeded();
+  if (status === "golf") {
+    await ensureDevBotIfNeeded();
+    game_state = { golf: { holeIndex: 0, results: {} } };
+  }
   await updateRoom({ status, game_state });
 }
 
@@ -1175,6 +1188,7 @@ function render() {
       html += renderGolfIntro();
       break;
     case "golf":
+      ensureGolfReady();
       ensureGolfAnim();
       html += renderGolf();
       break;
@@ -1777,7 +1791,7 @@ function renderGolfIntro() {
       <h2>⛳ Football Golf</h2>
 
       <h3>The format</h3>
-      <p>A fixed ${GOLF_HOLES.length}-hole course. One player takes their turn at a time — everyone else watches — playing all ${GOLF_HOLES.length} holes back to back before it passes to the next player.</p>
+      <p>A fixed ${GOLF_HOLES.length}-hole course. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. As each player finishes their shot, their ball lands on a shared green everyone can see, live.</p>
 
       <h3>How a shot works</h3>
       <p>Two taps per hole. First, a power meter sweeps back and forth — tap to lock it wherever it's sitting. Then an aim meter does the same. The closer both taps land to dead-center, the better the shot — there's no visible target to judge against beforehand, so it's feel and timing, not memorization.</p>
@@ -1794,7 +1808,7 @@ function renderGolfIntro() {
           </tbody>
         </table>
       </div>
-      <p>Your ${GOLF_HOLES.length} hole scores add up to a total. Once everyone's played, final standing (highest total first) adds placement points to the combined leaderboard — same system as the penalty shootout.</p>
+      <p>Host moves the group to the next hole whenever ready — no need to wait for stragglers. Your ${GOLF_HOLES.length} hole scores add up to a total; once all ${GOLF_HOLES.length} holes are done, final standing (highest total first) adds placement points to the combined leaderboard — same system as the penalty shootout.</p>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
@@ -1812,15 +1826,11 @@ function renderGolf() {
   const me = myPlayer();
   const isHost = me?.is_host;
   const gs = room.game_state.golf;
-  const activeId = golfActivePlayerId(gs);
-  const activePlayer = players.find((p) => p.id === activeId);
-  const isMyTurn = me?.id === activeId;
-  const activeResults = gs.results[activeId] || [];
-  const holesDone = activeResults.length;
-  const holeIndex = Math.min(holesDone, GOLF_HOLES.length - 1);
+  const holeIndex = gs.holeIndex;
   const hole = GOLF_HOLES[holeIndex];
-  const allDone = holesDone >= GOLF_HOLES.length;
-  const lastResult = activeResults[activeResults.length - 1] || null;
+  const answered = golfAlreadyAnswered(gs);
+  const finished = golfFinishedPlayers(gs);
+  const finishedIds = new Set(finished.map((p) => p.id));
 
   const scoreboardRows = players
     .map((p) => ({
@@ -1830,13 +1840,13 @@ function renderGolf() {
     }))
     .sort((a, b) => b.total - a.total);
 
-  let mainContent;
-  if (isMyTurn && !allDone) {
+  let swingUi = "";
+  if (!answered) {
     if (local.golf.subPhase === "power" || local.golf.subPhase === "aim") {
       const label = local.golf.subPhase === "power" ? "Tap when the power looks right." : "Now tap to set your aim.";
       const action = local.golf.subPhase === "power" ? "golf-lock-power" : "golf-lock-aim";
       const btnLabel = local.golf.subPhase === "power" ? "🦵 Kick!" : "🎯 Strike!";
-      mainContent = `
+      swingUi = `
         <div class="golf-hole-card">
           <h3>Hole ${holeIndex + 1} of ${GOLF_HOLES.length}: ${escapeHtml(hole.name)}</h3>
           <p class="sub">${label}</p>
@@ -1845,60 +1855,74 @@ function renderGolf() {
           </div>
           <button class="btn primary" data-action="${action}">${btnLabel}</button>
         </div>`;
-    } else if (local.golf.subPhase === "result" && lastResult) {
-      mainContent = `
-        ${renderGolfResultCard(lastResult, "You")}
-        <button class="btn primary" data-action="golf-advance-hole">▶️ Next hole</button>`;
     } else {
-      mainContent = `
+      swingUi = `
         <div class="golf-hole-card">
           <h3>Hole ${holeIndex + 1} of ${GOLF_HOLES.length}: ${escapeHtml(hole.name)}</h3>
           <p class="sub">${escapeHtml(hole.description)}</p>
           <button class="btn primary" data-action="golf-begin-swing">⚡ Ready? Kick!</button>
         </div>`;
     }
-  } else if (holesDone === 0) {
-    mainContent = `<p class="waiting">🏌️ ${escapeHtml(activePlayer?.name || "")} is lining up Hole 1 of ${GOLF_HOLES.length}…</p>`;
   } else {
-    mainContent = `
-      ${renderGolfResultCard(lastResult, activePlayer?.name || "")}
-      ${
-        allDone
-          ? `<p class="waiting">${escapeHtml(activePlayer?.name || "")} finished all ${GOLF_HOLES.length} holes — ${activeResults.reduce((s, r) => s + r.points, 0)} points!</p>`
-          : `<p class="waiting">Hole ${holesDone + 1} of ${GOLF_HOLES.length} next…</p>`
-      }`;
+    swingUi = `<p class="waiting">You're on the green for this hole. ${isHost ? "" : "Waiting for host to continue…"}</p>`;
   }
 
   return `
     <div class="card">
       <h2>⛳ Football Golf</h2>
-      <p class="sub">Hole ${Math.min(holesDone + 1, GOLF_HOLES.length)} of ${GOLF_HOLES.length} — ${escapeHtml(activePlayer?.name || "")}'s turn</p>
+      <p class="sub">Hole ${holeIndex + 1} of ${GOLF_HOLES.length}: ${escapeHtml(hole.name)} — ${escapeHtml(hole.description)}</p>
       <div class="side-layout">
-        <div class="side-main">${mainContent}</div>
+        <div class="side-main">
+          ${swingUi}
+          ${renderGolfGreen(hole, gs, holeIndex, finished)}
+        </div>
         <div class="side-roster">
-          <h3>Scores</h3>
+          <h3>On the green (${finished.length}/${players.length})</h3>
           <ul class="player-list compact">
-            ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total} (${r.holes}/${GOLF_HOLES.length})</li>`).join("")}
+            ${players.map((p) => `<li>${finishedIds.has(p.id) ? "⛳" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+          </ul>
+          <h3>Totals</h3>
+          <ul class="player-list compact">
+            ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total}</li>`).join("")}
           </ul>
         </div>
       </div>
       ${
-        isHost && allDone
-          ? `<button class="btn primary" data-action="golf-next-player">${gs.turnIndex + 1 >= gs.order.length ? "🏆 Show final standings" : "Next player"}</button>`
+        isHost
+          ? `<button class="btn primary" data-action="golf-next-hole">${holeIndex + 1 >= GOLF_HOLES.length ? "🏆 Show final standings" : "Next hole"}</button>`
           : ""
       }
     </div>`;
 }
 
-function renderGolfResultCard(result, whoLabel) {
+// A shared top-down "green" — every player who's landed a shot on the
+// current hole shows up as a ball, positioned by how far off their power
+// and aim were from dead-center. Purely illustrative (radius here is
+// visual, not literally the hole's scoring radius) — the shot list below
+// it is the actual source of truth for who scored what.
+function renderGolfGreen(hole, gs, holeIndex, finished) {
   const revealedClass = local.golfAnim.revealed ? " revealed" : "";
+  const balls = finished
+    .map((p) => {
+      const result = gs.results[p.id][holeIndex];
+      const offsetX = clamp(((result.aim - hole.aimCenter) / hole.radius) * 42, -42, 42);
+      const offsetY = clamp((-(result.power - hole.powerCenter) / hole.radius) * 42, -42, 42);
+      return `
+        <div class="golf-ball" style="left:${50 + offsetX}%; top:${50 + offsetY}%;" title="${escapeHtml(p.name)} — ${GOLF_RING_LABEL[result.ring]} (+${result.points})">
+          <span class="golf-ball-icon">⚽</span>
+          <span class="golf-ball-label">${escapeHtml(p.name)}</span>
+        </div>`;
+    })
+    .join("");
+  const shotList = finished
+    .map((p) => {
+      const r = gs.results[p.id][holeIndex];
+      return `<li>${GOLF_RING_EMOJI[r.ring]} ${escapeHtml(p.name)} — ${GOLF_RING_LABEL[r.ring]} (+${r.points})</li>`;
+    })
+    .join("");
   return `
-    <div class="golf-result golf-ring-${result.ring}${revealedClass}">
-      <div class="golf-ring-emoji">${GOLF_RING_EMOJI[result.ring]}</div>
-      <p class="golf-result-label">${escapeHtml(whoLabel)} — ${GOLF_RING_LABEL[result.ring]}</p>
-      <p class="golf-result-points">+${result.points} points</p>
-      <p class="golf-meter-recap">Power ${Math.round(result.powerAcc * 100)}% · Aim ${Math.round(result.aimAcc * 100)}%</p>
-    </div>`;
+    <div class="golf-green${revealedClass}">${balls}</div>
+    ${finished.length ? `<ul class="golf-shot-list">${shotList}</ul>` : `<p class="waiting">No shots landed yet…</p>`}`;
 }
 
 function renderLeaderboard(gameName, nextAction, nextLabel) {

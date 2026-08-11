@@ -228,25 +228,54 @@ input::placeholder { color: #6c9b83; }
 }
 .golf-sweep { animation: golf-sweep 1.4s linear infinite alternate; }
 
-.golf-result {
-  text-align: center;
-  padding: 20px 12px;
-  border-radius: var(--radius);
+.golf-green {
+  position: relative;
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 1;
+  margin: 16px auto;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(6,214,160,0.35) 0%, rgba(6,214,160,0.35) 12%,
+    rgba(255,209,102,0.28) 12%, rgba(255,209,102,0.28) 30%,
+    rgba(255,255,255,0.10) 30%, rgba(255,255,255,0.10) 55%,
+    rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.04) 100%);
   border: 1px solid var(--card-border);
-  background: rgba(255,255,255,0.04);
   opacity: 0;
-  transform: scale(0.75);
+  transform: scale(0.85);
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
-  margin-bottom: 12px;
 }
-.golf-result.revealed { opacity: 1; transform: scale(1); }
-.golf-result.golf-ring-bullseye { border-color: var(--accent2); background: rgba(6,214,160,0.15); }
-.golf-result.golf-ring-inner { border-color: var(--accent); background: rgba(255,209,102,0.12); }
-.golf-result.golf-ring-miss { border-color: var(--danger); background: rgba(239,71,111,0.12); }
-.golf-ring-emoji { font-size: 40px; margin-bottom: 4px; }
-.golf-result-label { font-weight: 700; margin: 4px 0; }
-.golf-result-points { font-size: 20px; font-weight: 800; color: var(--accent); margin: 4px 0; }
-.golf-meter-recap { color: var(--sub); font-size: 13px; margin: 4px 0 0; }
+.golf-green.revealed { opacity: 1; transform: scale(1); }
+.golf-ball {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
+.golf-ball-label {
+  font-size: 9px;
+  color: var(--text);
+  background: rgba(0,0,0,0.55);
+  padding: 1px 4px;
+  border-radius: 6px;
+  margin-top: 2px;
+  white-space: nowrap;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.golf-shot-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
 
 .clue-list {
   margin: 0 0 16px;
