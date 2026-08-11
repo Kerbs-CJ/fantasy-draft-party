@@ -192,13 +192,11 @@ async function onClick(e) {
   if (action === "guess-answer") return guessAnswer(btn.dataset.name);
   if (action === "guess-next") return guessNext();
   if (action === "show-shootout-intro") return updateRoom({ status: "shootout-intro" });
-  if (action === "create-tournament") return startTournamentDraw();
-  if (action === "draw-next-player") return drawNextPlayer();
-  if (action === "view-bracket") return updateRoom({ status: "bracket" });
-  if (action === "start-match") return startMatch(Number(btn.dataset.r), Number(btn.dataset.m));
+  if (action === "start-round-robin") return startRoundRobin();
+  if (action === "start-rr-match") return startRRMatch(Number(btn.dataset.i));
   if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
   if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
-  if (action === "finish-bracket") return finishBracket();
+  if (action === "finish-round-robin") return finishRoundRobin();
   if (action === "reveal") return updateRoom({ status: "reveal" });
   if (action === "leave") return leaveRoom();
   if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
@@ -411,174 +409,71 @@ async function guessNext() {
   }
 }
 
-// ── penalty shootout bracket ───────────────────────────────
-// Bracket lives entirely in room.game_state.bracket — an array of rounds,
-// each round an array of { p1, p2, winner, isBye }. Round 1 is padded up to
-// the next power of 2, so every bye needed for a non-power-of-2 field is
-// concentrated there — e.g. 5 players means round 1 is 1 real match + 3
-// byes. That's more people sitting out round 1 than a "pack it tight"
-// approach would need, but it guarantees every later round is a clean,
-// bye-free 2-vs-2 all the way to the final — no round past the first can
-// ever produce an odd number advancing, so a semifinal or final bye is
-// mathematically impossible, not just unlikely.
-function buildBracketRounds(playerCount) {
-  if (playerCount <= 1) {
-    return [[{ p1: null, p2: null, winner: null, isBye: true }]];
-  }
-  let size = 1;
-  while (size < playerCount) size *= 2;
-  const numByes = size - playerCount;
-  const matchCount0 = size / 2;
-  const firstRound = [];
-  for (let i = 0; i < matchCount0; i++) {
-    firstRound.push({ p1: null, p2: null, winner: null, isBye: i < numByes });
-  }
-  const rounds = [firstRound];
-
-  let prevCount = matchCount0;
-  while (prevCount > 1) {
-    const round = [];
-    for (let i = 0; i < prevCount / 2; i++) round.push({ p1: null, p2: null, winner: null, isBye: false });
-    rounds.push(round);
-    prevCount = round.length;
-  }
-  return rounds;
-}
-
-// Finds the next empty round-1 slot to fill, in a fixed order (p1 then p2
-// of match 0, p1 then p2 of match 1, ...) — used both to fill everything
-// at once (generateBracket) and one player at a time (the live draw).
-function nextEmptySlot(firstRound) {
-  for (let m = 0; m < firstRound.length; m++) {
-    const match = firstRound[m];
-    if (match.p1 === null) return { m, slot: "p1" };
-    if (!match.isBye && match.p2 === null) return { m, slot: "p2" };
-  }
-  return null;
-}
-
-// Drops a player into the next open slot. If that completes a bye match,
-// resolves it immediately and checks whether the whole round is now done.
-function placeNextDrawnPlayer(rounds, playerId) {
-  const slot = nextEmptySlot(rounds[0]);
-  if (!slot) return;
-  const match = rounds[0][slot.m];
-  match[slot.slot] = playerId;
-  if (match.isBye) {
-    match.winner = playerId;
-    tryAdvanceRound(rounds, 0);
-  }
-}
-
-// Instant-fill version of the bracket (used by dev-mode quickstarts to
-// skip the live draw ceremony) — same slot-filling logic, just done for
-// every player in one pass instead of one at a time.
-function generateBracket(playerIds) {
-  const rounds = buildBracketRounds(playerIds.length);
-  const shuffled = shuffle(playerIds);
-  shuffled.forEach((playerId) => placeNextDrawnPlayer(rounds, playerId));
-  return rounds;
-}
-
-function isRoundComplete(round) {
-  return round.every((match) => match.winner);
-}
-
-// Once every match in a round has a winner (including any bye), fill the
-// next round from a FRESH shuffle of those winners — never a fixed slot
-// carried over from the previous round. That's the actual fix for byes
-// chaining together: the old version routed round 1's bye to whoever had
-// round 0's bye by raw slot position, every single time. Now the bye
-// recipient is re-picked at random each round, and is explicitly excluded
-// from getting picked again immediately next round if any other advancing
-// player is available — a bye is meant to be a lucky round, not a
-// guaranteed free ride to the final.
-function tryAdvanceRound(rounds, r) {
-  const round = rounds[r];
-  if (!round || !isRoundComplete(round)) return;
-  const next = rounds[r + 1];
-  if (!next) return; // this round was the final
-  if (next.some((m) => m.p1 !== null)) return; // already filled, don't redo
-
-  const winners = round.map((m) => m.winner);
-  const nextHasBye = next.some((m) => m.isBye);
-  const prevByeWinner = round.find((m) => m.isBye)?.winner || null;
-
-  let byePlayer = null;
-  let rest = winners;
-  if (nextHasBye) {
-    let pool = winners;
-    if (prevByeWinner && winners.length > 1) {
-      const withoutRepeat = winners.filter((w) => w !== prevByeWinner);
-      if (withoutRepeat.length > 0) pool = withoutRepeat;
+// ── penalty shootout round robin ────────────────────────────
+// The whole mini-tournament lives in room.game_state.roundRobin — a flat,
+// shuffled list of every possible pairing (all N*(N-1)/2 of them, one
+// match each), no byes or brackets involved at all. That sidesteps the
+// bye-fairness problem entirely: with 5 players a knockout bracket always
+// has to concentrate byes somewhere (round 1, a later round, or both) —
+// round robin just has everyone play everyone, once each, full stop.
+function generateRoundRobinMatches(playerIds) {
+  const matches = [];
+  for (let i = 0; i < playerIds.length; i++) {
+    for (let j = i + 1; j < playerIds.length; j++) {
+      matches.push({ p1: playerIds[i], p2: playerIds[j], winner: null, score: null });
     }
-    byePlayer = pool[Math.floor(Math.random() * pool.length)];
-    rest = shuffle(winners.filter((w) => w !== byePlayer));
-  } else {
-    rest = shuffle(winners);
   }
+  return shuffle(matches);
+}
 
-  let idx = 0;
-  next.forEach((match) => {
-    if (match.isBye) {
-      match.p1 = byePlayer;
-      match.winner = byePlayer;
+function findNextRRMatch(matches) {
+  return matches.findIndex((m) => !m.winner);
+}
+
+// Standings: most wins first, then goal difference (kicks scored minus
+// kicks conceded across all of a player's matches), then raw kicks scored,
+// as the tiebreak — the familiar football-league sort order.
+function computeStandings(matches, playerList) {
+  const stats = {};
+  playerList.forEach((p) => {
+    stats[p.id] = { player: p, wins: 0, losses: 0, gf: 0, ga: 0 };
+  });
+  matches.forEach((m) => {
+    if (!m.winner || !m.score) return;
+    const s1 = stats[m.p1];
+    const s2 = stats[m.p2];
+    if (!s1 || !s2) return;
+    const p1Score = m.score[m.p1] || 0;
+    const p2Score = m.score[m.p2] || 0;
+    s1.gf += p1Score;
+    s1.ga += p2Score;
+    s2.gf += p2Score;
+    s2.ga += p1Score;
+    if (m.winner === m.p1) {
+      s1.wins++;
+      s2.losses++;
     } else {
-      match.p1 = rest[idx++];
-      match.p2 = rest[idx++];
+      s2.wins++;
+      s1.losses++;
     }
   });
-  tryAdvanceRound(rounds, r + 1); // in case that also completes immediately
+  return Object.values(stats)
+    .map((s) => ({ ...s, gd: s.gf - s.ga }))
+    .sort((a, b) => b.wins - a.wins || b.gd - a.gd || b.gf - a.gf);
 }
 
-function findNextMatch(rounds) {
-  for (let r = 0; r < rounds.length; r++) {
-    for (let m = 0; m < rounds[r].length; m++) {
-      const match = rounds[r][m];
-      if (match.p1 && match.p2 && !match.winner) return { r, m };
-    }
-  }
-  return null;
+async function startRoundRobin() {
+  const matches = generateRoundRobinMatches(players.map((p) => p.id));
+  await updateRoom({ status: "round-robin", game_state: { roundRobin: { matches } } });
 }
 
-function roundName(r, totalRounds) {
-  const fromEnd = totalRounds - 1 - r;
-  if (fromEnd === 0) return "Final";
-  if (fromEnd === 1) return "Semifinals";
-  if (fromEnd === 2) return "Quarterfinals";
-  return `Round ${r + 1}`;
-}
-
-async function startBracket() {
-  const rounds = generateBracket(players.map((p) => p.id));
-  await updateRoom({ status: "bracket", game_state: { bracket: { rounds } } });
-}
-
-// The real "Create Tournament" flow: build the empty bracket shape and a
-// shuffled draw order, then let the host reveal players into it one at a
-// time (drawNextPlayer) instead of the whole thing appearing at once.
-async function startTournamentDraw() {
-  const rounds = buildBracketRounds(players.length);
-  const drawOrder = shuffle(players.map((p) => p.id));
-  await updateRoom({ status: "bracket-draw", game_state: { bracket: { rounds }, drawOrder, drawnCount: 0 } });
-}
-
-async function drawNextPlayer() {
+async function startRRMatch(i) {
   const gs = room.game_state;
-  if (gs.drawnCount >= gs.drawOrder.length) return;
-  const playerId = gs.drawOrder[gs.drawnCount];
-  placeNextDrawnPlayer(gs.bracket.rounds, playerId);
-  await updateRoom({ game_state: { ...gs, drawnCount: gs.drawnCount + 1 } });
-}
-
-async function startMatch(r, m) {
-  const gs = room.game_state;
-  const match = gs.bracket.rounds[r][m];
+  const match = gs.roundRobin.matches[i];
   const newMatch = {
     p1: match.p1,
     p2: match.p2,
-    bracketR: r,
-    bracketM: m,
+    rrIndex: i,
     roundIndex: 0,
     turn: "p1",
     shooterPick: null,
@@ -645,7 +540,7 @@ async function submitPick(role, zone) {
     resolveKick(updated);
   }
   // Even a decisive kick just writes the match as normal — the winner flag
-  // rides along inside it. The bracket only gets finalized once every
+  // rides along inside it. The round robin standings only get updated once every
   // client has had a chance to play that final kick's animation; see
   // finalizeMatchIfDecided(), called from ensureShootoutAnim().
   await updateRoom({ game_state: { ...gs, match: updated } });
@@ -661,40 +556,28 @@ async function finalizeMatchIfDecided() {
   const gs = freshRoom.game_state;
   const m = gs.match;
   if (!m || !m.winnerId) return;
-  const bracket = gs.bracket;
-  bracket.rounds[m.bracketR][m.bracketM].winner = m.winnerId;
-  tryAdvanceRound(bracket.rounds, m.bracketR);
-  await updateRoom({ status: "bracket", game_state: { bracket, match: null } });
+  const roundRobin = gs.roundRobin;
+  roundRobin.matches[m.rrIndex].winner = m.winnerId;
+  roundRobin.matches[m.rrIndex].score = { ...m.score };
+  await updateRoom({ status: "round-robin", game_state: { roundRobin, match: null } });
 }
 
-function computeBracketPlacements(rounds) {
-  const totalRounds = rounds.length;
-  const placements = {};
-  rounds.forEach((round, r) => {
-    round.forEach((match) => {
-      [match.p1, match.p2].forEach((pid) => {
-        if (!pid) return;
-        if (match.winner === pid) {
-          if (r === totalRounds - 1) placements[pid] = totalRounds; // champion
-        } else {
-          placements[pid] = r; // eliminated here
-        }
-      });
-    });
-  });
-  return placements;
-}
-
-async function finishBracket() {
-  const rounds = room.game_state.bracket.rounds;
-  const totalRounds = rounds.length;
-  const placements = computeBracketPlacements(rounds);
-  const inserts = Object.entries(placements).map(([playerId, w]) => ({
+// Final standings decide placement points: 100/80/60/40/20 for a 5-player
+// field (a clean 20-point step per place), scaled to whatever the actual
+// player count is. That keeps the shootout's max swing (80, top to bottom)
+// in the same ballpark as Trivia Blitz's max swing (100 — 5 questions at
+// up to 20pts each), noticeably gentler than Guess the Footballer's (210 —
+// 7 rounds at up to 30pts each), since the shootout is one placement
+// rather than several independently-scored rounds.
+async function finishRoundRobin() {
+  const standings = computeStandings(room.game_state.roundRobin.matches, players);
+  const n = standings.length;
+  const inserts = standings.map((s, i) => ({
     room_code: room.code,
-    player_id: playerId,
+    player_id: s.player.id,
     game_index: 3,
     round_index: 0,
-    points: Math.round(100 / Math.pow(2, totalRounds - w)),
+    points: n > 1 ? Math.round(100 - (80 * i) / (n - 1)) : 100,
   }));
   if (inserts.length) await sb.from("scores").insert(inserts);
   await updateRoom({ status: "final-leaderboard" });
@@ -729,13 +612,9 @@ async function devJump(status) {
   if (status === "trivia") game_state = { order: randomTriviaOrder(), qIndex: 0 };
   if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
   if (status === "shootout-intro") await ensureDevBotIfNeeded();
-  if (status === "bracket-draw") {
+  if (status === "round-robin") {
     await ensureDevBotIfNeeded();
-    game_state = { bracket: { rounds: buildBracketRounds(players.length) }, drawOrder: shuffle(players.map((p) => p.id)), drawnCount: 0 };
-  }
-  if (status === "bracket") {
-    await ensureDevBotIfNeeded();
-    game_state = { bracket: { rounds: generateBracket(players.map((p) => p.id)) } };
+    game_state = { roundRobin: { matches: generateRoundRobinMatches(players.map((p) => p.id)) } };
   }
   await updateRoom({ status, game_state });
 }
@@ -751,7 +630,7 @@ const SHOOTOUT_RESULT_MS = 1300;
 function ensureShootoutAnim() {
   const match = room.game_state?.match;
   if (!match) return;
-  const matchKey = `${match.p1}-${match.p2}-${match.bracketR}-${match.bracketM}`;
+  const matchKey = `${match.p1}-${match.p2}-${match.rrIndex}`;
   if (local.shootoutAnim.matchKey !== matchKey) {
     local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, finalizing: false };
   }
@@ -803,7 +682,7 @@ function renderPkGoal(entry, animate) {
 }
 
 // While solo-testing in dev mode, auto-play any bot's turn a beat after
-// it comes up. With multiple bots (a full-size test bracket), a given
+// it comes up. With multiple bots (a full-size test group), a given
 // match might be bot-vs-bot with no human in it at all — so shooter and
 // keeper are checked and scheduled independently, not either/or.
 function ensureBotAutoPick() {
@@ -876,11 +755,8 @@ function render() {
     case "shootout-intro":
       html += renderShootoutIntro();
       break;
-    case "bracket-draw":
-      html += renderBracketDraw();
-      break;
-    case "bracket":
-      html += renderBracket();
+    case "round-robin":
+      html += renderRoundRobin();
       break;
     case "shootout":
       ensureShootoutAnim();
@@ -926,8 +802,7 @@ function renderDevBar() {
     ["guess", "Guess"],
     ["leaderboard", "Leaderboard"],
     ["shootout-intro", "PK Intro"],
-    ["bracket-draw", "Draw"],
-    ["bracket", "Bracket"],
+    ["round-robin", "Round Robin"],
     ["final-leaderboard", "Final LB"],
     ["reveal", "Reveal"],
   ];
@@ -976,7 +851,7 @@ function renderDevQuickStart() {
       <div class="dev-grid">
         <button class="dev-btn" data-action="dev-quickstart" data-status="trivia">🧠 Trivia Blitz</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="guess">🕵️ Guess the Footballer</button>
-        <button class="dev-btn" data-action="dev-quickstart" data-status="bracket">⚽ Shootout Bracket</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="round-robin">⚽ PK Round Robin</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="reveal">🏆 Reveal</button>
       </div>
     </div>`;
@@ -1100,97 +975,85 @@ function renderGuess() {
 function renderShootoutIntro() {
   const me = myPlayer();
   const isHost = me?.is_host;
+  const n = players.length;
+  const matchCount = (n * (n - 1)) / 2;
   return `
     <div class="card">
       <h2>⚽ Penalty Shootout</h2>
-      <p class="sub">The final round. A single-elimination bracket — winners play winners — decides the last bit of draft order. Each match is a best-of-5 shootout: shooter picks Left, Center, or Right, keeper picks a dive at the same time, blind. Still level after 5? Sudden death, one kick each, until someone blinks.</p>
+      <p class="sub">The final round. Round robin — every player faces every other player once (${matchCount} matches for ${n} players) — decides the last bit of draft order. Each match is a best-of-5 shootout: shooter picks Left, Center, or Right, keeper picks a dive at the same time, blind. Still level after 5? Sudden death, one kick each, until someone blinks. Standings are ranked by wins, then goal difference, then goals scored.</p>
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
         ${players.map((p) => `<li>${escapeHtml(p.name)}</li>`).join("")}
       </ul>
       ${
         isHost
-          ? `<button class="btn primary" data-action="create-tournament" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>🏆 Create Tournament</button>`
-          : `<p class="waiting">Waiting for host to create the tournament…</p>`
+          ? `<button class="btn primary" data-action="start-round-robin" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>🏁 Start Round Robin</button>`
+          : `<p class="waiting">Waiting for host to start the round robin…</p>`
       }
     </div>`;
 }
 
-// Shared tournament-tree layout used by both the live draw and the match-
-// play bracket screen: rounds as side-by-side columns (horizontally
-// scrollable), matches as boxed cards, winners highlighted, losers dimmed —
-// the classic bracket look, rather than a plain stacked list.
-function renderBracketTree(rounds, nameOf, emptyLabel) {
-  const totalRounds = rounds.length;
+function renderStandingsTable(standings) {
   return `
-    <div class="bracket-tree">
-      ${rounds
-        .map(
-          (round, r) => `
-        <div class="bracket-col">
-          <h4 class="bracket-col-title">${roundName(r, totalRounds)}</h4>
-          <div class="bracket-col-matches">
-            ${round
-              .map((match) => {
-                const p1Name = nameOf(match.p1);
-                const p2Name = nameOf(match.p2);
-                const p1Won = !!(match.winner && match.winner === match.p1);
-                const p2Won = !!(match.winner && match.winner === match.p2);
-                const p1Cls = p1Won ? "winner" : match.winner ? "loser" : "";
-                let p2Cls = p2Won ? "winner" : match.winner && !match.isBye ? "loser" : "";
-                if (match.isBye) p2Cls += " bye-slot";
-                const p2Display = match.isBye ? (p1Name ? "BYE" : emptyLabel) : p2Name ? escapeHtml(p2Name) : emptyLabel;
-                return `
-                <div class="bracket-match${match.winner ? " decided" : ""}">
-                  <div class="bracket-slot ${p1Cls}">${p1Name ? escapeHtml(p1Name) : emptyLabel}</div>
-                  <div class="bracket-slot ${p2Cls}">${p2Display}</div>
-                </div>`;
-              })
-              .join("")}
-          </div>
-        </div>`
-        )
-        .join('<div class="bracket-arrow">→</div>')}
+    <div class="standings-wrap">
+      <table class="standings-table">
+        <thead>
+          <tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>GF</th><th>GA</th><th>GD</th></tr>
+        </thead>
+        <tbody>
+          ${standings
+            .map(
+              (s, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${escapeHtml(s.player.name)}</td>
+              <td>${s.wins}</td>
+              <td>${s.losses}</td>
+              <td>${s.gf}</td>
+              <td>${s.ga}</td>
+              <td>${s.gd > 0 ? "+" : ""}${s.gd}</td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
     </div>`;
 }
 
-function renderBracketDraw() {
+function renderRoundRobin() {
   const me = myPlayer();
   const isHost = me?.is_host;
-  const gs = room.game_state;
-  const bracket = gs.bracket;
-  const remaining = gs.drawOrder.length - gs.drawnCount;
-  const nameOf = (id) => (id ? players.find((p) => p.id === id)?.name || "?" : null);
+  const matches = room.game_state.roundRobin.matches;
+  const nameOf = (id) => players.find((p) => p.id === id)?.name || "?";
+  const standings = computeStandings(matches, players);
+  const played = matches.filter((m) => m.winner).length;
+  const nextIndex = findNextRRMatch(matches);
   return `
     <div class="card">
-      <h2>🎲 Drawing the Bracket…</h2>
-      <p class="sub">${remaining > 0 ? `${remaining} player${remaining === 1 ? "" : "s"} left to draw` : "Draw complete!"}</p>
-      ${renderBracketTree(bracket.rounds, nameOf, "?")}
+      <h2>🏁 Round Robin Standings</h2>
+      <p class="sub">${played} of ${matches.length} matches played</p>
+      ${renderStandingsTable(standings)}
+      <h3>Matches</h3>
+      <ul class="rr-match-list">
+        ${matches
+          .map((m, i) => {
+            const decided = !!m.winner;
+            const isNext = i === nextIndex;
+            const scoreText = decided ? `${m.score[m.p1]}–${m.score[m.p2]}` : "vs";
+            return `
+            <li class="rr-match${decided ? " decided" : ""}${isNext ? " next" : ""}">
+              <span class="rr-match-p ${decided && m.winner === m.p1 ? "winner" : ""}">${escapeHtml(nameOf(m.p1))}</span>
+              <span class="rr-match-score">${scoreText}</span>
+              <span class="rr-match-p ${decided && m.winner === m.p2 ? "winner" : ""}">${escapeHtml(nameOf(m.p2))}</span>
+            </li>`;
+          })
+          .join("")}
+      </ul>
       ${
         isHost
-          ? remaining > 0
-            ? `<button class="btn primary" data-action="draw-next-player">🎲 Draw Next Player</button>`
-            : `<button class="btn primary" data-action="view-bracket">▶️ Start the Tournament</button>`
-          : `<p class="waiting">Waiting for host to draw the bracket…</p>`
-      }
-    </div>`;
-}
-
-function renderBracket() {
-  const me = myPlayer();
-  const isHost = me?.is_host;
-  const bracket = room.game_state.bracket;
-  const nameOf = (id) => (id ? players.find((p) => p.id === id)?.name || "?" : null);
-  const next = findNextMatch(bracket.rounds);
-  return `
-    <div class="card">
-      <h2>⚽ Penalty Shootout Bracket</h2>
-      ${renderBracketTree(bracket.rounds, nameOf, "TBD")}
-      ${
-        isHost
-          ? next
-            ? `<button class="btn primary" data-action="start-match" data-r="${next.r}" data-m="${next.m}">▶️ ${escapeHtml(nameOf(bracket.rounds[next.r][next.m].p1))} vs ${escapeHtml(nameOf(bracket.rounds[next.r][next.m].p2))}</button>`
-            : `<button class="btn primary" data-action="finish-bracket">🏆 Show final leaderboard</button>`
+          ? nextIndex >= 0
+            ? `<button class="btn primary" data-action="start-rr-match" data-i="${nextIndex}">▶️ ${escapeHtml(nameOf(matches[nextIndex].p1))} vs ${escapeHtml(nameOf(matches[nextIndex].p2))}</button>`
+            : `<button class="btn primary" data-action="finish-round-robin">🏆 Show final leaderboard</button>`
           : `<p class="waiting">Waiting for host…</p>`
       }
     </div>`;
@@ -1257,7 +1120,7 @@ function renderShootout() {
       </div>`;
   }
 
-  // Decided but not yet finalized into the bracket (a brief gap right
+  // Decided but not yet finalized into the standings (a brief gap right
   // after the last kick's replay finishes) — avoid flashing the next
   // shooter/keeper prompt for a match that's already over.
   if (match.winnerId) {
@@ -1265,7 +1128,7 @@ function renderShootout() {
       <div class="card">
         <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
         ${renderPkScoreboard(match)}
-        <p class="waiting">Match complete — updating bracket…</p>
+        <p class="waiting">Match complete — updating standings…</p>
       </div>`;
   }
 

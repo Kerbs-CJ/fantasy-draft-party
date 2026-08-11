@@ -3,8 +3,9 @@
 A tiny live multiplayer web app for deciding the Fantasy League Bugaloo draft
 order. Everyone joins a room from their own device, plays through three
 rounds — hard football Trivia Blitz, Guess the Footballer from progressive
-clues, then a 1v1 penalty shootout bracket (winners play winners) — and the
-combined leaderboard becomes the draft order, with a dramatic reveal at the end.
+clues, then a 1v1 penalty shootout round robin (everyone plays everyone once,
+standings by wins/goal difference) — and the combined leaderboard becomes the
+draft order, with a dramatic reveal at the end.
 
 No app install needed — it's just a web page. It's a plain static site (no
 build step, no server to maintain) that uses [Supabase](https://supabase.com)
@@ -52,17 +53,22 @@ it updates automatically within a minute or two.
    Footballer (host reveals clues one at a time per round; guessing on
    fewer clues scores more), with a leaderboard at the end of each.
 5. Host clicks through to the shootout intro screen (players + a quick
-   explainer), then **Create Tournament**. The bracket is drawn live, one
-   player at a time — host clicks **Draw Next Player** to reveal each name
-   into its slot. Round 1 is padded up to the next power of 2, so any byes
-   a non-power-of-2 field needs (e.g. 3 byes for 5 players) all land there —
-   every round after that is guaranteed a clean, bye-free 2-vs-2 all the way
-   to the final. Once everyone's drawn, host clicks **Start the Tournament**
-   to move into match play: host starts each match one at a time; the two
-   players in it pick shot/dive zones blind and simultaneous, best-of-5 then
-   sudden death. Everyone else spectates live.
-   Placement (champion, runner-up, etc.) adds to the same combined leaderboard.
+   explainer), then **Start Round Robin**. This generates every possible
+   pairing once each (10 matches for 5 players — no byes, no bracket, no
+   elimination) in a shuffled order. Host starts each match one at a time
+   from the standings screen; the two players in it pick shot/dive zones
+   blind and simultaneous, best-of-5 then sudden death. Everyone else
+   spectates live. Each finished match updates a live standings table
+   (Wins / Losses / Kicks For / Kicks Against / Goal Difference). Once every
+   match is played, host clicks **Show final leaderboard** — final placement
+   (ranked by wins, then goal difference, then kicks scored) adds to the
+   same combined leaderboard.
 6. Host clicks **Reveal Draft Order!** for the big reveal.
+
+Heads up: round robin means more matches than a knockout bracket would (10
+instead of 4 for a 5-player group) — plan for it to take a while longer,
+but every player gets the same number of shootouts and nobody sits out on
+a bye.
 
 **Staying anonymous as host:** the shared player list no longer shows who's
 hosting — the crown only appears on the host's own screen, never on other
