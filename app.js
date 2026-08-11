@@ -411,42 +411,67 @@ async function guessNext() {
 
 // ── penalty shootout bracket ───────────────────────────────
 // Bracket lives entirely in room.game_state.bracket — an array of rounds,
-// each round an array of { p1, p2, winner }. p2 is null for a bye, which
-// resolves immediately at bracket-generation time (a bye is unskilled luck,
-// but it still counts as tournament progress for placement points).
+// each round an array of { p1, p2, winner, isBye }. Each round pairs up as
+// many players as possible (floor(n/2) matches) and, only if the round has
+// an odd number of entrants, gives exactly one of them a bye — rather than
+// padding the whole tournament up to a power of 2 and dumping every bye
+// into round 1. With 5 players that means round 1 is 2 real matches + 1
+// bye (not 1 match + 3 byes), and it still takes the same number of total
+// rounds to reach a champion either way.
 function generateBracket(playerIds) {
   if (playerIds.length <= 1) {
-    return [[{ p1: playerIds[0] || null, p2: null, winner: playerIds[0] || null }]];
+    return [[{ p1: playerIds[0] || null, p2: null, winner: playerIds[0] || null, isBye: true }]];
   }
+  const rounds = [];
+  let count = playerIds.length;
+  const firstRound = [];
   const shuffled = shuffle(playerIds);
-  let size = 1;
-  while (size < shuffled.length) size *= 2;
-  const numByes = size - shuffled.length;
-  const matchCount = size / 2;
-  const round0 = [];
   let idx = 0;
-  for (let i = 0; i < matchCount; i++) {
-    const p1 = shuffled[idx++];
-    const p2 = i < numByes ? null : shuffled[idx++];
-    round0.push({ p1, p2, winner: p2 ? null : p1 });
+  const matchCount0 = Math.floor(count / 2);
+  const hasBye0 = count % 2 === 1;
+  for (let i = 0; i < matchCount0; i++) {
+    firstRound.push({ p1: shuffled[idx++], p2: shuffled[idx++], winner: null, isBye: false });
   }
-  const rounds = [round0];
-  let prevCount = round0.length;
+  if (hasBye0) {
+    const byePlayer = shuffled[idx++];
+    firstRound.push({ p1: byePlayer, p2: null, winner: byePlayer, isBye: true });
+  }
+  rounds.push(firstRound);
+
+  // Build the shape of every later round — sizes are fully predictable up
+  // front even though we don't know who's IN each slot until earlier
+  // rounds are actually played.
+  let prevCount = matchCount0 + (hasBye0 ? 1 : 0);
   while (prevCount > 1) {
-    const nextRound = [];
-    for (let i = 0; i < prevCount / 2; i++) nextRound.push({ p1: null, p2: null, winner: null });
-    rounds.push(nextRound);
-    prevCount = nextRound.length;
+    const matchCount = Math.floor(prevCount / 2);
+    const hasBye = prevCount % 2 === 1;
+    const round = [];
+    for (let i = 0; i < matchCount; i++) round.push({ p1: null, p2: null, winner: null, isBye: false });
+    if (hasBye) round.push({ p1: null, p2: null, winner: null, isBye: true });
+    rounds.push(round);
+    prevCount = matchCount + (hasBye ? 1 : 0);
   }
-  // propagate round-0 bye winners into round 1 slots
-  rounds[0].forEach((match, i) => {
-    if (match.winner && rounds[1]) {
-      const next = rounds[1][Math.floor(i / 2)];
-      if (i % 2 === 0) next.p1 = match.winner;
-      else next.p2 = match.winner;
-    }
+
+  // Propagate every immediately-known bye winner (round 1's, and any chain
+  // reaction it triggers in later rounds that also turn out to be byes).
+  firstRound.forEach((match, i) => {
+    if (match.winner) propagateBracketWinner(rounds, 0, i, match.winner);
   });
   return rounds;
+}
+
+// Places a winner into their next-round slot, and — if that slot is itself
+// a designated bye (no p2 ever coming) — immediately resolves it too and
+// keeps propagating, so a chain of byes doesn't need separate handling.
+function propagateBracketWinner(rounds, r, i, winnerId) {
+  if (!rounds[r + 1]) return;
+  const next = rounds[r + 1][Math.floor(i / 2)];
+  if (i % 2 === 0) next.p1 = winnerId;
+  else next.p2 = winnerId;
+  if (next.isBye && next.p1 && !next.winner) {
+    next.winner = next.p1;
+    propagateBracketWinner(rounds, r + 1, rounds[r + 1].indexOf(next), next.winner);
+  }
 }
 
 function findNextMatch(rounds) {
@@ -564,11 +589,7 @@ async function finalizeMatchIfDecided() {
   if (!m || !m.winnerId) return;
   const bracket = gs.bracket;
   bracket.rounds[m.bracketR][m.bracketM].winner = m.winnerId;
-  if (bracket.rounds[m.bracketR + 1]) {
-    const next = bracket.rounds[m.bracketR + 1][Math.floor(m.bracketM / 2)];
-    if (m.bracketM % 2 === 0) next.p1 = m.winnerId;
-    else next.p2 = m.winnerId;
-  }
+  propagateBracketWinner(bracket.rounds, m.bracketR, m.bracketM, m.winnerId);
   await updateRoom({ status: "bracket", game_state: { bracket, match: null } });
 }
 
@@ -1028,7 +1049,7 @@ function renderBracket() {
               return `<li class="${match.winner ? "decided" : ""}">
                 <span class="${match.winner && match.winner === match.p1 ? "winner" : ""}">${p1Name ? escapeHtml(p1Name) : "TBD"}</span>
                 <span class="vs">vs</span>
-                <span class="${match.winner && match.winner === match.p2 ? "winner" : ""}">${p2Name ? escapeHtml(p2Name) : "BYE"}</span>
+                <span class="${match.winner && match.winner === match.p2 ? "winner" : ""}">${match.isBye ? "BYE" : p2Name ? escapeHtml(p2Name) : "TBD"}</span>
               </li>`;
             })
             .join("")}
