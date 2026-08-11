@@ -96,6 +96,48 @@ window.MISSING_CLUB_PLAYERS = [
     missingIndex: 0,
     decoys: ["Real Oviedo", "Racing Santander", "Celta Vigo", "Deportivo La Coruña"],
   },
+  {
+    name: "Michael Ballack",
+    clubs: ["Chemnitzer FC", "Kaiserslautern", "Bayer Leverkusen", "Bayern Munich", "Chelsea"],
+    missingIndex: 0,
+    decoys: ["Rot-Weiss Essen", "Hansa Rostock", "Energie Cottbus", "Dynamo Dresden"],
+  },
+  {
+    name: "Rivaldo",
+    clubs: ["Santa Cruz", "Corinthians", "Palmeiras", "Deportivo La Coruña", "Barcelona", "AC Milan"],
+    missingIndex: 0,
+    decoys: ["Náutico", "Sport Recife", "Botafogo", "Vasco da Gama"],
+  },
+  {
+    name: "Gianfranco Zola",
+    clubs: ["Nuorese", "Torres", "Napoli", "Parma", "Chelsea", "Cagliari"],
+    missingIndex: 0,
+    decoys: ["Ternana", "Pistoiese", "Nocerina", "Foggia"],
+  },
+  {
+    name: "Patrick Vieira",
+    clubs: ["Cannes", "AC Milan", "Arsenal", "Juventus", "Inter Milan", "Manchester City"],
+    missingIndex: 1,
+    decoys: ["Napoli", "Parma", "Fiorentina", "Roma"],
+  },
+  {
+    name: "Robert Lewandowski",
+    clubs: ["Znicz Pruszków", "Lech Poznań", "Borussia Dortmund", "Bayern Munich", "Barcelona"],
+    missingIndex: 0,
+    decoys: ["Legia Warszawa", "Widzew Łódź", "Wisła Kraków", "Cracovia"],
+  },
+  {
+    name: "Edwin van der Sar",
+    clubs: ["Ajax", "Juventus", "Fulham", "Manchester United"],
+    missingIndex: 2,
+    decoys: ["Tottenham Hotspur", "West Ham United", "Everton", "Aston Villa"],
+  },
+  {
+    name: "Gennaro Gattuso",
+    clubs: ["Perugia", "Glasgow Rangers", "AC Milan"],
+    missingIndex: 1,
+    decoys: ["Celtic", "Hearts", "Aberdeen", "Hibernian"],
+  },
 ];
 
 // ── Guess the Footballer ────────────────────────────────────
