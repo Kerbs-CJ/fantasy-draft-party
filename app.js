@@ -462,6 +462,17 @@ function computeStandings(matches, playerList) {
     .sort((a, b) => b.wins - a.wins || b.gd - a.gd || b.gf - a.gf);
 }
 
+// 100/80/60/40/20 for a 5-player field (a clean 20-point step per place),
+// scaled to whatever the actual player count is. That keeps the shootout's
+// max swing (80, top to bottom) in the same ballpark as Trivia Blitz's max
+// swing (100 — 5 questions at up to 20pts each), noticeably gentler than
+// Guess the Footballer's (210 — 7 rounds at up to 30pts each), since the
+// shootout is one placement rather than several independently-scored
+// rounds. rank is 0-indexed (0 = 1st place).
+function placementPoints(rank, n) {
+  return n > 1 ? Math.round(100 - (80 * rank) / (n - 1)) : 100;
+}
+
 async function startRoundRobin() {
   const matches = generateRoundRobinMatches(players.map((p) => p.id));
   await updateRoom({ status: "round-robin", game_state: { roundRobin: { matches } } });
@@ -562,13 +573,6 @@ async function finalizeMatchIfDecided() {
   await updateRoom({ status: "round-robin", game_state: { roundRobin, match: null } });
 }
 
-// Final standings decide placement points: 100/80/60/40/20 for a 5-player
-// field (a clean 20-point step per place), scaled to whatever the actual
-// player count is. That keeps the shootout's max swing (80, top to bottom)
-// in the same ballpark as Trivia Blitz's max swing (100 — 5 questions at
-// up to 20pts each), noticeably gentler than Guess the Footballer's (210 —
-// 7 rounds at up to 30pts each), since the shootout is one placement
-// rather than several independently-scored rounds.
 async function finishRoundRobin() {
   const standings = computeStandings(room.game_state.roundRobin.matches, players);
   const n = standings.length;
@@ -577,7 +581,7 @@ async function finishRoundRobin() {
     player_id: s.player.id,
     game_index: 3,
     round_index: 0,
-    points: n > 1 ? Math.round(100 - (80 * i) / (n - 1)) : 100,
+    points: placementPoints(i, n),
   }));
   if (inserts.length) await sb.from("scores").insert(inserts);
   await updateRoom({ status: "final-leaderboard" });
@@ -972,15 +976,49 @@ function renderGuess() {
     </div>`;
 }
 
+function ordinal(n) {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  const suffix = ["th", "st", "nd", "rd"][n % 10] || "th";
+  return `${n}${suffix}`;
+}
+
 function renderShootoutIntro() {
   const me = myPlayer();
   const isHost = me?.is_host;
   const n = players.length;
   const matchCount = (n * (n - 1)) / 2;
+  const pointsRows = Array.from({ length: n }, (_, i) => ({ place: i + 1, points: placementPoints(i, n) }));
   return `
     <div class="card">
       <h2>⚽ Penalty Shootout</h2>
-      <p class="sub">The final round. Round robin — every player faces every other player once (${matchCount} matches for ${n} players) — decides the last bit of draft order. Each match is a best-of-5 shootout: shooter picks Left, Center, or Right, keeper picks a dive at the same time, blind. Still level after 5? Sudden death, one kick each, until someone blinks. Standings are ranked by wins, then goal difference, then goals scored.</p>
+      <p class="sub">The final round — and it decides any points still up for grabs before the draft order is locked in.</p>
+
+      <h3>The format</h3>
+      <p>Round robin: every player faces every other player exactly once — ${matchCount} matches for ${n} players. No brackets, no eliminations, no one sits out.</p>
+
+      <h3>How a match works</h3>
+      <p>Best-of-5 shootout between two players. Each kick, the shooter secretly picks a side — Left, Center, or Right — while the keeper picks a side to dive, at the same time, blind. Match the keeper's dive and it's saved; pick differently and it's a goal. Still level after 5 kicks each? Sudden death — one kick each, repeated — until someone's save decides it. (Real shootout rules apply: if one side can no longer catch up with the kicks they have left, the match ends early.)</p>
+
+      <h3>How standings are decided</h3>
+      <p>After every match, players are ranked by:</p>
+      <ol>
+        <li><b>Most wins</b></li>
+        <li>Tied on wins? <b>Best goal difference</b> (kicks scored minus kicks conceded, across all their matches)</li>
+        <li>Still tied? <b>Most kicks scored</b></li>
+      </ol>
+
+      <h3>Points on offer</h3>
+      <p class="sub">Your final shootout placement adds points to the same combined leaderboard as Trivia Blitz and Guess the Footballer:</p>
+      <div class="standings-wrap">
+        <table class="standings-table">
+          <thead><tr><th>Place</th><th>Points</th></tr></thead>
+          <tbody>
+            ${pointsRows.map((r) => `<tr><td>${ordinal(r.place)}</td><td>${r.points}</td></tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
         ${players.map((p) => `<li>${escapeHtml(p.name)}</li>`).join("")}

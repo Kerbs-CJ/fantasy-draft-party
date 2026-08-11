@@ -201,6 +201,16 @@ input::placeholder { color: #6c9b83; }
   gap: 8px;
 }
 
+.card ol:not(.clue-list) {
+  margin: 0 0 4px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card ol:not(.clue-list) li { line-height: 1.4; }
+.card p { line-height: 1.5; }
+
 .leaderboard { list-style: none; padding: 0; margin: 0 0 16px; counter-reset: rank; }
 .leaderboard li {
   counter-increment: rank;
