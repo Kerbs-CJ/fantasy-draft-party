@@ -483,8 +483,7 @@ function findNextRRMatch(matches) {
 
 // Standings: most wins first, then goal difference (kicks scored minus
 // kicks conceded across all of a player's matches). Anyone still tied
-// after that is resolved by head-to-head — see resolveHeadToHead below —
-// falling back to overall kicks scored only if even that's exhausted.
+// after that is resolved by head-to-head — see resolveHeadToHead below.
 function computeStandings(matches, playerList) {
   const stats = {};
   playerList.forEach((p) => {
@@ -547,13 +546,15 @@ function resolveHeadToHead(group, matches) {
     if (m.winner === m.p1) h2h[m.p1].wins++;
     else h2h[m.p2].wins++;
   });
-  // Head-to-head wins, then head-to-head goal difference, then (only if a
-  // 3+ way tie is somehow still unresolved, e.g. everyone split 1-1)
-  // overall kicks scored as a last-resort tiebreak.
+  // Head-to-head wins, then head-to-head goal difference. In the
+  // vanishingly rare case a 3+ way tie survives even that (e.g. everyone
+  // splits their head-to-heads 1-1 with identical scores), the group just
+  // keeps its existing order — not worth a further tiebreak on top of a
+  // goal-difference-flavored one.
   group.sort((a, b) => {
     const ha = h2h[a.player.id];
     const hb = h2h[b.player.id];
-    return hb.wins - ha.wins || (hb.gf - hb.ga) - (ha.gf - ha.ga) || b.gf - a.gf;
+    return hb.wins - ha.wins || (hb.gf - hb.ga) - (ha.gf - ha.ga);
   });
 }
 
@@ -1087,21 +1088,19 @@ function renderShootoutIntro() {
   return `
     <div class="card">
       <h2>⚽ Penalty Shootout</h2>
-      <p class="sub">The final round — and it decides any points still up for grabs before the draft order is locked in.</p>
 
       <h3>The format</h3>
       <p>Round robin: every player faces every other player exactly once — ${matchCount} matches for ${n} players. No brackets, no eliminations, no one sits out.</p>
 
       <h3>How a match works</h3>
-      <p>Best-of-5 shootout between two players. Each kick, the shooter secretly picks a side — Left, Center, or Right — while the keeper picks a side to dive, at the same time, blind. Match the keeper's dive and it's saved; pick differently and it's a goal. Still level after 5 kicks each? Sudden death — one kick each, repeated — until someone's save decides it. (Real shootout rules apply: if one side can no longer catch up with the kicks they have left, the match ends early.)</p>
+      <p>Best-of-5 shootout: shooter picks a side, keeper picks a side to dive, both blind. Guess wrong and it's a goal. Still level after 5? Sudden death until someone blinks.</p>
 
       <h3>How standings are decided</h3>
       <p>After every match, players are ranked by:</p>
       <ol>
         <li><b>Most wins</b></li>
         <li>Tied on wins? <b>Best goal difference</b> (kicks scored minus kicks conceded, across all their matches)</li>
-        <li>Still tied? <b>Head-to-head</b> — whoever won when the tied players played each other decides it (for 3+ players tied together, it's a mini table of just their results against each other)</li>
-        <li>Somehow still tied? Overall kicks scored, as a last resort</li>
+        <li>Still tied? <b>Head-to-head results</b></li>
       </ol>
 
       <h3>Points on offer</h3>
