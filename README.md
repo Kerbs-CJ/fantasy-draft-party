@@ -49,10 +49,11 @@ it updates automatically within a minute or two.
 1. Open the site link. Whoever's the host clicks **Create a new room** and
    shares the 4-letter code (or the "Copy invite link" button) with the group.
 2. Everyone else opens the link, types their name, and joins.
-3. Host clicks **Start the party!**, which lands on an intro screen
-   explaining Guess the Missing Club's format and scoring before it
-   starts — same for Guess the Footballer right after. Every round in the
-   app gets one of these explainer screens before it begins.
+3. Host clicks **Start the party!**, which lands on an overview screen
+   listing every round and how the combined score becomes the draft
+   order. From there, each round also gets its own explainer screen
+   (format + scoring) right before it starts — Guess the Missing Club's,
+   then Guess the Footballer's, then the penalty shootout's.
 4. Guess the Missing Club plays first (5 random player career timelines,
    one club redacted — everyone answers in their own time on their own
    device, tapping a club then confirming to lock it in; a side panel

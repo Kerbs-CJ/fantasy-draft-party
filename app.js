@@ -209,6 +209,7 @@ async function onClick(e) {
   // clicking; this is the actual enforcement (e.g. against someone firing
   // the action straight from devtools).
   if (!isMeHost()) return;
+  if (action === "show-party-intro") return updateRoom({ status: "party-intro" });
   if (action === "show-missing-club-intro") return updateRoom({ status: "missing-club-intro" });
   if (action === "start-missing-club") return startMissingClub();
   if (action === "reveal-missing-club") return revealMissingClub();
@@ -978,6 +979,9 @@ function render() {
     case "lobby":
       html += renderLobby();
       break;
+    case "party-intro":
+      html += renderPartyIntro();
+      break;
     case "missing-club-intro":
       html += renderMissingClubIntro();
       break;
@@ -1041,6 +1045,7 @@ function renderTopBar() {
 function renderDevBar() {
   const stages = [
     ["lobby", "Lobby"],
+    ["party-intro", "Party Intro"],
     ["missing-club-intro", "MC Intro"],
     ["missing-club", "Missing Club"],
     ["guess-intro", "Guess Intro"],
@@ -1120,10 +1125,41 @@ function renderLobby() {
 
       ${
         isHost
-          ? `<button class="btn primary" data-action="show-missing-club-intro" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
+          ? `<button class="btn primary" data-action="show-party-intro" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
               ${players.length < 2 && !DEV_MODE ? "Need at least 2 players" : "▶️ Start the party!"}
             </button>`
           : `<p class="waiting">Waiting for the host to start…</p>`
+      }
+    </div>`;
+}
+
+function renderPartyIntro() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  return `
+    <div class="card">
+      <h2>🏆 Fantasy League Bugaloo</h2>
+      <p class="sub">Here's how tonight decides the draft order.</p>
+
+      <h3>The idea</h3>
+      <p>Everyone plays through the same rounds. Every round scores points, and your <b>combined score across all of them</b> becomes your draft position — most points drafts first. Each round gets its own quick explainer screen right before it starts, so you'll never be thrown in blind.</p>
+
+      <h3>The rounds</h3>
+      <ol class="party-round-list">
+        <li><b>⚽ Guess the Missing Club</b> — a real footballer's club career shown as a timeline with one club redacted. Answer in your own time; the host reveals the correct club (and how many got it) to everyone at once.</li>
+        <li><b>🕵️ Guess the Footballer</b> — a mystery player revealed one clue at a time, most obscure clue first. Guess earlier for more points, but guess wrong and you're frozen out for that round.</li>
+        <li><b>🥅 Penalty Shootout</b> — a round-robin of 1v1 shootouts, everyone plays everyone once. Blind, simultaneous shot/dive picks; final standing adds placement points to the leaderboard.</li>
+      </ol>
+      <p>You'll see a running leaderboard after each round, and the big reveal at the very end turns the final combined score into the draft order.</p>
+
+      <h3>Players (${players.length})</h3>
+      <ul class="player-list">
+        ${players.map((p) => `<li>${escapeHtml(p.name)}</li>`).join("")}
+      </ul>
+      ${
+        isHost
+          ? `<button class="btn primary" data-action="show-missing-club-intro">▶️ Continue</button>`
+          : `<p class="waiting">Waiting for host to continue…</p>`
       }
     </div>`;
 }
@@ -1173,8 +1209,8 @@ function renderMissingClub() {
     <div class="card">
       <h2>⚽ Guess the Missing Club</h2>
       <p class="sub">Journey ${qIndex + 1} of ${gs.order.length} — answer in your own time, the reveal happens once the host calls it</p>
-      <div class="mc-layout">
-        <div class="mc-main">
+      <div class="side-layout">
+        <div class="side-main">
           <p class="question">${escapeHtml(entry.name)}'s career:</p>
           <ol class="club-timeline">
             ${entry.clubs
@@ -1210,7 +1246,7 @@ function renderMissingClub() {
                 : ""
           }
         </div>
-        <div class="mc-roster">
+        <div class="side-roster">
           <h3>Locked in (${answeredIds.size}/${players.length})</h3>
           <ul class="player-list compact">
             ${players.map((p) => `<li>${answeredIds.has(p.id) ? "🔒" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
@@ -1279,33 +1315,39 @@ function renderGuess() {
     <div class="card">
       <h2>🕵️ Guess the Footballer</h2>
       <p class="sub">Player ${pIndex + 1} of ${gs.order.length} — guess earlier for more points</p>
-      <ol class="clue-list">
-        ${cluesShown.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}
-      </ol>
-      <div class="choices">
-        ${local.guess.choices
-          .map((name) => {
-            let cls = "choice";
-            if (answered) {
-              if (name === entry.name) cls += " correct";
-              else if (name === local.guess.myChoice) cls += " wrong";
-            }
-            return `<button class="${cls}" data-action="guess-answer" data-name="${escapeHtml(name)}" ${answered ? "disabled" : ""}>${escapeHtml(name)}</button>`;
-          })
-          .join("")}
+      <div class="side-layout">
+        <div class="side-main">
+          <ol class="clue-list">
+            ${cluesShown.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}
+          </ol>
+          <div class="choices">
+            ${local.guess.choices
+              .map((name) => {
+                let cls = "choice";
+                if (answered) {
+                  if (name === entry.name) cls += " correct";
+                  else if (name === local.guess.myChoice) cls += " wrong";
+                }
+                return `<button class="${cls}" data-action="guess-answer" data-name="${escapeHtml(name)}" ${answered ? "disabled" : ""}>${escapeHtml(name)}</button>`;
+              })
+              .join("")}
+          </div>
+          ${
+            answered
+              ? myCorrect
+                ? `<p class="lock-msg lock-correct">🔒 Locked in — correct! ${GUESS_CLUE_POINTS[local.guess.answeredClueIndex]} points.</p>`
+                : `<p class="lock-msg lock-wrong">🥶 Wrong — you're frozen out for this one. 0 points.</p>`
+              : ""
+          }
+          ${answered && !isHost ? `<p class="waiting">Waiting for host to continue…</p>` : ""}
+        </div>
+        <div class="side-roster">
+          <h3>Guessed (${answeredIds.size}/${players.length})</h3>
+          <ul class="player-list compact">
+            ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+          </ul>
+        </div>
       </div>
-      ${
-        answered
-          ? myCorrect
-            ? `<p class="lock-msg lock-correct">🔒 Locked in — correct! ${GUESS_CLUE_POINTS[local.guess.answeredClueIndex]} points.</p>`
-            : `<p class="lock-msg lock-wrong">🥶 Wrong — you're frozen out for this one. 0 points.</p>`
-          : ""
-      }
-      ${answered && !isHost ? `<p class="waiting">Waiting for host to continue…</p>` : ""}
-      <h3>Guessed (${answeredIds.size}/${players.length})</h3>
-      <ul class="player-list compact">
-        ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
-      </ul>
       ${
         isHost
           ? `<div class="guess-host-controls">
