@@ -845,13 +845,38 @@ function triggerShotAnimation(entry) {
 
 const PK_AD_TEXT = "Fantasy League Bugaloo";
 
+// A scatter of individually-colored "heads" reads as an actual crowd —
+// a repeating CSS pattern is too mechanically regular and just looks like
+// static/lines. Generated once at load (not per-render, or it'd visibly
+// reshuffle on every re-render) and reused as a fixed HTML string.
+function generateCrowdDots() {
+  const colors = [
+    "#f4d9b0", "#e8b98a", "#c98b5e", "#8a5a3c", "#4a3324", "#efe6da",
+    "#ffd166", "#4b8bf0", "#ef476f", "#06d6a0", "#8892a6", "#c94f4f",
+  ];
+  const rows = 5;
+  const perRow = 22;
+  let out = "";
+  for (let r = 0; r < rows; r++) {
+    for (let i = 0; i < perRow; i++) {
+      const left = Math.min(99, Math.max(1, (i / perRow) * 100 + (Math.random() - 0.5) * (100 / perRow) * 0.9)).toFixed(1);
+      const top = Math.min(96, Math.max(4, (r / rows) * 100 + (Math.random() - 0.5) * (100 / rows) * 0.85)).toFixed(1);
+      const size = (2.6 + Math.random() * 2.2).toFixed(1);
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      out += `<span style="left:${left}%;top:${top}%;width:${size}px;height:${size}px;background:${color};"></span>`;
+    }
+  }
+  return out;
+}
+const PK_CROWD_HTML = generateCrowdDots();
+
 function renderPkGoal(entry, animate) {
   const ballPos = animate ? PK_BALL_START : ZONE_POS[entry.shooterPick];
   const keeperPos = animate ? PK_KEEPER_START : ZONE_POS[entry.keeperPick];
   if (animate) setTimeout(() => triggerShotAnimation(entry), 180);
   return `
     <div class="pk-goal">
-      <div class="pk-crowd"></div>
+      <div class="pk-crowd">${PK_CROWD_HTML}</div>
       <div class="pk-adboard">${Array(3).fill(`<span>${escapeHtml(PK_AD_TEXT)}</span>`).join("")}</div>
       <div class="pk-goal-frame"></div>
       <div id="pk-keeper" class="pk-keeper" style="left:${keeperPos.x}%; top:${keeperPos.y}%;">🧤</div>

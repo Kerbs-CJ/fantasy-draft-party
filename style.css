@@ -493,10 +493,10 @@ code {
     radial-gradient(ellipse 130px 90px at 96% -8%, rgba(255,241,199,0.4), transparent 65%),
     repeating-linear-gradient(115deg, #1c5735 0 22px, #164a2c 22px 44px);
 }
-/* Tiered stand packed with a crowd, rendered as two overlapping dot
-   patterns (slightly different colors/spacing so it doesn't read as a
-   uniform grid) under a dark gradient for depth, plus faint horizontal
-   seating-row lines. */
+/* Tiered stand: a dark backdrop (brighter near the top, under the
+   floodlights) with individually-colored "heads" scattered across it —
+   see generateCrowdDots() in app.js. Actual varied-color dots read as a
+   crowd; a repeating CSS pattern alone just looks like static/lines. */
 .pk-crowd {
   position: absolute;
   left: 0;
@@ -504,11 +504,14 @@ code {
   top: 0;
   height: 21%;
   z-index: 0;
-  background:
-    repeating-linear-gradient(180deg, rgba(255,255,255,0.045) 0 3px, transparent 3px 7px),
-    repeating-radial-gradient(circle at 4px 4px, rgba(234,246,239,0.26) 0 1.3px, transparent 1.3px 8px),
-    repeating-radial-gradient(circle at 9px 1px, rgba(255,209,102,0.16) 0 1.1px, transparent 1.1px 10px),
-    linear-gradient(rgba(4,10,7,0.94), rgba(4,10,7,0.55));
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(20,30,24,0.7), rgba(4,10,7,0.92));
+}
+.pk-crowd span {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,0.35);
 }
 /* Pitch-side sponsor hoarding — the one bit of branding a real broadcast
    shot always lingers on. */
