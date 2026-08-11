@@ -51,8 +51,9 @@ it updates automatically within a minute or two.
 2. Everyone else opens the link, types their name, and joins.
 3. Host clicks **Start the party!** when everyone's in.
 4. Guess the Missing Club plays first (5 random player career timelines,
-   one club redacted — everyone answers at once on their own device, and
-   the fastest correct guess scores most), then Guess the Footballer (host
+   one club redacted — everyone answers in their own time on their own
+   device; nobody's answer is revealed until the host reveals the correct
+   club and how many got it right), then Guess the Footballer (host
    reveals clues one at a time per round; guessing on fewer clues scores
    more), with a leaderboard at the end of each.
 5. Host clicks through to the shootout intro screen (full explainer: format,

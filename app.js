@@ -3,7 +3,7 @@
 const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 const MISSING_CLUB_COUNT = 5;
-const MISSING_CLUB_TIME_MS = 12000;
+const MISSING_CLUB_POINTS = 20; // flat — no timer, so no speed bonus
 const GUESS_PLAYER_COUNT = 7;
 const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
 const DEV_BOT_PREFIX = "🤖 ";
@@ -26,7 +26,7 @@ let local = {
   joinCodeInput: "",
   nameInput: "",
   error: "",
-  missingClub: { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, choices: null, timer: null },
+  missingClub: { qIndex: null, answeredQIndex: null, myChoice: null, choices: null },
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
   botShooterScheduledFor: null,
@@ -168,6 +168,13 @@ function answeredPlayerIds(gameIndex, roundIndex) {
       .map((s) => s.player_id)
   );
 }
+function correctPlayerIds(gameIndex, roundIndex) {
+  return new Set(
+    scores
+      .filter((s) => s.game_index === gameIndex && s.round_index === roundIndex && s.points > 0)
+      .map((s) => s.player_id)
+  );
+}
 async function updateRoom(patch) {
   const { data } = await sb.from("rooms").update(patch).eq("code", room.code).select().maybeSingle();
   if (data) room = data;
@@ -202,6 +209,7 @@ async function onClick(e) {
   // the action straight from devtools).
   if (!isMeHost()) return;
   if (action === "start-missing-club") return startMissingClub();
+  if (action === "reveal-missing-club") return revealMissingClub();
   if (action === "missing-club-next") return missingClubNext();
   if (action === "guess-reveal-clue") return guessRevealClue();
   if (action === "guess-next") return guessNext();
@@ -311,23 +319,18 @@ function randomMissingClubOrder() {
 }
 
 async function startMissingClub() {
-  await updateRoom({ status: "missing-club", game_state: { order: randomMissingClubOrder(), qIndex: 0 } });
+  await updateRoom({ status: "missing-club", game_state: { order: randomMissingClubOrder(), qIndex: 0, revealed: false } });
 }
 
-function ensureMissingClubTimer() {
+function ensureMissingClubReady() {
   const gs = room.game_state || {};
   if (gs.qIndex === undefined) return;
   if (local.missingClub.qIndex !== gs.qIndex) {
     local.missingClub.qIndex = gs.qIndex;
     local.missingClub.answeredQIndex = null;
     local.missingClub.myChoice = null;
-    local.missingClub.deadline = Date.now() + MISSING_CLUB_TIME_MS;
     const entry = window.MISSING_CLUB_PLAYERS[gs.order[gs.qIndex]];
     local.missingClub.choices = shuffle([entry.clubs[entry.missingIndex], ...entry.decoys]);
-    clearTimeout(local.missingClub.timer);
-    local.missingClub.timer = setTimeout(() => {
-      if (local.missingClub.answeredQIndex !== gs.qIndex) submitMissingClubAnswer(null, gs.qIndex);
-    }, MISSING_CLUB_TIME_MS + 50);
   }
 }
 
@@ -357,11 +360,18 @@ async function submitMissingClubAnswer(club, qIndex) {
   const gs = room.game_state || {};
   const entry = window.MISSING_CLUB_PLAYERS[gs.order[qIndex]];
   const correct = club === entry.clubs[entry.missingIndex];
-  const remaining = Math.max(0, local.missingClub.deadline - Date.now());
-  const timeFraction = remaining / MISSING_CLUB_TIME_MS;
-  const points = correct ? Math.round(12 + 8 * timeFraction) : 0;
+  const points = correct ? MISSING_CLUB_POINTS : 0;
   render();
   await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, round_index: qIndex, points });
+}
+
+// Host-triggered — shows the correct club and the "X/Y got it right" tally
+// to everyone at once, instead of each player finding out the instant they
+// answer. Players can keep taking their own time beforehand; nothing is
+// revealed until the host calls it for the whole room.
+async function revealMissingClub() {
+  const gs = room.game_state || {};
+  await updateRoom({ game_state: { ...gs, revealed: true } });
 }
 
 async function missingClubNext() {
@@ -370,7 +380,7 @@ async function missingClubNext() {
   if (next >= gs.order.length) {
     await updateRoom({ status: "guess", game_state: { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 } });
   } else {
-    await updateRoom({ game_state: { ...gs, qIndex: next } });
+    await updateRoom({ game_state: { ...gs, qIndex: next, revealed: false } });
   }
 }
 
@@ -705,8 +715,7 @@ async function finishRoundRobin() {
 
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
-  clearTimeout(local.missingClub.timer);
-  local.missingClub = { qIndex: null, answeredQIndex: null, deadline: null, myChoice: null, choices: null, timer: null };
+  local.missingClub = { qIndex: null, answeredQIndex: null, myChoice: null, choices: null };
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
   local.botShooterScheduledFor = null;
@@ -729,7 +738,7 @@ async function ensureDevBotIfNeeded() {
 async function devJump(status) {
   resetLocalGameState();
   let game_state = {};
-  if (status === "missing-club") game_state = { order: randomMissingClubOrder(), qIndex: 0 };
+  if (status === "missing-club") game_state = { order: randomMissingClubOrder(), qIndex: 0, revealed: false };
   if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
   if (status === "shootout-intro") await ensureDevBotIfNeeded();
   if (status === "round-robin") {
@@ -952,7 +961,7 @@ function render() {
       html += renderLobby();
       break;
     case "missing-club":
-      ensureMissingClubTimer();
+      ensureMissingClubReady();
       html += renderMissingClub();
       break;
     case "guess":
@@ -1101,11 +1110,14 @@ function renderMissingClub() {
   const entry = window.MISSING_CLUB_PLAYERS[gs.order[qIndex]];
   const missingClub = entry.clubs[entry.missingIndex];
   const answered = local.missingClub.answeredQIndex === qIndex;
+  const revealed = !!gs.revealed;
+  const myCorrect = local.missingClub.myChoice === missingClub;
   const answeredIds = answeredPlayerIds(1, qIndex);
+  const correctIds = revealed ? correctPlayerIds(1, qIndex) : null;
   return `
     <div class="card">
       <h2>⚽ Guess the Missing Club</h2>
-      <p class="sub">Journey ${qIndex + 1} of ${gs.order.length} — everyone answers at once, fastest correct guess scores most</p>
+      <p class="sub">Journey ${qIndex + 1} of ${gs.order.length} — answer in your own time, the reveal happens once the host calls it</p>
       <p class="question">${escapeHtml(entry.name)}'s career:</p>
       <ol class="club-timeline">
         ${entry.clubs
@@ -1116,20 +1128,34 @@ function renderMissingClub() {
         ${(local.missingClub.choices || [])
           .map((c) => {
             let cls = "choice";
-            if (answered) {
+            if (revealed) {
               if (c === missingClub) cls += " correct";
               else if (c === local.missingClub.myChoice) cls += " wrong";
+            } else if (answered && c === local.missingClub.myChoice) {
+              cls += " selected";
             }
             return `<button class="${cls}" data-action="missing-club-answer" data-club="${escapeHtml(c)}" ${answered ? "disabled" : ""}>${escapeHtml(c)}</button>`;
           })
           .join("")}
       </div>
-      ${answered ? `<p class="waiting">Answer locked in. ${isHost ? "" : "Waiting for host to continue…"}</p>` : ""}
+      ${
+        revealed
+          ? `<p class="lock-msg ${answered && myCorrect ? "lock-correct" : "lock-wrong"}">The missing club was <b>${escapeHtml(missingClub)}</b> — ${answered ? (myCorrect ? `you got it! ${MISSING_CLUB_POINTS} points.` : "you didn't get it. 0 points.") : "you didn't answer before the reveal. 0 points."} ${correctIds.size}/${players.length} got it right.</p>`
+          : answered
+            ? `<p class="waiting">Answer locked in. ${isHost ? "" : "Waiting for the reveal…"}</p>`
+            : ""
+      }
       <h3>Answered (${answeredIds.size}/${players.length})</h3>
       <ul class="player-list compact">
         ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
       </ul>
-      ${isHost ? `<button class="btn primary" data-action="missing-club-next">${qIndex + 1 >= gs.order.length ? "🕵️ Next: Guess the Footballer" : "Next journey"}</button>` : ""}
+      ${
+        isHost
+          ? revealed
+            ? `<button class="btn primary" data-action="missing-club-next">${qIndex + 1 >= gs.order.length ? "🕵️ Next: Guess the Footballer" : "Next journey"}</button>`
+            : `<button class="btn primary" data-action="reveal-missing-club">🔍 Reveal answer</button>`
+          : ""
+      }
     </div>`;
 }
 

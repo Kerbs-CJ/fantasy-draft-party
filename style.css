@@ -183,6 +183,7 @@ input::placeholder { color: #6c9b83; }
 }
 .choice.correct { background: rgba(6,214,160,0.25); border-color: var(--accent2); }
 .choice.wrong { background: rgba(239,71,111,0.25); border-color: var(--danger); }
+.choice.selected { background: rgba(255,209,102,0.18); border-color: var(--accent); }
 .choice:disabled { cursor: default; }
 
 .clue-list {
