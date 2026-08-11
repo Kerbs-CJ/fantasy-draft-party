@@ -64,7 +64,8 @@ it updates automatically within a minute or two.
    spectates live. Each finished match updates a live standings table
    (Wins / Losses / Kicks For / Kicks Against / Goal Difference). Once every
    match is played, host clicks **Show final leaderboard** — final placement
-   (ranked by wins, then goal difference, then kicks scored) adds to the
+   (ranked by wins, then goal difference, then head-to-head result, then
+   kicks scored as a last resort) adds to the
    same combined leaderboard.
 6. Host clicks **Reveal Draft Order!** for the big reveal.
 

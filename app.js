@@ -482,8 +482,9 @@ function findNextRRMatch(matches) {
 }
 
 // Standings: most wins first, then goal difference (kicks scored minus
-// kicks conceded across all of a player's matches), then raw kicks scored,
-// as the tiebreak — the familiar football-league sort order.
+// kicks conceded across all of a player's matches). Anyone still tied
+// after that is resolved by head-to-head — see resolveHeadToHead below —
+// falling back to overall kicks scored only if even that's exhausted.
 function computeStandings(matches, playerList) {
   const stats = {};
   playerList.forEach((p) => {
@@ -508,9 +509,52 @@ function computeStandings(matches, playerList) {
       s1.losses++;
     }
   });
-  return Object.values(stats)
-    .map((s) => ({ ...s, gd: s.gf - s.ga }))
-    .sort((a, b) => b.wins - a.wins || b.gd - a.gd || b.gf - a.gf);
+
+  const all = Object.values(stats).map((s) => ({ ...s, gd: s.gf - s.ga }));
+  all.sort((a, b) => b.wins - a.wins || b.gd - a.gd);
+
+  // Anyone sharing the same (wins, gd) after that sort is a tied block —
+  // resolve each block using only the matches played between its members.
+  // For a 2-way tie that's a single decisive match (someone always wins a
+  // shootout, so it can never itself be a tie). For a 3+ way tie it's a
+  // mini table of just those players' results against each other.
+  const result = [];
+  let i = 0;
+  while (i < all.length) {
+    let j = i + 1;
+    while (j < all.length && all[j].wins === all[i].wins && all[j].gd === all[i].gd) j++;
+    const group = all.slice(i, j);
+    if (group.length > 1) resolveHeadToHead(group, matches);
+    result.push(...group);
+    i = j;
+  }
+  return result;
+}
+
+function resolveHeadToHead(group, matches) {
+  const ids = new Set(group.map((s) => s.player.id));
+  const h2h = {};
+  group.forEach((s) => (h2h[s.player.id] = { wins: 0, gf: 0, ga: 0 }));
+  matches.forEach((m) => {
+    if (!m.winner || !m.score) return;
+    if (!ids.has(m.p1) || !ids.has(m.p2)) return; // only matches between the tied players count
+    const p1Score = m.score[m.p1] || 0;
+    const p2Score = m.score[m.p2] || 0;
+    h2h[m.p1].gf += p1Score;
+    h2h[m.p1].ga += p2Score;
+    h2h[m.p2].gf += p2Score;
+    h2h[m.p2].ga += p1Score;
+    if (m.winner === m.p1) h2h[m.p1].wins++;
+    else h2h[m.p2].wins++;
+  });
+  // Head-to-head wins, then head-to-head goal difference, then (only if a
+  // 3+ way tie is somehow still unresolved, e.g. everyone split 1-1)
+  // overall kicks scored as a last-resort tiebreak.
+  group.sort((a, b) => {
+    const ha = h2h[a.player.id];
+    const hb = h2h[b.player.id];
+    return hb.wins - ha.wins || (hb.gf - hb.ga) - (ha.gf - ha.ga) || b.gf - a.gf;
+  });
 }
 
 // 100/80/60/40/20 for a 5-player field (a clean 20-point step per place),
@@ -1056,7 +1100,8 @@ function renderShootoutIntro() {
       <ol>
         <li><b>Most wins</b></li>
         <li>Tied on wins? <b>Best goal difference</b> (kicks scored minus kicks conceded, across all their matches)</li>
-        <li>Still tied? <b>Most kicks scored</b></li>
+        <li>Still tied? <b>Head-to-head</b> — whoever won when the tied players played each other decides it (for 3+ players tied together, it's a mini table of just their results against each other)</li>
+        <li>Somehow still tied? Overall kicks scored, as a last resort</li>
       </ol>
 
       <h3>Points on offer</h3>
