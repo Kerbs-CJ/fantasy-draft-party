@@ -1,12 +1,12 @@
 # 🏆 Fantasy League Bugaloo — Draft Party
 
 A tiny live multiplayer web app for deciding the Fantasy League Bugaloo draft
-order. Everyone joins a room from their own device, plays through three
+order. Everyone joins a room from their own device, plays through four
 rounds — Guess the Missing Club from a player's career timeline, Guess the
-Footballer from progressive clues, then a 1v1 penalty shootout round robin
-(everyone plays everyone once, standings by wins/goal difference) — and the
-combined leaderboard becomes the draft order, with a dramatic reveal at the
-end.
+Footballer from progressive clues, a 1v1 penalty shootout round robin
+(everyone plays everyone once, standings by wins/goal difference), then
+Football Golf, a 3-hole solo skill course — and the combined leaderboard
+becomes the draft order, with a dramatic reveal at the end.
 
 No app install needed — it's just a web page. It's a plain static site (no
 build step, no server to maintain) that uses [Supabase](https://supabase.com)
@@ -75,7 +75,16 @@ it updates automatically within a minute or two.
    match is played, host clicks **Show final leaderboard** — final placement
    (ranked by wins, then goal difference, then head-to-head result) adds to the
    same combined leaderboard.
-6. Host clicks **Reveal Draft Order!** for the big reveal.
+6. Host clicks through to the Football Golf intro (format + scoring table),
+   then **Start Football Golf**. It's a fixed 3-hole course, played one
+   player at a time while everyone else watches: two taps per hole — a
+   power meter sweeps back and forth, tap to lock it in, then the same for
+   an aim meter. The closer both taps land to dead-center, the better the
+   shot (🎯 Bullseye down to ❌ a miss). A live side panel tracks every
+   player's running total as they each take their turn. Once everyone's
+   played all 3 holes, host clicks **Show final standings** — final
+   placement (highest total first) adds to the combined leaderboard.
+7. Host clicks **Reveal Draft Order!** for the big reveal.
 
 Heads up: round robin means more matches than a knockout bracket would (10
 instead of 4 for a 5-player group) — plan for it to take a while longer,
@@ -94,7 +103,8 @@ forward or back. This is enforced in the app logic itself, not just by
 hiding buttons, so it holds even against someone poking at devtools. Same
 idea for penalty kicks: only the two players actually in a match (the
 current shooter and keeper) can submit a pick — everyone else is a pure
-spectator for that match.
+spectator for that match. Football Golf works the same way: only the
+player whose turn it is can swing; everyone else just watches.
 
 Notes:
 - Works best with a decent wifi/data connection for everyone.
@@ -113,9 +123,6 @@ Notes:
 
 ## Backlog / future ideas
 
-- **A 4th round** — the plan is at least 4 rounds total; currently there are
-  3 (Guess the Missing Club, Guess the Footballer, Penalty Shootout). No
-  concrete idea chosen yet for the 4th.
 - **Volleyball-style 1v1 mini-game** — real-time WASD movement and live ball
   physics, as an alternative/addition to the penalty shootout. Bigger build
   (needs an actual real-time physics sync layer), not started yet.
