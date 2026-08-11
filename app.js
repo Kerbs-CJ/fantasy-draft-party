@@ -105,6 +105,7 @@ let local = {
   missingClub: { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null },
   guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
+  missingClubBotScheduled: {}, // `${botId}-${qIndex}` -> true, so a bot isn't scheduled twice
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
@@ -472,6 +473,39 @@ async function submitMissingClubAnswer(club, qIndex) {
   const points = correct ? MISSING_CLUB_POINTS : 0;
   render();
   await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, round_index: qIndex, points });
+}
+
+// While solo-testing in dev mode, have any dev bots lock in an answer a
+// beat after each question appears — same idea as ensureBotAutoPick for
+// the shootout. Bots pick a random choice (not necessarily correct, same
+// as a real random guesser would); this only needs a `scores` insert,
+// unlike the shootout's picks, since "who's answered" is already derived
+// from the scores table via answeredPlayerIds().
+function ensureMissingClubBotAnswer() {
+  if (!DEV_MODE) return;
+  const gs = room.game_state || {};
+  if (gs.qIndex === undefined) return;
+  const answeredIds = answeredPlayerIds(1, gs.qIndex);
+  for (const bot of players.filter((p) => isDevBot(p) && !answeredIds.has(p.id))) {
+    scheduleMissingClubBotAnswer(bot, gs.qIndex);
+  }
+}
+
+function scheduleMissingClubBotAnswer(bot, qIndex) {
+  const key = `${bot.id}-${qIndex}`;
+  if (local.missingClubBotScheduled[key]) return;
+  local.missingClubBotScheduled[key] = true;
+  setTimeout(async () => {
+    const gs = room.game_state || {};
+    if (gs.qIndex !== qIndex) return; // host already moved on
+    if (answeredPlayerIds(1, qIndex).has(bot.id)) return; // already answered somehow
+    const entry = window.MISSING_CLUB_PLAYERS[gs.order[qIndex]];
+    const choices = [entry.clubs[entry.missingIndex], ...entry.decoys];
+    const pick = choices[Math.floor(Math.random() * choices.length)];
+    const correct = pick === entry.clubs[entry.missingIndex];
+    const points = correct ? MISSING_CLUB_POINTS : 0;
+    await sb.from("scores").insert({ room_code: room.code, player_id: bot.id, game_index: 1, round_index: qIndex, points });
+  }, 900 + Math.random() * 2200);
 }
 
 // Host-triggered — shows the correct club and the "X/Y got it right" tally
@@ -1085,6 +1119,7 @@ function resetLocalGameState() {
   local.missingClub = { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null };
   local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
+  local.missingClubBotScheduled = {};
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
   local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
@@ -1377,6 +1412,7 @@ function renderInner() {
       break;
     case "missing-club":
       ensureMissingClubReady();
+      ensureMissingClubBotAnswer();
       html += renderMissingClub();
       break;
     case "guess-intro":
