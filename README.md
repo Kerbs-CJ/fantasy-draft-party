@@ -5,8 +5,8 @@ order. Everyone joins a room from their own device, plays through four
 rounds — Guess the Missing Club from a player's career timeline, Guess the
 Footballer from progressive clues, a 1v1 penalty shootout round robin
 (everyone plays everyone once, standings by wins/goal difference), then
-Football Golf, a 3-hole solo skill course — and the combined leaderboard
-becomes the draft order, with a dramatic reveal at the end.
+Football Golf, real stroke play over a 3-hole course — and the combined
+leaderboard becomes the draft order, with a dramatic reveal at the end.
 
 No app install needed — it's just a web page. It's a plain static site (no
 build step, no server to maintain) that uses [Supabase](https://supabase.com)
@@ -76,15 +76,18 @@ it updates automatically within a minute or two.
    (ranked by wins, then goal difference, then head-to-head result) adds to the
    same combined leaderboard.
 6. Host clicks through to the Football Golf intro (format + scoring table),
-   then **Start Football Golf**. It's a fixed 3-hole course — everyone plays
-   the *same hole at once*, each in their own time on their own device, like
-   Guess the Missing Club: two taps — a power meter sweeps back and forth,
-   tap to lock it in, then the same for an aim meter. The closer both taps
-   land to dead-center, the better the shot (🎯 Bullseye down to ❌ a miss).
-   As each player finishes, their ball lands on a shared green everyone can
-   watch fill up live, with a side panel tracking who's in and running
-   totals. Host moves the group to the next hole whenever ready — no need
-   to wait on stragglers. After all 3 holes, host clicks **Show final
+   then **Start Football Golf**. It's real stroke play over a fixed 3-hole
+   course — everyone plays the *same hole at once*, each in their own time
+   on their own device, like Guess the Missing Club. Tee off (two taps: a
+   power meter sweeps back and forth, tap to lock it in, then the same for
+   an aim meter, both always centered — the closer to dead-center, the
+   better the shot), see how much ground you covered, then keep swinging
+   from wherever you land until the ball's holed. Fewer strokes scores
+   more, same as real golf (🦅 Eagle down to a bogey), with a live side
+   panel showing who's holed out and running totals as they finish each
+   hole. Host moves the group to the next hole whenever ready — no need to
+   wait on stragglers (a hole that's dragging on also force-finishes a few
+   strokes over par). After all 3 holes, host clicks **Show final
    standings** — final placement (highest total first) adds to the
    combined leaderboard.
 7. Host clicks **Reveal Draft Order!** for the big reveal.

@@ -228,49 +228,57 @@ input::placeholder { color: #6c9b83; }
 }
 .golf-sweep { animation: golf-sweep 1.4s linear infinite alternate; }
 
-.golf-green {
+.golf-progress { margin: 16px 0 4px; }
+.golf-progress-track {
   position: relative;
-  width: 100%;
-  max-width: 260px;
-  aspect-ratio: 1;
-  margin: 16px auto;
-  border-radius: 50%;
-  background: radial-gradient(circle,
-    rgba(6,214,160,0.35) 0%, rgba(6,214,160,0.35) 12%,
-    rgba(255,209,102,0.28) 12%, rgba(255,209,102,0.28) 30%,
-    rgba(255,255,255,0.10) 30%, rgba(255,255,255,0.10) 55%,
-    rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.04) 100%);
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.08);
   border: 1px solid var(--card-border);
-  opacity: 0;
-  transform: scale(0.85);
-  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
 }
-.golf-green.revealed { opacity: 1; transform: scale(1); }
-.golf-ball {
+.golf-progress-fill {
   position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--accent2);
+  transition: width 0.4s ease-out;
+}
+.golf-progress-ball {
+  position: absolute;
+  top: 50%;
   transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: 18px;
+  font-size: 16px;
+  transition: left 0.4s ease-out;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
 }
-.golf-ball-label {
-  font-size: 9px;
-  color: var(--text);
-  background: rgba(0,0,0,0.55);
-  padding: 1px 4px;
-  border-radius: 6px;
-  margin-top: 2px;
-  white-space: nowrap;
-  max-width: 70px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.golf-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--sub);
+  margin-top: 4px;
+}
+
+.golf-finishers {
+  margin-top: 16px;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+.golf-finishers.revealed { opacity: 1; transform: scale(1); }
+.golf-finishers h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .golf-shot-list {
   list-style: none;
   padding: 0;
-  margin: 8px 0 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
