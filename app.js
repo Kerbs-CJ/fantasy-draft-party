@@ -742,8 +742,8 @@ async function devJump(status) {
 // new log entry via the realtime subscription and plays the same replay
 // independently, so the room shares roughly the same moment without
 // needing any extra server-side orchestration.
-const SHOOTOUT_KICK_MS = 750;
-const SHOOTOUT_RESULT_MS = 1300;
+const SHOOTOUT_KICK_MS = 1200;
+const SHOOTOUT_RESULT_MS = 1700;
 
 function ensureShootoutAnim() {
   const match = room.game_state?.match;
@@ -843,28 +843,10 @@ function triggerShotAnimation(entry) {
   });
 }
 
-// A smaller, quicker confetti burst than the big end-of-draft one — baked
-// straight into the render() output (rather than an imperative DOM append
-// like spawnConfetti) so it disappears for free the moment the next
-// render() replaces the DOM, no manual cleanup needed.
-function renderKickConfetti() {
-  if (prefersReducedMotion()) return "";
-  const colors = ["#ffd166", "#06d6a0", "#ef476f", "#118ab2", "#ffffff"];
-  let out = "";
-  for (let i = 0; i < 22; i++) {
-    const left = (Math.random() * 100).toFixed(1);
-    const bg = colors[Math.floor(Math.random() * colors.length)];
-    const delay = (Math.random() * 0.15).toFixed(2);
-    const dur = (1.1 + Math.random() * 0.7).toFixed(2);
-    out += `<div class="confetti" style="left:${left}vw;background:${bg};animation-delay:${delay}s;animation-duration:${dur}s;"></div>`;
-  }
-  return out;
-}
-
 function renderPkGoal(entry, animate) {
   const ballPos = animate ? PK_BALL_START : ZONE_POS[entry.shooterPick];
   const keeperPos = animate ? PK_KEEPER_START : ZONE_POS[entry.keeperPick];
-  if (animate) setTimeout(() => triggerShotAnimation(entry), 30);
+  if (animate) setTimeout(() => triggerShotAnimation(entry), 180);
   return `
     <div class="pk-goal">
       <div class="pk-goal-frame"></div>
@@ -1348,7 +1330,7 @@ function renderShootout() {
             : `<p class="sub" style="text-align:center">${escapeHtml(nameOf(entry.shooter))} steps up…</p>`
         }
       </div>
-      ${showImpact && entry.scored ? `<div class="pk-flash"></div>${renderKickConfetti()}` : ""}`;
+      ${showImpact && entry.scored ? `<div class="pk-flash"></div>` : ""}`;
   }
 
   // Decided but not yet finalized into the standings (a brief gap right
