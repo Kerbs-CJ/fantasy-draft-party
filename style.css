@@ -228,37 +228,72 @@ input::placeholder { color: #6c9b83; }
 }
 .golf-sweep { animation: golf-sweep 1.4s linear infinite alternate; }
 
-.golf-progress { margin: 16px 0 4px; }
-.golf-progress-track {
+.golf-course {
   position: relative;
-  height: 10px;
-  border-radius: 5px;
-  background: rgba(255,255,255,0.08);
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 2 / 3;
+  margin: 16px auto;
+  border-radius: 14px;
+  background: radial-gradient(ellipse at center, #2e7d4f 0%, #256840 70%, #1c4f31 100%);
   border: 1px solid var(--card-border);
+  overflow: hidden;
 }
-.golf-progress-fill {
+.golf-bunker {
   position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  border-radius: 5px;
-  background: var(--accent2);
-  transition: width 0.4s ease-out;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #d9c17a;
+  opacity: 0.85;
 }
-.golf-progress-ball {
+.golf-green-circle {
   position: absolute;
-  top: 50%;
+  width: 30%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.14);
+  transform: translate(-50%, -50%);
+}
+.golf-pin, .golf-tee-marker {
+  position: absolute;
   transform: translate(-50%, -50%);
   font-size: 16px;
-  transition: left 0.4s ease-out;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
 }
-.golf-progress-labels {
+.golf-course-ball {
+  position: absolute;
+  transform: translate(-50%, -50%);
   display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--sub);
-  margin-top: 4px;
+  flex-direction: column;
+  align-items: center;
+  font-size: 15px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+}
+/* The app fully replaces the DOM on every render, so a `transition`
+   would have nothing to animate from — every ball element is freshly
+   inserted. `@keyframes` sidesteps that: it plays from its own `from`
+   state automatically whenever a `.flying` element is inserted, using
+   the per-ball --from-x/--from-y -> --to-x/--to-y custom properties set
+   inline by renderGolfCourse(). */
+@keyframes golf-ball-fly {
+  from { left: var(--from-x); top: var(--from-y); }
+  to { left: var(--to-x); top: var(--to-y); }
+}
+.golf-course-ball.flying {
+  animation: golf-ball-fly 0.6s ease-out forwards;
+}
+.golf-course-ball.holed { opacity: 0.5; }
+.golf-course-ball-label {
+  font-size: 8px;
+  color: #fff;
+  background: rgba(0,0,0,0.6);
+  padding: 1px 4px;
+  border-radius: 5px;
+  margin-top: 2px;
+  white-space: nowrap;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .golf-finishers {

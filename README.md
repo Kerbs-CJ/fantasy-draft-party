@@ -85,16 +85,17 @@ it updates automatically within a minute or two.
    the same room together and can take as many practice swings as they
    like in their own lane, to get a feel for the power/aim timing before
    it counts. When ready, host clicks **Start Football Golf**. It's real
-   stroke play over a fixed 3-hole
-   course — everyone plays the *same hole at once*, each in their own time
-   on their own device, like Guess the Missing Club. Tee off (two taps: a
-   power meter sweeps back and forth, tap to lock it in, then the same for
-   an aim meter, both always centered — the closer to dead-center, the
-   better the shot), see how much ground you covered, then keep swinging
-   from wherever you land until the ball's holed. Fewer strokes scores
-   more, same as real golf (🦅 Eagle down to a bogey), with a live side
-   panel showing who's holed out and running totals as they finish each
-   hole. Host moves the group to the next hole whenever ready — no need to
+   stroke play on an actual top-down course — a shared birds-eye map with
+   a tee, a green, and bunkers, where every player's ball is visible
+   moving across it live as shots land, not just a final result. Everyone
+   plays the *same hole at once*, each in their own time on their own
+   device, like Guess the Missing Club. Tee off (two taps: a power meter
+   sweeps back and forth, tap to lock it in — controls distance — then
+   the same for an aim meter — controls direction, curving the shot left
+   or right off-center), watch the ball land on the shared map, then keep
+   swinging from there until it's holed. Fewer strokes scores more, same
+   as real golf (🦅 Eagle down to a bogey). Host moves the group to the
+   next hole whenever ready — no need to
    wait on stragglers (a hole that's dragging on also force-finishes a few
    strokes over par). After all 3 holes, host clicks **Show final
    standings** — final placement (highest total first) adds to the

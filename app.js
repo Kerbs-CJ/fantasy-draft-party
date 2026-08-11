@@ -6,27 +6,71 @@ const MISSING_CLUB_COUNT = 5;
 const MISSING_CLUB_POINTS = 20; // flat — no timer, so no speed bonus
 const GUESS_PLAYER_COUNT = 7;
 const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
-// Football Golf — actual stroke play, not a one-shot dart throw: tee off,
-// see how much ground you covered, keep swinging from wherever you ended
-// up until the ball's in, then score by strokes taken vs. par (same as
-// real golf). Every swing is the same power+aim tap-timing pair — a
-// marker sweeps a track and bounces back (matches sweepValue()'s triangle
-// wave below), tap to lock it in as close to dead-center as you can. Both
-// meters are always centered on 50; `radius` is how far off that center
-// still counts for something, and controls the hole's difficulty — a
-// tighter radius means even good timing yields lower shot quality, so it
-// takes more strokes to get down in the ideal `par`.
+// Football Golf — a real top-down course, not an abstract scalar. Every
+// player has an actual (x, y) position on the hole (percent coordinates,
+// tee near the bottom, pin near the top) that's part of shared room
+// state, so a shot's outcome is visible to everyone as a ball moving
+// across the shared course, not just a final result. Every swing is the
+// same power+aim tap-timing pair — a marker sweeps a track and bounces
+// back (matches sweepValue()'s triangle wave below), tap to lock it in as
+// close to dead-center as you can. Both meters are always centered on 50;
+// `radius` is how far off that center still counts for something — a
+// tighter radius means even good timing yields lower shot quality, which
+// feeds both how far the shot travels and (via aim) how much it curves
+// off the direct line to the pin. `bunkers` are decorative only (visual
+// variety per hole), not a gameplay penalty yet.
 const GOLF_HOLES = [
-  { name: "The Approach", description: "A short, forgiving hole to warm up on.", par: 3, radius: 30 },
-  { name: "The Dogleg", description: "Longer, and the window's narrower now.", par: 4, radius: 22 },
-  { name: "The Long Drive", description: "A proper test — small margin for error.", par: 5, radius: 16 },
+  {
+    name: "The Approach",
+    description: "A short, forgiving hole to warm up on.",
+    par: 3,
+    radius: 30,
+    tee: { x: 50, y: 90 },
+    pin: { x: 50, y: 12 },
+    bunkers: [
+      { x: 30, y: 45, w: 16, h: 9 },
+      { x: 68, y: 60, w: 12, h: 7 },
+    ],
+  },
+  {
+    name: "The Dogleg",
+    description: "Bends away from the tee — line matters as much as power.",
+    par: 4,
+    radius: 22,
+    tee: { x: 18, y: 90 },
+    pin: { x: 80, y: 14 },
+    bunkers: [
+      { x: 55, y: 48, w: 16, h: 9 },
+      { x: 30, y: 65, w: 10, h: 6 },
+      { x: 70, y: 30, w: 12, h: 7 },
+    ],
+  },
+  {
+    name: "The Long Drive",
+    description: "A proper test — small margin for error.",
+    par: 5,
+    radius: 16,
+    tee: { x: 50, y: 94 },
+    pin: { x: 50, y: 8 },
+    bunkers: [
+      { x: 35, y: 35, w: 12, h: 7 },
+      { x: 65, y: 55, w: 12, h: 7 },
+      { x: 30, y: 72, w: 10, h: 6 },
+      { x: 70, y: 20, w: 10, h: 6 },
+    ],
+  },
 ];
 const GOLF_SWEEP_PERIOD_MS = 1400; // one-way sweep duration — must match the .golf-sweep CSS animation-duration
-// A shot's `advance` toward the pin is 0.4 (a total mishit still crawls
-// forward) up to 1.0 (dead-center on both taps) — see computeShotQuality.
-// Playing every shot perfectly finishes exactly at par (par shots x 1.0
-// advance = par units covered); worse timing needs extra strokes.
+// A shot's `advance` distance is GOLF_ADVANCE_FLOOR (a total mishit still
+// crawls forward) up to 1.0 (dead-center on both taps) times the hole's
+// per-shot "unit distance" (tee-to-pin distance / par) — see
+// computeShotResult. Playing every shot perfectly finishes exactly at par
+// (par shots x 1.0 unit = the full tee-to-pin distance); worse timing
+// needs extra strokes. Aim deviates the shot's direction left/right of
+// the straight line to the pin, up to GOLF_MAX_AIM_DEVIATION_DEG.
 const GOLF_ADVANCE_FLOOR = 0.4;
+const GOLF_MAX_AIM_DEVIATION_DEG = 28;
+const GOLF_HOLED_THRESHOLD = 5; // how close (course %) counts as "in the hole"
 const GOLF_MERCY_STROKES = 3; // holes forcibly finish at par + this, however far short
 const GOLF_PRACTICE_RADIUS = 25; // medium difficulty — just for getting a feel for the timing
 const GOLF_TERM_POINTS = { eagle: 50, birdie: 35, par: 25, bogey: 15, "double-bogey": 8, "triple-plus": 3 };
@@ -64,7 +108,8 @@ let local = {
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
-  golf: { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, strokes: 0, remainingDistance: null, lastShot: null },
+  golf: { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, lastShot: null },
+  golfBallAnim: {}, // playerId -> {x, y} currently-displayed position, for the animated slide
   golfAnim: { key: null, revealed: false },
   practice: { subPhase: "ready", phaseStart: null, power: null, lastQuality: null },
 };
@@ -782,17 +827,17 @@ async function finishRoundRobin() {
 }
 
 // ── football golf ───────────────────────────────────────────
-// A fixed 3-hole course, played as actual stroke play — tee off, see how
-// close you got, keep swinging from wherever you land until the ball's
-// holed, then score by strokes vs. par. Everyone plays the SAME hole at
-// once, each on their own device and own time (like Guess the Missing
-// Club) — no bracket, no turn order, so nobody's ever stuck waiting on
-// one slow (or unresponsive, e.g. a dev bot) player. The sweeping
-// power/aim meters and every intermediate stroke are purely local to
-// each player's own device; only the final holed-out result (strokes
-// taken) gets written to shared room state once they've finished the
-// hole, and every client independently renders whichever players have
-// finished so far, live.
+// A fixed 3-hole course, played as actual stroke play on a real top-down
+// layout — every player has an (x, y) position on the hole, starting at
+// the tee, that lives in shared room state and updates after every shot
+// (not just the final one), so the whole group watches every ball move
+// across the course live, not just a final result. Everyone plays the
+// SAME hole at once, each on their own device and own time (like Guess
+// the Missing Club) — no bracket, no turn order, so nobody's ever stuck
+// waiting on one slow (or unresponsive, e.g. a dev bot) player. The
+// sweeping power/aim meters themselves are still purely local to each
+// player's own device — only the resolved shot (new position, stroke
+// count) gets written to shared state.
 
 // Maps an elapsed time to where a linear-alternate CSS sweep animation
 // would currently sit — a triangle wave from 0 to 100 and back, matching
@@ -805,15 +850,38 @@ function sweepValue(elapsedMs, periodMs) {
 }
 
 // Both meters are always centered on 50 — how well you time each tap is
-// the whole skill test, not guessing a hidden target. `advance` is how
-// many "par units" this single stroke covers: GOLF_ADVANCE_FLOOR even on
-// a total mishit, up to a full 1.0 unit on a dead-center double-tap.
-function computeShotQuality(hole, power, aim) {
-  const powerAcc = Math.max(0, 1 - Math.abs(power - 50) / hole.radius);
-  const aimAcc = Math.max(0, 1 - Math.abs(aim - 50) / hole.radius);
+// the whole skill test, not guessing a hidden target. Power drives
+// distance (a total mishit still crawls forward GOLF_ADVANCE_FLOOR of a
+// "par unit", up to a full unit on a dead-center tap); aim drives
+// direction, deviating up to GOLF_MAX_AIM_DEVIATION_DEG off the straight
+// line to the pin. A flawless run of `par` shots — each covering exactly
+// one unit dead straight — lands exactly on the pin; worse timing costs
+// extra strokes and/or sends the ball off-line.
+function computeShotResult(hole, pos, power, aim) {
+  const dx = hole.pin.x - pos.x;
+  const dy = hole.pin.y - pos.y;
+  const distToPin = Math.sqrt(dx * dx + dy * dy);
+  const idealAngle = Math.atan2(dy, dx);
+
+  const powerAcc = clamp(1 - Math.abs(power - 50) / hole.radius, 0, 1);
+  const aimAcc = clamp(1 - Math.abs(aim - 50) / hole.radius, 0, 1);
   const quality = (powerAcc + aimAcc) / 2;
-  const advance = GOLF_ADVANCE_FLOOR + (1 - GOLF_ADVANCE_FLOOR) * quality;
-  return { powerAcc, aimAcc, quality, advance };
+
+  const maxDeviationRad = (GOLF_MAX_AIM_DEVIATION_DEG * Math.PI) / 180;
+  const aimOffset = ((aim - 50) / 50) * maxDeviationRad;
+  const shotAngle = idealAngle + aimOffset;
+
+  const totalDist = Math.hypot(hole.pin.x - hole.tee.x, hole.pin.y - hole.tee.y);
+  const unitDistance = totalDist / hole.par;
+  const advance = unitDistance * (GOLF_ADVANCE_FLOOR + (1 - GOLF_ADVANCE_FLOOR) * quality);
+  const travel = Math.min(advance, distToPin + 3); // don't wildly overshoot past the pin
+
+  const x = clamp(pos.x + Math.cos(shotAngle) * travel, 3, 97);
+  const y = clamp(pos.y + Math.sin(shotAngle) * travel, 3, 97);
+  const newDistToPin = Math.hypot(hole.pin.x - x, hole.pin.y - y);
+  const holed = newDistToPin <= GOLF_HOLED_THRESHOLD;
+
+  return { x, y, powerAcc, aimAcc, quality, holed };
 }
 
 function golfScoreTerm(strokes, par) {
@@ -831,23 +899,25 @@ function golfFinishedPlayers(gs) {
   return players.filter((p) => (gs.results[p.id] || []).length > gs.holeIndex);
 }
 
+// Everyone's ball starts bunched up at the tee, visible to the whole
+// group from the first render of the hole — not just appearing once
+// someone's taken a shot.
+function golfBallsAtTee(hole) {
+  const balls = {};
+  for (const p of players) balls[p.id] = { x: hole.tee.x, y: hole.tee.y, strokes: 0, holedOut: false };
+  return balls;
+}
+
 async function startGolf() {
-  await updateRoom({ status: "golf", game_state: { golf: { holeIndex: 0, results: {} } } });
+  await updateRoom({ status: "golf", game_state: { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]) } } });
 }
 
 function ensureGolfReady() {
   const gs = room.game_state?.golf;
   if (!gs) return;
   if (local.golf.holeIndex !== gs.holeIndex) {
-    local.golf = {
-      holeIndex: gs.holeIndex,
-      subPhase: "ready",
-      phaseStart: null,
-      power: null,
-      strokes: 0,
-      remainingDistance: GOLF_HOLES[gs.holeIndex]?.par ?? null,
-      lastShot: null,
-    };
+    local.golf = { holeIndex: gs.holeIndex, subPhase: "ready", phaseStart: null, power: null, lastShot: null };
+    local.golfBallAnim = {}; // fresh hole — don't animate a cross-course jump from the old one
   }
 }
 
@@ -855,6 +925,11 @@ function golfAlreadyAnswered(gs) {
   const me = myPlayer();
   if (!me) return true;
   return (gs.results[me.id] || []).length > gs.holeIndex;
+}
+
+function golfMyBall(gs, hole) {
+  const me = myPlayer();
+  return (me && gs.balls[me.id]) || { x: hole.tee.x, y: hole.tee.y, strokes: 0, holedOut: false };
 }
 
 // Used both to tee off (subPhase "ready") and to line up every
@@ -886,24 +961,21 @@ async function golfLockAim() {
   const hole = GOLF_HOLES[gs.holeIndex];
   if (!hole) return;
 
-  const shot = computeShotQuality(hole, local.golf.power, aim);
-  const strokes = local.golf.strokes + 1;
-  const remainingDistance = Math.max(0, local.golf.remainingDistance - shot.advance);
-  const holedOut = remainingDistance <= 0 || strokes >= hole.par + GOLF_MERCY_STROKES;
+  const currentBall = golfMyBall(gs, hole);
+  const shot = computeShotResult(hole, currentBall, local.golf.power, aim);
+  const strokes = currentBall.strokes + 1;
+  const holedOut = shot.holed || strokes >= hole.par + GOLF_MERCY_STROKES;
+  const balls = { ...gs.balls, [me.id]: { x: shot.x, y: shot.y, strokes, holedOut } };
 
-  if (!holedOut) {
-    // Not in yet — show this shot's recap locally, no shared write until
-    // the hole is actually finished.
-    local.golf = { ...local.golf, subPhase: "recap", phaseStart: null, power: null, strokes, remainingDistance, lastShot: shot };
-    render();
-    return;
+  let results = gs.results;
+  if (holedOut) {
+    const term = golfScoreTerm(strokes, hole.par);
+    const result = { strokes, term, points: GOLF_TERM_POINTS[term] };
+    results = { ...gs.results, [me.id]: [...(gs.results[me.id] || []), result] };
   }
 
-  const term = golfScoreTerm(strokes, hole.par);
-  const result = { strokes, term, points: GOLF_TERM_POINTS[term] };
-  const results = { ...gs.results, [me.id]: [...(gs.results[me.id] || []), result] };
-  local.golf = { ...local.golf, subPhase: "recap", phaseStart: null, power: null, strokes, remainingDistance, lastShot: shot };
-  await updateRoom({ game_state: { golf: { ...gs, results } } });
+  local.golf = { ...local.golf, subPhase: "recap", phaseStart: null, power: null, lastShot: shot };
+  await updateRoom({ game_state: { golf: { ...gs, balls, results } } });
 }
 
 // Host-triggered, same as Missing Club's reveal/next — doesn't require
@@ -916,7 +988,7 @@ async function golfNextHole() {
   if (next >= GOLF_HOLES.length) {
     await finishGolf(gs);
   } else {
-    await updateRoom({ game_state: { golf: { ...gs, holeIndex: next } } });
+    await updateRoom({ game_state: { golf: { ...gs, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]) } } });
   }
 }
 
@@ -938,10 +1010,7 @@ async function finishGolf(gs) {
   await updateRoom({ status: "golf-leaderboard" });
 }
 
-// Drives the pop-in reveal for the finishers list — whenever the current
-// hole changes, or another player holes out, everyone's screen animates
-// the (possibly-updated) list in together, rather than tracking each
-// entry's own reveal state individually.
+// Drives the pop-in reveal for the finishers list, same shape as before.
 function ensureGolfAnim() {
   const gs = room.game_state?.golf;
   if (!gs) return;
@@ -957,6 +1026,7 @@ function ensureGolfAnim() {
     }, 60);
   }
 }
+
 
 // ── football golf: driving range ────────────────────────────
 // A shared, unscored warm-up screen off the golf launcher — everyone's
@@ -982,15 +1052,24 @@ function practiceLockPower() {
   render();
 }
 
+// The driving range has no real course to aim at (no tee/pin), just a
+// timing test — this is the same power/aim accuracy math computeShotResult
+// uses internally, without the 2D position side of it.
+function computeSwingQuality(radius, power, aim) {
+  const powerAcc = clamp(1 - Math.abs(power - 50) / radius, 0, 1);
+  const aimAcc = clamp(1 - Math.abs(aim - 50) / radius, 0, 1);
+  return (powerAcc + aimAcc) / 2;
+}
+
 async function practiceLockAim() {
   const me = myPlayer();
   if (!me || local.practice.subPhase !== "aim") return;
   const aim = sweepValue(Date.now() - local.practice.phaseStart, GOLF_SWEEP_PERIOD_MS);
-  const shot = computeShotQuality({ radius: GOLF_PRACTICE_RADIUS }, local.practice.power, aim);
-  local.practice = { ...local.practice, subPhase: "recap", phaseStart: null, power: null, lastQuality: shot.quality };
+  const quality = computeSwingQuality(GOLF_PRACTICE_RADIUS, local.practice.power, aim);
+  local.practice = { ...local.practice, subPhase: "recap", phaseStart: null, power: null, lastQuality: quality };
   render();
   const gs = room.game_state?.golfPractice || { swings: {} };
-  await updateRoom({ game_state: { golfPractice: { swings: { ...gs.swings, [me.id]: shot.quality } } } });
+  await updateRoom({ game_state: { golfPractice: { swings: { ...gs.swings, [me.id]: quality } } } });
 }
 
 function practiceQualityLabel(quality) {
@@ -1009,7 +1088,8 @@ function resetLocalGameState() {
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
   local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
-  local.golf = { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, strokes: 0, remainingDistance: null, lastShot: null };
+  local.golf = { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, lastShot: null };
+  local.golfBallAnim = {};
   local.golfAnim = { key: null, revealed: false };
   local.practice = { subPhase: "ready", phaseStart: null, power: null, lastQuality: null };
 }
@@ -1046,7 +1126,7 @@ async function devJump(status) {
   }
   if (status === "golf") {
     await ensureDevBotIfNeeded();
-    game_state = { golf: { holeIndex: 0, results: {} } };
+    game_state = { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]) } };
   }
   await updateRoom({ status, game_state });
 }
@@ -1938,10 +2018,10 @@ function renderGolfIntro() {
       <h2>⛳ Football Golf</h2>
 
       <h3>The format</h3>
-      <p>A fixed ${GOLF_HOLES.length}-hole course, played as real stroke play. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, see how close you got, then keep swinging from wherever you land until the ball's holed. Fewer strokes is better, same as real golf.</p>
+      <p>A fixed ${GOLF_HOLES.length}-hole course, played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>Two taps per swing. First, a power meter sweeps back and forth — tap to lock it wherever it's sitting. Then an aim meter does the same. Both are always centered — the closer both taps land to dead-center, the better the shot, covering more ground toward the hole. A mishit still crawls forward a bit, so you're never fully stuck, just taking more strokes.</p>
+      <p>Two taps per swing. First, a power meter sweeps back and forth — tap to lock it wherever it's sitting, which controls distance. Then an aim meter does the same, controlling direction — dead-center flies straight at the pin, off-center curves the shot left or right. Both meters are always centered on the same spot each time — the closer to dead-center, the better the shot. A mishit still crawls forward a bit off-line, so you're never fully stuck, just taking more strokes to get there.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
@@ -2036,7 +2116,7 @@ function renderGolf() {
   const hole = GOLF_HOLES[holeIndex];
   const answered = golfAlreadyAnswered(gs);
   const finished = golfFinishedPlayers(gs);
-  const finishedIds = new Set(finished.map((p) => p.id));
+  const myStrokes = golfMyBall(gs, hole).strokes;
 
   const scoreboardRows = players
     .map((p) => ({
@@ -2057,14 +2137,13 @@ function renderGolf() {
     const btnLabel = local.golf.subPhase === "power" ? "🏌️ Swing!" : "🎯 Strike!";
     swingUi = `
       <div class="golf-hole-card">
-        <h3>Stroke ${local.golf.strokes + 1} — ${escapeHtml(hole.name)}</h3>
+        <h3>Stroke ${myStrokes + 1} — ${escapeHtml(hole.name)}</h3>
         <p class="sub">${label}</p>
         <div class="golf-meter">
           <div class="golf-meter-track"><div class="golf-meter-marker golf-sweep"></div></div>
         </div>
         <button class="btn primary" data-action="${action}">${btnLabel}</button>
-      </div>
-      ${renderGolfProgress(hole, local.golf.remainingDistance, local.golf.strokes)}`;
+      </div>`;
   } else if (local.golf.subPhase === "recap" && local.golf.lastShot) {
     const s = local.golf.lastShot;
     const shotLabel =
@@ -2072,13 +2151,8 @@ function renderGolf() {
     swingUi = `
       <div class="golf-hole-card">
         <h3>${shotLabel}</h3>
-        <p class="sub">Stroke ${local.golf.strokes} down. ${local.golf.remainingDistance <= 0 ? "That's the hole!" : "Still short of the pin — keep going."}</p>
-        ${renderGolfProgress(hole, local.golf.remainingDistance, local.golf.strokes)}
-        ${
-          local.golf.remainingDistance > 0
-            ? `<button class="btn primary" data-action="golf-begin-swing">🏌️ Next shot</button>`
-            : ""
-        }
+        <p class="sub">Stroke ${myStrokes} down — check the course below to see where it landed.</p>
+        <button class="btn primary" data-action="golf-begin-swing">🏌️ Next shot</button>
       </div>`;
   } else {
     // "ready" — the very first shot of the hole
@@ -2097,19 +2171,16 @@ function renderGolf() {
       <div class="side-layout">
         <div class="side-main">
           ${swingUi}
-          ${renderGolfFinishers(gs, holeIndex, finished)}
+          ${renderGolfCourse(hole, gs)}
         </div>
         <div class="side-roster">
-          <h3>Holed out (${finished.length}/${players.length})</h3>
-          <ul class="player-list compact">
-            ${players.map((p) => `<li>${finishedIds.has(p.id) ? "⛳" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
-          </ul>
           <h3>Totals</h3>
           <ul class="player-list compact">
             ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total}</li>`).join("")}
           </ul>
         </div>
       </div>
+      ${renderGolfFinishers(gs, holeIndex, finished)}
       ${
         isHost
           ? `<button class="btn primary" data-action="golf-next-hole">${holeIndex + 1 >= GOLF_HOLES.length ? "🏆 Show final standings" : "Next hole"}</button>`
@@ -2118,18 +2189,45 @@ function renderGolf() {
     </div>`;
 }
 
-// A simple tee-to-pin progress bar for the player's own in-progress hole.
-function renderGolfProgress(hole, remainingDistance, strokes) {
-  const pct = clamp((1 - remainingDistance / hole.par) * 100, 0, 100);
+// The shared top-down course. Since render() fully replaces the DOM on
+// every call (no persisting elements), a CSS `transition` on left/top
+// would have nothing to animate FROM — freshly-inserted elements just
+// snap to their final style. `@keyframes` don't have that problem (they
+// auto-play from their own `from` state on insertion), so each ball that
+// moved since the last render gets an inline `--from-x/--from-y` ->
+// `--to-x/--to-y` pair and a `flying` class that runs a keyframe
+// animation between them; balls that haven't moved just render statically
+// at rest. local.golfBallAnim remembers each ball's last-rendered spot so
+// we can tell which is which.
+function renderGolfCourse(hole, gs) {
+  const bunkers = (hole.bunkers || [])
+    .map((b) => `<div class="golf-bunker" style="left:${b.x}%; top:${b.y}%; width:${b.w}%; height:${b.h}%;"></div>`)
+    .join("");
+  const balls = players
+    .map((p) => {
+      const ball = gs.balls[p.id] || hole.tee;
+      const prev = local.golfBallAnim[p.id];
+      const moved = prev && (prev.x !== ball.x || prev.y !== ball.y);
+      local.golfBallAnim[p.id] = { x: ball.x, y: ball.y };
+      const holedOut = !!gs.balls[p.id]?.holedOut;
+      const style = moved
+        ? `--from-x:${prev.x}%; --from-y:${prev.y}%; --to-x:${ball.x}%; --to-y:${ball.y}%;`
+        : `left:${ball.x}%; top:${ball.y}%;`;
+      return `
+        <div class="golf-course-ball${moved ? " flying" : ""}${holedOut ? " holed" : ""}" style="${style}" title="${escapeHtml(p.name)}">
+          <span>⚽</span>
+          <span class="golf-course-ball-label">${escapeHtml(p.name)}</span>
+        </div>`;
+    })
+    .join("");
   return `
-    <div class="golf-progress">
-      <div class="golf-progress-track">
-        <div class="golf-progress-fill" style="width:${pct}%"></div>
-        <div class="golf-progress-ball" style="left:${pct}%">⚽</div>
-      </div>
-      <div class="golf-progress-labels"><span>Tee</span><span>⛳ Pin</span></div>
-    </div>
-    <p class="sub" style="text-align:center">Stroke ${strokes} of up to ${hole.par + GOLF_MERCY_STROKES}</p>`;
+    <div class="golf-course">
+      ${bunkers}
+      <div class="golf-green-circle" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
+      <div class="golf-pin" style="left:${hole.pin.x}%; top:${hole.pin.y}%;">⛳</div>
+      <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;">📍</div>
+      ${balls}
+    </div>`;
 }
 
 // Who's holed out on the current hole so far, and in how many strokes —
