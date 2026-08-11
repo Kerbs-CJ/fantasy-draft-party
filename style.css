@@ -422,10 +422,16 @@ code {
   border-radius: 10px;
   margin: 0 0 16px;
   font-size: 14px;
-  animation: pkResultPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 .kick-result.goal { background: rgba(6,214,160,0.18); color: var(--accent2); }
 .kick-result.save { background: rgba(239,71,111,0.18); color: var(--danger); }
+/* Only applied on the render that first reveals a kick's result (see the
+   showImpact guard in renderShootout) — a redundant re-render mid-result,
+   e.g. the realtime echo of our own DB write landing a beat later, must
+   not restart the pop-in and make it look like it's flashing repeatedly. */
+.pk-result-pop {
+  animation: pkResultPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
 @keyframes pkResultPop {
   0% { transform: scale(0.4); opacity: 0; }
   60% { transform: scale(1.12); opacity: 1; }
@@ -527,7 +533,7 @@ code {
 .pk-ball { font-size: 24px; z-index: 3; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pk-impact-goal, .pk-impact-save, .pk-flash, .kick-result, .confetti { animation: none !important; }
+  .pk-impact-goal, .pk-impact-save, .pk-flash, .pk-result-pop, .confetti { animation: none !important; }
 }
 
 /* dev-only testing affordances (?dev=1) */
