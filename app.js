@@ -938,6 +938,12 @@ function render() {
     return;
   }
 
+  // Confetti pieces are appended straight to <body> (see spawnConfetti),
+  // outside the #app subtree this function replaces on every render — so
+  // navigating away from the reveal screen (e.g. jumping back to Trivia
+  // mid-testing) wouldn't otherwise clear ones still mid-fall.
+  if (room.status !== "reveal") clearConfetti();
+
   let html = renderTopBar();
   switch (room.status) {
     case "lobby":
@@ -1475,6 +1481,10 @@ function spawnConfetti() {
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 4500);
   }
+}
+
+function clearConfetti() {
+  document.querySelectorAll(".confetti").forEach((el) => el.remove());
 }
 
 function escapeHtml(str) {
