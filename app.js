@@ -192,7 +192,9 @@ async function onClick(e) {
   if (action === "guess-answer") return guessAnswer(btn.dataset.name);
   if (action === "guess-next") return guessNext();
   if (action === "show-shootout-intro") return updateRoom({ status: "shootout-intro" });
-  if (action === "create-tournament") return startBracket();
+  if (action === "create-tournament") return startTournamentDraw();
+  if (action === "draw-next-player") return drawNextPlayer();
+  if (action === "view-bracket") return updateRoom({ status: "bracket" });
   if (action === "start-match") return startMatch(Number(btn.dataset.r), Number(btn.dataset.m));
   if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
   if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
@@ -418,29 +420,21 @@ async function guessNext() {
 // into round 1. With 5 players that means round 1 is 2 real matches + 1
 // bye (not 1 match + 3 byes), and it still takes the same number of total
 // rounds to reach a champion either way.
-function generateBracket(playerIds) {
-  if (playerIds.length <= 1) {
-    return [[{ p1: playerIds[0] || null, p2: null, winner: playerIds[0] || null, isBye: true }]];
+// Builds the empty SHAPE of the bracket — how many matches and byes each
+// round has — which is fully predictable from the player count alone, long
+// before we know who's actually standing in any given slot.
+function buildBracketRounds(playerCount) {
+  if (playerCount <= 1) {
+    return [[{ p1: null, p2: null, winner: null, isBye: true }]];
   }
   const rounds = [];
-  let count = playerIds.length;
+  const matchCount0 = Math.floor(playerCount / 2);
+  const hasBye0 = playerCount % 2 === 1;
   const firstRound = [];
-  const shuffled = shuffle(playerIds);
-  let idx = 0;
-  const matchCount0 = Math.floor(count / 2);
-  const hasBye0 = count % 2 === 1;
-  for (let i = 0; i < matchCount0; i++) {
-    firstRound.push({ p1: shuffled[idx++], p2: shuffled[idx++], winner: null, isBye: false });
-  }
-  if (hasBye0) {
-    const byePlayer = shuffled[idx++];
-    firstRound.push({ p1: byePlayer, p2: null, winner: byePlayer, isBye: true });
-  }
+  for (let i = 0; i < matchCount0; i++) firstRound.push({ p1: null, p2: null, winner: null, isBye: false });
+  if (hasBye0) firstRound.push({ p1: null, p2: null, winner: null, isBye: true });
   rounds.push(firstRound);
 
-  // Build the shape of every later round — sizes are fully predictable up
-  // front even though we don't know who's IN each slot until earlier
-  // rounds are actually played.
   let prevCount = matchCount0 + (hasBye0 ? 1 : 0);
   while (prevCount > 1) {
     const matchCount = Math.floor(prevCount / 2);
@@ -451,12 +445,44 @@ function generateBracket(playerIds) {
     rounds.push(round);
     prevCount = matchCount + (hasBye ? 1 : 0);
   }
+  return rounds;
+}
 
-  // Propagate every immediately-known bye winner (round 1's, and any chain
-  // reaction it triggers in later rounds that also turn out to be byes).
-  firstRound.forEach((match, i) => {
-    if (match.winner) propagateBracketWinner(rounds, 0, i, match.winner);
-  });
+// Finds the next empty round-1 slot to fill, in a fixed order (p1 then p2
+// of match 0, p1 then p2 of match 1, ...) — used both to fill everything
+// at once (generateBracket) and one player at a time (the live draw).
+function nextEmptySlot(firstRound) {
+  for (let m = 0; m < firstRound.length; m++) {
+    const match = firstRound[m];
+    if (match.p1 === null) return { m, slot: "p1" };
+    if (!match.isBye && match.p2 === null) return { m, slot: "p2" };
+  }
+  return null;
+}
+
+// Drops a player into the next open slot. If that completes a bye match,
+// resolves and propagates it immediately.
+function placeNextDrawnPlayer(rounds, playerId) {
+  const slot = nextEmptySlot(rounds[0]);
+  if (!slot) return;
+  const match = rounds[0][slot.m];
+  match[slot.slot] = playerId;
+  if (match.isBye) {
+    match.winner = playerId;
+    propagateBracketWinner(rounds, 0, slot.m, playerId);
+  }
+}
+
+// Each round pairs up as many players as possible (floor(n/2) matches) and,
+// only if the round has an odd number of entrants, gives exactly one of
+// them a bye — rather than padding the whole tournament up to a power of 2
+// and dumping every bye into round 1. With 5 players that means round 1 is
+// 2 real matches + 1 bye (not 1 match + 3 byes), and it still takes the
+// same number of total rounds to reach a champion either way.
+function generateBracket(playerIds) {
+  const rounds = buildBracketRounds(playerIds.length);
+  const shuffled = shuffle(playerIds);
+  shuffled.forEach((playerId) => placeNextDrawnPlayer(rounds, playerId));
   return rounds;
 }
 
@@ -495,6 +521,23 @@ function roundName(r, totalRounds) {
 async function startBracket() {
   const rounds = generateBracket(players.map((p) => p.id));
   await updateRoom({ status: "bracket", game_state: { bracket: { rounds } } });
+}
+
+// The real "Create Tournament" flow: build the empty bracket shape and a
+// shuffled draw order, then let the host reveal players into it one at a
+// time (drawNextPlayer) instead of the whole thing appearing at once.
+async function startTournamentDraw() {
+  const rounds = buildBracketRounds(players.length);
+  const drawOrder = shuffle(players.map((p) => p.id));
+  await updateRoom({ status: "bracket-draw", game_state: { bracket: { rounds }, drawOrder, drawnCount: 0 } });
+}
+
+async function drawNextPlayer() {
+  const gs = room.game_state;
+  if (gs.drawnCount >= gs.drawOrder.length) return;
+  const playerId = gs.drawOrder[gs.drawnCount];
+  placeNextDrawnPlayer(gs.bracket.rounds, playerId);
+  await updateRoom({ game_state: { ...gs, drawnCount: gs.drawnCount + 1 } });
 }
 
 async function startMatch(r, m) {
@@ -655,6 +698,10 @@ async function devJump(status) {
   if (status === "trivia") game_state = { order: randomTriviaOrder(), qIndex: 0 };
   if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
   if (status === "shootout-intro") await ensureDevBotIfNeeded();
+  if (status === "bracket-draw") {
+    await ensureDevBotIfNeeded();
+    game_state = { bracket: { rounds: buildBracketRounds(players.length) }, drawOrder: shuffle(players.map((p) => p.id)), drawnCount: 0 };
+  }
   if (status === "bracket") {
     await ensureDevBotIfNeeded();
     game_state = { bracket: { rounds: generateBracket(players.map((p) => p.id)) } };
@@ -734,11 +781,17 @@ function ensureBotAutoPick() {
   if (!match || match.winnerId) return;
   const shooterId = match.turn === "p1" ? match.p1 : match.p2;
   const keeperId = match.turn === "p1" ? match.p2 : match.p1;
-  scheduleBotPick(match, "shooter", isDevBot(players.find((p) => p.id === shooterId)) && match.shooterPick === null);
-  scheduleBotPick(match, "keeper", isDevBot(players.find((p) => p.id === keeperId)) && match.keeperPick === null);
+  const shooterIsBot = isDevBot(players.find((p) => p.id === shooterId));
+  const keeperIsBot = isDevBot(players.find((p) => p.id === keeperId));
+  // A bot-vs-bot match has no human actively playing it — slow those picks
+  // down more so it still reads as a real contest to spectate, not a
+  // instant-resolving formality.
+  const slowMode = shooterIsBot && keeperIsBot;
+  scheduleBotPick(match, "shooter", shooterIsBot && match.shooterPick === null, slowMode);
+  scheduleBotPick(match, "keeper", keeperIsBot && match.keeperPick === null, slowMode);
 }
 
-function scheduleBotPick(match, role, shouldPick) {
+function scheduleBotPick(match, role, shouldPick, slowMode) {
   const flagKey = role === "shooter" ? "botShooterScheduledFor" : "botKeeperScheduledFor";
   if (!shouldPick) {
     local[flagKey] = null;
@@ -747,10 +800,11 @@ function scheduleBotPick(match, role, shouldPick) {
   const pickKey = `${match.roundIndex}-${match.turn}-${role}`;
   if (local[flagKey] === pickKey) return;
   local[flagKey] = pickKey;
+  const [min, range] = slowMode ? [1400, 1800] : [900, 1000];
   setTimeout(() => {
     const zone = ZONES[Math.floor(Math.random() * ZONES.length)];
     submitPick(role, zone);
-  }, 500 + Math.random() * 900);
+  }, min + Math.random() * range);
 }
 
 async function devQuickStart(status) {
@@ -790,6 +844,9 @@ function render() {
       break;
     case "shootout-intro":
       html += renderShootoutIntro();
+      break;
+    case "bracket-draw":
+      html += renderBracketDraw();
       break;
     case "bracket":
       html += renderBracket();
@@ -838,6 +895,7 @@ function renderDevBar() {
     ["guess", "Guess"],
     ["leaderboard", "Leaderboard"],
     ["shootout-intro", "PK Intro"],
+    ["bracket-draw", "Draw"],
     ["bracket", "Bracket"],
     ["final-leaderboard", "Final LB"],
     ["reveal", "Reveal"],
@@ -1023,6 +1081,47 @@ function renderShootoutIntro() {
         isHost
           ? `<button class="btn primary" data-action="create-tournament" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>🏆 Create Tournament</button>`
           : `<p class="waiting">Waiting for host to create the tournament…</p>`
+      }
+    </div>`;
+}
+
+function renderBracketDraw() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  const gs = room.game_state;
+  const bracket = gs.bracket;
+  const totalRounds = bracket.rounds.length;
+  const remaining = gs.drawOrder.length - gs.drawnCount;
+  const nameOf = (id) => (id ? players.find((p) => p.id === id)?.name || "?" : null);
+  return `
+    <div class="card">
+      <h2>🎲 Drawing the Bracket…</h2>
+      <p class="sub">${remaining > 0 ? `${remaining} player${remaining === 1 ? "" : "s"} left to draw` : "Draw complete!"}</p>
+      ${bracket.rounds
+        .map(
+          (round, r) => `
+        <h3>${roundName(r, totalRounds)}</h3>
+        <ul class="bracket-round">
+          ${round
+            .map((match) => {
+              const p1Name = nameOf(match.p1);
+              const p2Name = nameOf(match.p2);
+              return `<li class="${match.winner ? "decided" : ""}">
+                <span class="${match.winner && match.winner === match.p1 ? "winner" : ""}">${p1Name ? escapeHtml(p1Name) : "?"}</span>
+                <span class="vs">vs</span>
+                <span class="${match.winner && match.winner === match.p2 ? "winner" : ""}">${match.isBye ? (p1Name ? "BYE" : "?") : p2Name ? escapeHtml(p2Name) : "?"}</span>
+              </li>`;
+            })
+            .join("")}
+        </ul>`
+        )
+        .join("")}
+      ${
+        isHost
+          ? remaining > 0
+            ? `<button class="btn primary" data-action="draw-next-player">🎲 Draw Next Player</button>`
+            : `<button class="btn primary" data-action="view-bracket">▶️ Start the Tournament</button>`
+          : `<p class="waiting">Waiting for host to draw the bracket…</p>`
       }
     </div>`;
 }

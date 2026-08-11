@@ -52,9 +52,12 @@ it updates automatically within a minute or two.
    Footballer (host reveals clues one at a time per round; guessing on
    fewer clues scores more), with a leaderboard at the end of each.
 5. Host clicks through to the shootout intro screen (players + a quick
-   explainer), then **Create Tournament** — a single-elimination bracket is
-   drawn (byes auto-fill if the group isn't a power of 2). Host starts each
-   match one at a time; the two players in it pick shot/dive zones blind and
+   explainer), then **Create Tournament**. The bracket is drawn live, one
+   player at a time — host clicks **Draw Next Player** to reveal each name
+   into its slot (each round pairs up as many players as it can, giving a
+   bye to at most one leftover per round). Once everyone's drawn, host clicks
+   **Start the Tournament** to move into match play: host starts each match
+   one at a time; the two players in it pick shot/dive zones blind and
    simultaneous, best-of-5 then sudden death. Everyone else spectates live.
    Placement (champion, runner-up, etc.) adds to the same combined leaderboard.
 6. Host clicks **Reveal Draft Order!** for the big reveal.
