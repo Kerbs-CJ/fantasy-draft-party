@@ -50,10 +50,14 @@ it updates automatically within a minute or two.
    shares the 4-letter code (or the "Copy invite link" button) with the group.
 2. Everyone else opens the link, types their name, and joins.
 3. Host clicks **Start the party!**, which lands on an overview screen
-   listing every round and how the combined score becomes the draft
-   order. From there, each round also gets its own explainer screen
-   (format + scoring) right before it starts — Guess the Missing Club's,
-   then Guess the Footballer's, then the penalty shootout's.
+   listing every round, how the combined score becomes the draft order,
+   and a few fair-play notes worth reading out loud (the content was
+   freshly generated so the host isn't playing with advance knowledge
+   either, this was built in a few days so bugs are likely, and the host
+   has no control over outcomes — just pacing). From there, each round
+   also gets its own explainer screen (format + scoring) right before it
+   starts — Guess the Missing Club's, then Guess the Footballer's, then
+   the penalty shootout's.
 4. Guess the Missing Club plays first (5 random player career timelines,
    one club redacted — everyone answers in their own time on their own
    device, tapping a club then confirming to lock it in; a side panel
@@ -75,8 +79,13 @@ it updates automatically within a minute or two.
    match is played, host clicks **Show final leaderboard** — final placement
    (ranked by wins, then goal difference, then head-to-head result) adds to the
    same combined leaderboard.
-6. Host clicks through to the Football Golf intro (format + scoring table),
-   then **Start Football Golf**. It's real stroke play over a fixed 3-hole
+6. Host clicks through to the Football Golf intro (format + scoring table).
+   From there the host can optionally send everyone to the **🏌️ Driving
+   Range** first — a shared, unscored warm-up screen where everyone's on
+   the same room together and can take as many practice swings as they
+   like in their own lane, to get a feel for the power/aim timing before
+   it counts. When ready, host clicks **Start Football Golf**. It's real
+   stroke play over a fixed 3-hole
    course — everyone plays the *same hole at once*, each in their own time
    on their own device, like Guess the Missing Club. Tee off (two taps: a
    power meter sweeps back and forth, tap to lock it in, then the same for

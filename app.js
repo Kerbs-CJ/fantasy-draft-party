@@ -28,6 +28,7 @@ const GOLF_SWEEP_PERIOD_MS = 1400; // one-way sweep duration — must match the 
 // advance = par units covered); worse timing needs extra strokes.
 const GOLF_ADVANCE_FLOOR = 0.4;
 const GOLF_MERCY_STROKES = 3; // holes forcibly finish at par + this, however far short
+const GOLF_PRACTICE_RADIUS = 25; // medium difficulty — just for getting a feel for the timing
 const GOLF_TERM_POINTS = { eagle: 50, birdie: 35, par: 25, bogey: 15, "double-bogey": 8, "triple-plus": 3 };
 const GOLF_TERM_LABEL = {
   eagle: "🦅 Eagle!",
@@ -65,6 +66,7 @@ let local = {
   shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, strokes: 0, remainingDistance: null, lastShot: null },
   golfAnim: { key: null, revealed: false },
+  practice: { subPhase: "ready", phaseStart: null, power: null, lastQuality: null },
 };
 
 function clamp(v, min, max) {
@@ -240,6 +242,9 @@ async function onClick(e) {
   if (action === "golf-begin-swing") return golfBeginSwing();
   if (action === "golf-lock-power") return golfLockPower();
   if (action === "golf-lock-aim") return golfLockAim();
+  if (action === "practice-begin-swing") return practiceBeginSwing();
+  if (action === "practice-lock-power") return practiceLockPower();
+  if (action === "practice-lock-aim") return practiceLockAim();
   if (action === "leave") return leaveRoom();
   if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
 
@@ -262,6 +267,7 @@ async function onClick(e) {
   if (action === "start-rr-match") return startRRMatch(Number(btn.dataset.i));
   if (action === "finish-round-robin") return finishRoundRobin();
   if (action === "show-golf-intro") return updateRoom({ status: "golf-intro" });
+  if (action === "show-golf-practice") return showGolfPractice();
   if (action === "start-golf") return startGolf();
   if (action === "golf-next-hole") return golfNextHole();
   if (action === "reveal") return updateRoom({ status: "reveal" });
@@ -952,6 +958,49 @@ function ensureGolfAnim() {
   }
 }
 
+// ── football golf: driving range ────────────────────────────
+// A shared, unscored warm-up screen off the golf launcher — everyone's
+// on the same room state together (so everyone genuinely sees everyone),
+// but each player's swing is their own repeatable loop, same mechanic as
+// the real round, minus strokes/par/results. Only the latest swing per
+// player is kept (no history), just enough to show "here's roughly how
+// I'm doing" in each player's own lane.
+async function showGolfPractice() {
+  await updateRoom({ status: "golf-practice", game_state: { golfPractice: { swings: {} } } });
+}
+
+function practiceBeginSwing() {
+  if (local.practice.subPhase !== "ready" && local.practice.subPhase !== "recap") return;
+  local.practice = { ...local.practice, subPhase: "power", phaseStart: Date.now(), power: null };
+  render();
+}
+
+function practiceLockPower() {
+  if (local.practice.subPhase !== "power") return;
+  const power = sweepValue(Date.now() - local.practice.phaseStart, GOLF_SWEEP_PERIOD_MS);
+  local.practice = { ...local.practice, subPhase: "aim", phaseStart: Date.now(), power };
+  render();
+}
+
+async function practiceLockAim() {
+  const me = myPlayer();
+  if (!me || local.practice.subPhase !== "aim") return;
+  const aim = sweepValue(Date.now() - local.practice.phaseStart, GOLF_SWEEP_PERIOD_MS);
+  const shot = computeShotQuality({ radius: GOLF_PRACTICE_RADIUS }, local.practice.power, aim);
+  local.practice = { ...local.practice, subPhase: "recap", phaseStart: null, power: null, lastQuality: shot.quality };
+  render();
+  const gs = room.game_state?.golfPractice || { swings: {} };
+  await updateRoom({ game_state: { golfPractice: { swings: { ...gs.swings, [me.id]: shot.quality } } } });
+}
+
+function practiceQualityLabel(quality) {
+  if (quality == null) return "⏳ Hasn't swung yet";
+  if (quality >= 0.85) return "🔥 Great strike!";
+  if (quality >= 0.55) return "👍 Solid contact";
+  if (quality >= 0.25) return "😬 Mishit";
+  return "🫣 Total shank!";
+}
+
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
   local.missingClub = { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null };
@@ -962,6 +1011,7 @@ function resetLocalGameState() {
   local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, strokes: 0, remainingDistance: null, lastShot: null };
   local.golfAnim = { key: null, revealed: false };
+  local.practice = { subPhase: "ready", phaseStart: null, power: null, lastQuality: null };
 }
 
 async function ensureDevBotIfNeeded() {
@@ -990,6 +1040,10 @@ async function devJump(status) {
   // never submit a shot, which no longer blocks anyone since the host can
   // advance holes without waiting on every player.
   if (status === "golf-intro") await ensureDevBotIfNeeded();
+  if (status === "golf-practice") {
+    await ensureDevBotIfNeeded();
+    game_state = { golfPractice: { swings: {} } };
+  }
   if (status === "golf") {
     await ensureDevBotIfNeeded();
     game_state = { golf: { holeIndex: 0, results: {} } };
@@ -1268,6 +1322,9 @@ function renderInner() {
     case "golf-intro":
       html += renderGolfIntro();
       break;
+    case "golf-practice":
+      html += renderGolfPractice();
+      break;
     case "golf":
       ensureGolfReady();
       ensureGolfAnim();
@@ -1318,6 +1375,7 @@ function renderDevBar() {
     ["round-robin", "Round Robin"],
     ["final-leaderboard", "Final LB"],
     ["golf-intro", "Golf Intro"],
+    ["golf-practice", "Golf Practice"],
     ["golf", "Golf"],
     ["golf-leaderboard", "Golf LB"],
     ["reveal", "Reveal"],
@@ -1418,6 +1476,14 @@ function renderPartyIntro() {
         <li><b>⛳ Football Golf</b> — real stroke play over a 3-hole course. Tee off, then keep swinging (power + aim taps) from wherever you land until it's holed — fewer strokes scores more (eagle down to a bogey). Final total placement adds points too.</li>
       </ol>
       <p>You'll see a running leaderboard after each round, and the big reveal at the very end turns the final combined score into the draft order.</p>
+
+      <h3>🎤 A couple of things worth saying out loud</h3>
+      <ul>
+        <li><b>Fairness:</b> the host didn't write tonight's Missing Club and Guess the Footballer content from memory — it was freshly generated for tonight, with nothing carried over from anything the host had already seen. The host is guessing blind right along with everyone else.</li>
+        <li><b>It's a new build:</b> this whole app came together in just a few days, so there'll probably be a bug or two — bear with it, and just flag anything weird.</li>
+        <li><b>Host has no special powers:</b> starting rounds, revealing answers, and moving things along is all the host does — the actual questions, clue order, and shootout/golf outcomes aren't something the host controls or has advance knowledge of.</li>
+        <li>At the end of the day it's just deciding draft order — have fun with it.</li>
+      </ul>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
@@ -1899,8 +1965,65 @@ function renderGolfIntro() {
       </ul>
       ${
         isHost
-          ? `<button class="btn primary" data-action="start-golf" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>⛳ Start Football Golf</button>`
+          ? `<div class="guess-host-controls">
+              <button class="btn" data-action="show-golf-practice">🏌️ Practice Range first</button>
+              <button class="btn primary" data-action="start-golf" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>⛳ Start Football Golf</button>
+            </div>`
           : `<p class="waiting">Waiting for host to start…</p>`
+      }
+    </div>`;
+}
+
+function renderGolfPractice() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  const gs = room.game_state.golfPractice || { swings: {} };
+
+  let swingUi;
+  if (local.practice.subPhase === "power" || local.practice.subPhase === "aim") {
+    const label = local.practice.subPhase === "power" ? "Tap when the power looks right." : "Now tap to set your aim.";
+    const action = local.practice.subPhase === "power" ? "practice-lock-power" : "practice-lock-aim";
+    const btnLabel = local.practice.subPhase === "power" ? "🏌️ Swing!" : "🎯 Strike!";
+    swingUi = `
+      <div class="golf-hole-card">
+        <p class="sub">${label}</p>
+        <div class="golf-meter">
+          <div class="golf-meter-track"><div class="golf-meter-marker golf-sweep"></div></div>
+        </div>
+        <button class="btn primary" data-action="${action}">${btnLabel}</button>
+      </div>`;
+  } else {
+    swingUi = `
+      <div class="golf-hole-card">
+        ${
+          local.practice.subPhase === "recap"
+            ? `<p class="sub">${practiceQualityLabel(local.practice.lastQuality)}</p>`
+            : `<p class="sub">No pressure — swing as many times as you like.</p>`
+        }
+        <button class="btn primary" data-action="practice-begin-swing">🏌️ ${local.practice.subPhase === "recap" ? "Swing again" : "Take a swing"}</button>
+      </div>`;
+  }
+
+  return `
+    <div class="card">
+      <h2>🏌️ Driving Range</h2>
+      <p class="sub">Practice swings only — nothing here counts. Get a feel for the timing before the real round.</p>
+      <div class="side-layout">
+        <div class="side-main">${swingUi}</div>
+        <div class="side-roster">
+          <h3>Lanes</h3>
+          <ul class="player-list compact">
+            ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceQualityLabel(gs.swings[p.id])}</li>`).join("")}
+          </ul>
+        </div>
+      </div>
+      ${
+        isHost
+          ? `<div class="guess-host-controls">
+              <button class="btn" data-action="show-golf-intro">⬅️ Back</button>
+              <button class="btn primary" data-action="start-golf" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>⛳ Start Football Golf</button>
+            </div>`
+          : ""
       }
     </div>`;
 }
