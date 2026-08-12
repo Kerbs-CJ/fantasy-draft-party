@@ -39,10 +39,12 @@ const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only
 // point B, and a small number of "gate" walls — each one spanning nearly
 // the full width/height except for a single gap — divide the course into
 // a sequence of legs, forcing an actual zigzag from A to B rather than a
-// straight shot. Each leg gets exactly one extra feature (a pillar OR a
-// slope, never both, and never touching a gate) so nothing ever
-// overlaps — verified by hand against every other obstacle/slope in the
-// hole when this was laid out.
+// straight shot. Each leg gets AT MOST one extra pillar (slopes don't
+// count, since the ball rolls through those, not around them) — every
+// pillar is checked against every gate/pillar it shares an x-range OR
+// y-range with, for at least a full ball-diameter's clearance (solid
+// obstacles have real collision; a gap narrower than the ball itself
+// traps it bouncing forever, which is worse than no obstacle at all).
 const GOLF_HOLES = [
   {
     club: "Arsenal",
@@ -56,8 +58,8 @@ const GOLF_HOLES = [
     obstacles: [
       { x: 35, y: 37.5, w: 6, h: 69 }, // gate 1 — gap south (y 72-97)
       { x: 63, y: 62.5, w: 6, h: 69 }, // gate 2 — gap north (y 3-28)
-      { x: 22, y: 84, r: 3.5, shape: "circle" }, // leg 1 — a loose cannonball
-      { x: 75, y: 15, r: 3.5, shape: "circle" }, // leg 3 — a loose cannonball
+      { x: 20, y: 85, r: 3.5, shape: "circle" }, // leg 1 — a loose cannonball
+      { x: 78, y: 14, r: 3.5, shape: "circle" }, // leg 3 — a loose cannonball
     ],
     slopes: [
       { x: 49, y: 50, w: 12, h: 20, dir: "down" }, // leg 2 — resists the cut through the middle
@@ -76,7 +78,7 @@ const GOLF_HOLES = [
       { x: 63.5, y: 58, w: 67, h: 6 }, // gate 1 — gap west (x 3-30)
       { x: 36.5, y: 32, w: 67, h: 6 }, // gate 2 — gap east (x 70-97)
       { x: 20, y: 72, r: 4, shape: "circle" }, // leg 1 — a steward's post
-      { x: 76, y: 24, r: 4, shape: "circle" }, // leg 3 — a steward's post
+      { x: 76, y: 20, r: 3, shape: "circle" }, // leg 3 — a steward's post
     ],
     slopes: [
       { x: 48, y: 45, w: 18, h: 16, dir: "up" }, // leg 2 — a boost through the long middle stretch
@@ -87,18 +89,17 @@ const GOLF_HOLES = [
     crest: "LUFC",
     colors: { primary: "#1D428A", secondary: "#FFCD00" },
     name: "Elland Road",
-    description: "Thread the middle gate, then the badge ring guards the green.",
+    description: "Thread the middle gate, then a three-sided cup guards the green.",
     par: 3,
     tee: { x: 50, y: 88 },
     pin: { x: 50, y: 16 },
     obstacles: [
       { x: 21.5, y: 58, w: 37, h: 6 }, // gate — west half
       { x: 79.5, y: 58, w: 35, h: 6 }, // gate — east half (gap x 40-62, dead center)
-      { x: 50, y: 42, r: 3, shape: "circle" }, // leg 2 — a lone post before the ring
-      { x: 61, y: 20, r: 5, shape: "circle" }, // badge ring
-      { x: 39, y: 20, r: 5, shape: "circle" }, // badge ring
-      { x: 43, y: 11, r: 5, shape: "circle" }, // badge ring
-      { x: 57, y: 11, r: 5, shape: "circle" }, // badge ring — gap left open facing the tee
+      { x: 50, y: 42, r: 3, shape: "circle" }, // leg 2 — a lone post before the green
+      { x: 35, y: 18, w: 6, h: 20 }, // cup — west wall
+      { x: 65, y: 18, w: 6, h: 20 }, // cup — east wall
+      { x: 50, y: 7, w: 24, h: 6 }, // cup — north wall, joins both side walls with zero gap at the corners (south stays open, facing the tee)
     ],
     slopes: [
       { x: 50, y: 78, w: 22, h: 14, dir: "down" }, // leg 1 — resists right off the tee
@@ -117,12 +118,10 @@ const GOLF_HOLES = [
       { x: 68, y: 68.5, w: 6, h: 57 }, // gate 1 — gap north (y 3-40)
       { x: 50, y: 31.5, w: 6, h: 57 }, // gate 2 — gap south (y 60-97)
       { x: 32, y: 68.5, w: 6, h: 57 }, // gate 3 — gap north (y 3-40)
-      { x: 59, y: 50, r: 4, shape: "circle" }, // leg 2 — a stray post
-      { x: 20, y: 25, r: 4, shape: "circle" }, // leg 4 — a stray post
     ],
     slopes: [
       { x: 82, y: 65, w: 14, h: 16, dir: "down" }, // leg 1 — resists right off the tee
-      { x: 41, y: 50, w: 8, h: 14, dir: "up" }, // leg 3 — a boost through the tightest squeeze
+      { x: 41, y: 50, w: 8, h: 14, dir: "up" }, // leg 2 — a boost through the tightest squeeze
     ],
   },
   {
@@ -138,8 +137,6 @@ const GOLF_HOLES = [
       { x: 63.5, y: 72, w: 67, h: 6 }, // gate 1 — gap west (x 3-30)
       { x: 36.5, y: 50, w: 67, h: 6 }, // gate 2 — gap east (x 70-97)
       { x: 66, y: 28, w: 62, h: 6 }, // gate 3 — gap west (x 3-35)
-      { x: 15, y: 82, r: 4, shape: "circle" }, // leg 1 — a tight one right off the tee
-      { x: 55, y: 39, r: 4, shape: "circle" }, // leg 3 — guarding the middle
     ],
     slopes: [
       { x: 48, y: 61, w: 16, h: 10, dir: "down" }, // leg 2 — resists the long middle swing
@@ -158,20 +155,27 @@ const GOLF_MAX_DRAG_PERCENT = 45;
 const GOLF_MAX_SHOT_DISTANCE = 60;
 const GOLF_MIN_DRAG_PERCENT = 4; // below this, a release cancels instead of firing a near-zero shot
 const GOLF_HOLED_THRESHOLD = 5; // how close (course %) counts as "in the hole"
-const GOLF_MERCY_STROKES = 3; // holes forcibly finish at par + this, however far short
+const GOLF_MAX_STROKES = 12; // holes forcibly finish here, however far short — flat, not per-par, so a tough hole gets real room to work with
 // The driving range has no real hole to play, no strokes/par, and no
 // score — just somewhere to practice dragging (and bouncing off
 // something) before the real round. Otherwise works exactly like a real
 // hole: each swing fires from wherever the ball currently rests (see
 // practiceMyBall), starting at the tee.
+// One of everything the real course throws at you — a wall, a pillar, a
+// downhill slope, an uphill slope — spread out and kept clear of the tee
+// itself, so a practice swing always has a straight run at the pin
+// available as well as something to deliberately try bouncing off.
 const GOLF_PRACTICE_HOLE = {
   tee: { x: 50, y: 88 },
   pin: { x: 50, y: 15 },
   obstacles: [
-    { x: 50, y: 50, w: 24, h: 6 },
-    { x: 28, y: 65, r: 5, shape: "circle" },
+    { x: 65, y: 58, w: 16, h: 8 },
+    { x: 30, y: 40, r: 4, shape: "circle" },
   ],
-  slopes: [{ x: 50, y: 72, w: 20, h: 14, dir: "down" }],
+  slopes: [
+    { x: 30, y: 72, w: 18, h: 14, dir: "down" },
+    { x: 65, y: 25, w: 18, h: 14, dir: "up" },
+  ],
 };
 // ── golf shot physics ───────────────────────────────────────
 // A real simulated roll, not a straight line — the ball moves tick by
@@ -1371,7 +1375,7 @@ async function golfSubmitShot(shot) {
   const currentBall = golfMyBall(gs, hole);
   const holed = shot.holed;
   const strokes = currentBall.strokes + 1;
-  const holedOut = holed || strokes >= hole.par + GOLF_MERCY_STROKES;
+  const holedOut = holed || strokes >= GOLF_MAX_STROKES;
   const balls = { ...gs.balls, [me.id]: { x: shot.endX, y: shot.endY, strokes, holedOut, path: shot.path } };
 
   let results = gs.results;
@@ -1536,7 +1540,44 @@ async function practicePointerUp() {
   // a separate "landing dot" system. The ball rests wherever it lands, so
   // the next swing (see practicePointerDown) drags from there, same as
   // real play — no more separate "always fires from the tee" behavior.
-  await updateRoom({ game_state: { golfPractice: { swings: { ...gs.swings, [me.id]: { x: sim.endX, y: sim.endY, holed: sim.holed, path: sim.path } } } } });
+  // Spreading `...gs` (not just replacing with a bare {swings}) matters —
+  // it preserves `session`, which ensurePracticeReady depends on to know
+  // this ISN'T a fresh driving-range visit; losing it here would reset
+  // everyone's tracked ball positions on every single shot.
+  await updateRoom({ game_state: { golfPractice: { ...gs, swings: { ...gs.swings, [me.id]: { x: sim.endX, y: sim.endY, holed: sim.holed, path: sim.path } } } } });
+  // Reached the green — after giving the roll animation time to actually
+  // play out, send the ball back to the tee as a real second move (its
+  // own write, its own path), so anyone can practice forever. This is
+  // deliberately NOT baked into the write above: this room is shared and
+  // everyone practicing together triggers renders on each other's
+  // devices constantly, so if the write above already claimed the ball
+  // was back at the tee, an unrelated render arriving before the pin
+  // animation had even played would show it at the tee with no roll at
+  // all — or, if the animation HAD already finished, snap it back to the
+  // tee out of nowhere the next time anything else caused a re-render.
+  if (sim.holed) schedulePracticeReset(me.id);
+}
+
+function schedulePracticeReset(playerId) {
+  setTimeout(async () => {
+    const cur = room.game_state?.golfPractice;
+    const mine = cur?.swings?.[playerId];
+    // Only reset if they haven't already taken (and landed) a newer
+    // swing in the meantime — don't clobber it.
+    if (!mine || !mine.holed) return;
+    const path = [
+      { x: mine.x, y: mine.y },
+      { x: GOLF_PRACTICE_HOLE.tee.x, y: GOLF_PRACTICE_HOLE.tee.y },
+    ];
+    await updateRoom({
+      game_state: {
+        golfPractice: {
+          ...cur,
+          swings: { ...cur.swings, [playerId]: { x: GOLF_PRACTICE_HOLE.tee.x, y: GOLF_PRACTICE_HOLE.tee.y, holed: false, path } },
+        },
+      },
+    });
+  }, 2900); // longer than animateGolfBallFlight's own duration cap (2600ms) so the roll-to-pin animation always finishes first
 }
 
 function practicePointerCancel() {
@@ -2534,7 +2575,7 @@ function renderGolfIntro() {
           </tbody>
         </table>
       </div>
-      <p>Each hole has a par (${GOLF_HOLES.map((h) => `${escapeHtml(h.club)} — ${escapeHtml(h.name)}: Par ${h.par}`).join(", ")}) — a hole that's dragging on forcibly wraps up after ${GOLF_MERCY_STROKES} strokes over par, so nobody's stuck forever. Host moves the group to the next hole whenever ready — no need to wait for stragglers. Once all ${GOLF_HOLES.length} holes are done, total points decide final standing, which adds placement points to the combined leaderboard — same system as the penalty shootout.</p>
+      <p>Each hole has a par (${GOLF_HOLES.map((h) => `${escapeHtml(h.club)} — ${escapeHtml(h.name)}: Par ${h.par}`).join(", ")}) — a hole that's dragging on forcibly wraps up after ${GOLF_MAX_STROKES} strokes, so nobody's stuck forever, but that's plenty of room to actually work a tough hole out. Host moves the group to the next hole whenever ready — no need to wait for stragglers. Once all ${GOLF_HOLES.length} holes are done, total points decide final standing, which adds placement points to the combined leaderboard — same system as the penalty shootout.</p>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
@@ -2583,7 +2624,9 @@ function renderGolfPractice() {
       <h2>🏌️ Driving Range</h2>
       <p class="sub">Practice swings only — nothing here counts. Get a feel for the drag before the real round.</p>
       <p class="sub" style="text-align:center">${instructions}</p>
-      ${renderGolfCourse(GOLF_PRACTICE_HOLE, gs.swings, local.practiceBallAnim, local.practice, true)}
+      <div class="golf-course-wrap practice">
+        ${renderGolfCourse(GOLF_PRACTICE_HOLE, gs.swings, local.practiceBallAnim, local.practice, true)}
+      </div>
       <h3>Lanes</h3>
       <ul class="player-list compact">
         ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceSwingLabel(gs.swings[p.id])}</li>`).join("")}
