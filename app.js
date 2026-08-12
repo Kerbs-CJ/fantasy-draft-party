@@ -1628,7 +1628,7 @@ function renderMissingClubIntro() {
       <p>${MISSING_CLUB_COUNT} rounds, each a real footballer's club career shown as a timeline — with one club blanked out.</p>
 
       <h3>How it works</h3>
-      <p>Tap the club you think is missing, then hit Confirm to lock it in — no rush, answer whenever you're ready. A side panel shows who's still deciding. Once everyone's locked in, the host reveals the correct club and how many people got it right, to everyone at once.</p>
+      <p>Tap the club you think is missing, then hit Confirm to lock it in — no rush, answer whenever you're ready. A side panel shows who's still deciding. Once the host reveals, that same panel shows exactly who got it right and who didn't — everyone's answers are out in the open.</p>
 
       <h3>Scoring</h3>
       <p>Guess right and you score a flat <b>${MISSING_CLUB_POINTS} points</b> — get it wrong, or don't answer before the reveal, and it's 0. No bonus for speed, no penalty for taking your time.</p>
@@ -1693,16 +1693,22 @@ function renderMissingClub() {
           }
           ${
             revealed
-              ? `<p class="lock-msg ${answered && myCorrect ? "lock-correct" : "lock-wrong"}">The missing club was <b>${escapeHtml(missingClub)}</b> — ${answered ? (myCorrect ? `you got it! ${MISSING_CLUB_POINTS} points.` : "you didn't get it. 0 points.") : "you didn't answer before the reveal. 0 points."} ${correctIds.size}/${players.length} got it right.</p>`
+              ? `<p class="lock-msg ${answered && myCorrect ? "lock-correct" : "lock-wrong"}">The missing club was <b>${escapeHtml(missingClub)}</b> — ${answered ? (myCorrect ? `you got it! ${MISSING_CLUB_POINTS} points.` : "you didn't get it. 0 points.") : "you didn't answer before the reveal. 0 points."}</p>`
               : answered
                 ? `<p class="waiting">Answer locked in. ${isHost ? "" : "Waiting for the reveal…"}</p>`
                 : ""
           }
         </div>
         <div class="side-roster">
-          <h3>Locked in (${answeredIds.size}/${players.length})</h3>
+          <h3>${revealed ? `Results (${correctIds.size}/${players.length} correct)` : `Locked in (${answeredIds.size}/${players.length})`}</h3>
           <ul class="player-list compact">
-            ${players.map((p) => `<li>${answeredIds.has(p.id) ? "🔒" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+            ${players
+              .map((p) => {
+                if (!revealed) return `<li>${answeredIds.has(p.id) ? "🔒" : "⏳"} ${escapeHtml(p.name)}</li>`;
+                if (!answeredIds.has(p.id)) return `<li>⚠️ ${escapeHtml(p.name)} — no answer</li>`;
+                return `<li>${correctIds.has(p.id) ? "✅" : "❌"} ${escapeHtml(p.name)}</li>`;
+              })
+              .join("")}
           </ul>
         </div>
       </div>

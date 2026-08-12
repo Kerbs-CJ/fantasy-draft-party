@@ -62,7 +62,8 @@ it updates automatically within a minute or two.
    one club redacted — everyone answers in their own time on their own
    device, tapping a club then confirming to lock it in; a side panel
    shows who's still deciding. Nobody's answer is revealed until the host
-   reveals the correct club and how many got it right), then Guess the
+   reveals — at which point that same side panel switches to showing
+   exactly who got it right and who didn't, by name), then Guess the
    Footballer (host reveals clues one at a time per round; guessing on
    fewer clues scores more), with a leaderboard at the end of each.
 5. Host clicks through to the shootout intro screen (full explainer: format,
