@@ -6,25 +6,24 @@ const MISSING_CLUB_COUNT = 10;
 const MISSING_CLUB_POINTS = 20; // flat — no timer, so no speed bonus
 const GUESS_PLAYER_COUNT = 7;
 const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
-// Football Golf — a real top-down course, not an abstract scalar. Every
-// player has an actual (x, y) position on the hole (percent coordinates,
-// tee near the bottom, pin near the top) that's part of shared room
-// state, so a shot's outcome is visible to everyone as a ball moving
-// across the shared course, not just a final result. Every swing is the
-// same power+aim tap-timing pair — a marker sweeps a track and bounces
-// back (matches sweepValue()'s triangle wave below), tap to lock it in as
-// close to dead-center as you can. Both meters are always centered on 50;
-// `radius` is how far off that center still counts for something — a
-// tighter radius means even good timing yields lower shot quality, which
-// feeds both how far the shot travels and (via aim) how much it curves
-// off the direct line to the pin. `bunkers` are decorative only (visual
-// variety per hole), not a gameplay penalty yet.
+// Football Golf — a real top-down course, drag-to-shoot. Every player has
+// an actual (x, y) position on the hole (percent coordinates, tee near
+// the bottom, pin near the top) that's part of shared room state, so a
+// shot's outcome is visible to everyone as a ball moving across the
+// shared course, not just a final result. The swing itself is a single
+// drag gesture on the ball, slingshot-style: pull back to aim (the shot
+// fires the opposite way) and set power (how far you pull, capped at
+// GOLF_MAX_DRAG_PERCENT of the course's own size — device-independent
+// since it's a percentage of the rendered course, not raw pixels), release
+// to shoot. Nothing is randomized or timing-based — what you drag is
+// exactly what you get, so the only skill is judging distance and angle
+// by eye, same as a real mini-golf/slingshot mechanic. `bunkers` are
+// decorative only (visual variety per hole), not a gameplay penalty yet.
 const GOLF_HOLES = [
   {
     name: "The Approach",
     description: "A short, forgiving hole to warm up on.",
     par: 3,
-    radius: 30,
     tee: { x: 50, y: 90 },
     pin: { x: 50, y: 12 },
     bunkers: [
@@ -36,7 +35,6 @@ const GOLF_HOLES = [
     name: "The Dogleg",
     description: "Bends away from the tee — line matters as much as power.",
     par: 4,
-    radius: 22,
     tee: { x: 18, y: 90 },
     pin: { x: 80, y: 14 },
     bunkers: [
@@ -47,9 +45,8 @@ const GOLF_HOLES = [
   },
   {
     name: "The Long Drive",
-    description: "A proper test — small margin for error.",
+    description: "A proper test — long enough that even a full-power drive won't reach in one.",
     par: 5,
-    radius: 16,
     tee: { x: 50, y: 94 },
     pin: { x: 50, y: 8 },
     bunkers: [
@@ -60,19 +57,20 @@ const GOLF_HOLES = [
     ],
   },
 ];
-const GOLF_SWEEP_PERIOD_MS = 1400; // one-way sweep duration — must match the .golf-sweep CSS animation-duration
-// A shot's `advance` distance is GOLF_ADVANCE_FLOOR (a total mishit still
-// crawls forward) up to 1.0 (dead-center on both taps) times the hole's
-// per-shot "unit distance" (tee-to-pin distance / par) — see
-// computeShotResult. Playing every shot perfectly finishes exactly at par
-// (par shots x 1.0 unit = the full tee-to-pin distance); worse timing
-// needs extra strokes. Aim deviates the shot's direction left/right of
-// the straight line to the pin, up to GOLF_MAX_AIM_DEVIATION_DEG.
-const GOLF_ADVANCE_FLOOR = 0.4;
-const GOLF_MAX_AIM_DEVIATION_DEG = 28;
+// Dragging back GOLF_MAX_DRAG_PERCENT of the course's own rendered
+// width/height (whichever axis the drag lies closer to) maxes out power.
+// A full-power shot travels GOLF_MAX_SHOT_DISTANCE course-percent units —
+// deliberately less than any hole's tee-to-pin distance, so even a
+// perfect shot can't 1-putt a hole from the tee; you're always judging
+// how much of the remaining distance to commit to.
+const GOLF_MAX_DRAG_PERCENT = 55;
+const GOLF_MAX_SHOT_DISTANCE = 42;
+const GOLF_MIN_DRAG_PERCENT = 4; // below this, a release cancels instead of firing a near-zero shot
 const GOLF_HOLED_THRESHOLD = 5; // how close (course %) counts as "in the hole"
 const GOLF_MERCY_STROKES = 3; // holes forcibly finish at par + this, however far short
-const GOLF_PRACTICE_RADIUS = 25; // medium difficulty — just for getting a feel for the timing
+// The driving range has no real hole to play, just somewhere to practice
+// dragging — every practice swing fires from this same fixed spot.
+const GOLF_PRACTICE_HOLE = { tee: { x: 50, y: 88 }, pin: { x: 50, y: 15 }, bunkers: [] };
 const GOLF_TERM_POINTS = { eagle: 50, birdie: 35, par: 25, bogey: 15, "double-bogey": 8, "triple-plus": 3 };
 const GOLF_TERM_LABEL = {
   eagle: "🦅 Eagle!",
@@ -109,10 +107,31 @@ let local = {
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
-  golf: { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, lastShot: null },
+  golf: {
+    holeIndex: null,
+    subPhase: "ready", // "ready" | "dragging" | "recap"
+    lastShot: null,
+    // Live-drag fields — mutated directly during pointermove WITHOUT going
+    // through render() (see the "dragging bypasses render()" note near
+    // golfPointerMove). ballPos/courseRect are captured once at drag start.
+    dragPointerId: null,
+    ballPos: null,
+    courseRect: null,
+    startClient: null,
+    currentClient: null,
+  },
   golfBallAnim: {}, // playerId -> {x, y} currently-displayed position, for the animated slide
   golfAnim: { key: null, revealed: false },
-  practice: { subPhase: "ready", phaseStart: null, power: null, lastQuality: null },
+  practice: {
+    subPhase: "ready", // "ready" | "dragging" | "recap"
+    lastShot: null,
+    dragPointerId: null,
+    ballPos: null,
+    courseRect: null,
+    startClient: null,
+    currentClient: null,
+  },
+  practiceBallAnim: {}, // separate from golfBallAnim so switching screens can't cross-contaminate the slide animation
 };
 
 function clamp(v, min, max) {
@@ -146,6 +165,34 @@ function init() {
 
   APP_EL.addEventListener("click", onClick);
   APP_EL.addEventListener("submit", onSubmit);
+  APP_EL.addEventListener("pointerdown", onPointerDown);
+  APP_EL.addEventListener("pointermove", onPointerMove);
+  APP_EL.addEventListener("pointerup", onPointerUp);
+  APP_EL.addEventListener("pointercancel", onPointerCancel);
+}
+
+// ── golf drag-to-shoot: event routing ───────────────────────
+// Delegated on APP_EL like click/submit above. Routes by room status
+// (real round vs. driving range) on pointerdown, then by which of the two
+// screens actually owns the active pointerId for move/up/cancel — at most
+// one of golf/practice drag state is ever active at a time.
+function onPointerDown(e) {
+  const courseEl = e.target.closest(".golf-course");
+  if (!courseEl) return;
+  if (room?.status === "golf") golfPointerDown(courseEl, e);
+  else if (room?.status === "golf-practice") practicePointerDown(courseEl, e);
+}
+function onPointerMove(e) {
+  if (e.pointerId === local.golf.dragPointerId) golfPointerMove(e);
+  else if (e.pointerId === local.practice.dragPointerId) practicePointerMove(e);
+}
+function onPointerUp(e) {
+  if (e.pointerId === local.golf.dragPointerId) golfPointerUp();
+  else if (e.pointerId === local.practice.dragPointerId) practicePointerUp();
+}
+function onPointerCancel(e) {
+  if (e.pointerId === local.golf.dragPointerId) golfPointerCancel();
+  else if (e.pointerId === local.practice.dragPointerId) practicePointerCancel();
 }
 
 // ── session persistence ─────────────────────────────────────
@@ -285,12 +332,6 @@ async function onClick(e) {
   if (action === "guess-answer") return guessAnswer(btn.dataset.name);
   if (action === "pick-shooter") return submitPick("shooter", btn.dataset.zone);
   if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
-  if (action === "golf-begin-swing") return golfBeginSwing();
-  if (action === "golf-lock-power") return golfLockPower();
-  if (action === "golf-lock-aim") return golfLockAim();
-  if (action === "practice-begin-swing") return practiceBeginSwing();
-  if (action === "practice-lock-power") return practiceLockPower();
-  if (action === "practice-lock-aim") return practiceLockAim();
   if (action === "leave") return leaveRoom();
   if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
 
@@ -862,60 +903,64 @@ async function finishRoundRobin() {
 
 // ── football golf ───────────────────────────────────────────
 // A fixed 3-hole course, played as actual stroke play on a real top-down
-// layout — every player has an (x, y) position on the hole, starting at
-// the tee, that lives in shared room state and updates after every shot
-// (not just the final one), so the whole group watches every ball move
-// across the course live, not just a final result. Everyone plays the
-// SAME hole at once, each on their own device and own time (like Guess
-// the Missing Club) — no bracket, no turn order, so nobody's ever stuck
-// waiting on one slow (or unresponsive, e.g. a dev bot) player. The
-// sweeping power/aim meters themselves are still purely local to each
-// player's own device — only the resolved shot (new position, stroke
-// count) gets written to shared state.
+// layout, swung with a single drag gesture — no timing, no hidden target,
+// just judging distance and angle by eye. Every player has an (x, y)
+// position on the hole, starting at the tee, that lives in shared room
+// state and updates after every shot (not just the final one), so the
+// whole group watches every ball move across the course live. Everyone
+// plays the SAME hole at once, each on their own device and own time
+// (like Guess the Missing Club) — no bracket, no turn order, so nobody's
+// ever stuck waiting on one slow (or unresponsive, e.g. a dev bot) player.
+//
+// The drag itself is purely local while it's in progress — see the note
+// above golfPointerDown for why it deliberately bypasses render(). Only
+// the resolved shot (new position, stroke count) gets written to shared
+// state, once per swing.
 
-// Maps an elapsed time to where a linear-alternate CSS sweep animation
-// would currently sit — a triangle wave from 0 to 100 and back, matching
-// `.golf-sweep`'s `animation: golf-sweep <period>ms linear infinite
-// alternate` exactly (period here must match GOLF_SWEEP_PERIOD_MS).
-function sweepValue(elapsedMs, periodMs) {
-  const t = (elapsedMs % (periodMs * 2)) / periodMs; // 0..2
-  const pos = t <= 1 ? t : 2 - t; // 0..1..0 triangle
-  return Math.round(pos * 100);
+// A pure function of the drag gesture, reused for both the live aim
+// preview (every pointermove) and the committed shot (on release) so
+// there's exactly one place this math lives. `courseRect` is the course
+// element's own on-screen size — dividing by it turns the raw pixel drag
+// into a percentage of the course, so results are the same shot on a
+// phone or a tablet, not just "same number of pixels dragged". The shot
+// fires the OPPOSITE way from the drag (slingshot / mini-golf
+// convention): pull back down-left, the ball flies up-right.
+function golfDragToShot(courseRect, ballPos, startClient, currentClient) {
+  const dxPercent = ((currentClient.x - startClient.x) / courseRect.width) * 100;
+  const dyPercent = ((currentClient.y - startClient.y) / courseRect.height) * 100;
+  const dragMagnitude = Math.hypot(dxPercent, dyPercent);
+  const power = clamp(dragMagnitude / GOLF_MAX_DRAG_PERCENT, 0, 1);
+  const angle = Math.atan2(-dyPercent, -dxPercent);
+  const travel = power * GOLF_MAX_SHOT_DISTANCE;
+  const endX = clamp(ballPos.x + Math.cos(angle) * travel, 3, 97);
+  const endY = clamp(ballPos.y + Math.sin(angle) * travel, 3, 97);
+  return { dragMagnitude, power, angle, endX, endY };
 }
 
-// Both meters are always centered on 50 — how well you time each tap is
-// the whole skill test, not guessing a hidden target. Power drives
-// distance (a total mishit still crawls forward GOLF_ADVANCE_FLOOR of a
-// "par unit", up to a full unit on a dead-center tap); aim drives
-// direction, deviating up to GOLF_MAX_AIM_DEVIATION_DEG off the straight
-// line to the pin. A flawless run of `par` shots — each covering exactly
-// one unit dead straight — lands exactly on the pin; worse timing costs
-// extra strokes and/or sends the ball off-line.
-function computeShotResult(hole, pos, power, aim) {
-  const dx = hole.pin.x - pos.x;
-  const dy = hole.pin.y - pos.y;
-  const distToPin = Math.sqrt(dx * dx + dy * dy);
-  const idealAngle = Math.atan2(dy, dx);
-
-  const powerAcc = clamp(1 - Math.abs(power - 50) / hole.radius, 0, 1);
-  const aimAcc = clamp(1 - Math.abs(aim - 50) / hole.radius, 0, 1);
-  const quality = (powerAcc + aimAcc) / 2;
-
-  const maxDeviationRad = (GOLF_MAX_AIM_DEVIATION_DEG * Math.PI) / 180;
-  const aimOffset = ((aim - 50) / 50) * maxDeviationRad;
-  const shotAngle = idealAngle + aimOffset;
-
-  const totalDist = Math.hypot(hole.pin.x - hole.tee.x, hole.pin.y - hole.tee.y);
-  const unitDistance = totalDist / hole.par;
-  const advance = unitDistance * (GOLF_ADVANCE_FLOOR + (1 - GOLF_ADVANCE_FLOOR) * quality);
-  const travel = Math.min(advance, distToPin + 3); // don't wildly overshoot past the pin
-
-  const x = clamp(pos.x + Math.cos(shotAngle) * travel, 3, 97);
-  const y = clamp(pos.y + Math.sin(shotAngle) * travel, 3, 97);
-  const newDistToPin = Math.hypot(hole.pin.x - x, hole.pin.y - y);
-  const holed = newDistToPin <= GOLF_HOLED_THRESHOLD;
-
-  return { x, y, powerAcc, aimAcc, quality, holed };
+// Applies the live aim preview directly via the DOM, not render() — see
+// golfPointerDown. Shared by both the real round and the driving range,
+// since they use identical `.golf-aim-*` markup.
+let dragVisualRafScheduled = false;
+function scheduleDragVisualUpdate(state) {
+  if (dragVisualRafScheduled) return;
+  dragVisualRafScheduled = true;
+  requestAnimationFrame(() => {
+    dragVisualRafScheduled = false;
+    if (state.subPhase !== "dragging") return; // released mid-frame
+    const shot = golfDragToShot(state.courseRect, state.ballPos, state.startClient, state.currentClient);
+    const line = document.querySelector(".golf-aim-line");
+    const dot = document.querySelector(".golf-aim-dot");
+    const readout = document.querySelector(".golf-power-readout");
+    if (line) {
+      line.setAttribute("x2", shot.endX);
+      line.setAttribute("y2", shot.endY);
+    }
+    if (dot) {
+      dot.setAttribute("cx", shot.endX);
+      dot.setAttribute("cy", shot.endY);
+    }
+    if (readout) readout.textContent = `Power ${Math.round(shot.power * 100)}%`;
+  });
 }
 
 function golfScoreTerm(strokes, par) {
@@ -950,7 +995,16 @@ function ensureGolfReady() {
   const gs = room.game_state?.golf;
   if (!gs) return;
   if (local.golf.holeIndex !== gs.holeIndex) {
-    local.golf = { holeIndex: gs.holeIndex, subPhase: "ready", phaseStart: null, power: null, lastShot: null };
+    local.golf = {
+      holeIndex: gs.holeIndex,
+      subPhase: "ready",
+      lastShot: null,
+      dragPointerId: null,
+      ballPos: null,
+      courseRect: null,
+      startClient: null,
+      currentClient: null,
+    };
     local.golfBallAnim = {}; // fresh hole — don't animate a cross-course jump from the old one
   }
 }
@@ -966,40 +1020,77 @@ function golfMyBall(gs, hole) {
   return (me && gs.balls[me.id]) || { x: hole.tee.x, y: hole.tee.y, strokes: 0, holedOut: false };
 }
 
-// Used both to tee off (subPhase "ready") and to line up every
-// subsequent approach shot (subPhase "recap", after seeing the last
-// shot's outcome) — same swing, just repeated until the hole's done.
-function golfBeginSwing() {
+// Fires on pointerdown anywhere on the shared course, while it's my turn
+// to swing. Deliberately does exactly one render() here (to switch the
+// UI into "dragging" mode) and then NONE until the drag ends — every
+// pointermove during the drag mutates the aim line's DOM attributes
+// directly (scheduleDragVisualUpdate). That's necessary, not just an
+// optimization: this app replaces the whole #app subtree on every
+// render(), which would destroy and recreate the course element on every
+// frame — and pointer capture (setPointerCapture, below) doesn't survive
+// its element being removed from the DOM. Re-rendering mid-drag would
+// silently break the gesture (and flicker badly besides).
+function golfPointerDown(courseEl, e) {
   const gs = room.game_state?.golf;
   if (!gs || golfAlreadyAnswered(gs)) return;
   if (local.golf.subPhase !== "ready" && local.golf.subPhase !== "recap") return;
-  local.golf = { ...local.golf, subPhase: "power", phaseStart: Date.now(), power: null };
-  render();
-}
-
-function golfLockPower() {
-  const gs = room.game_state?.golf;
-  if (!gs || golfAlreadyAnswered(gs)) return;
-  if (local.golf.subPhase !== "power") return;
-  const power = sweepValue(Date.now() - local.golf.phaseStart, GOLF_SWEEP_PERIOD_MS);
-  local.golf = { ...local.golf, subPhase: "aim", phaseStart: Date.now(), power };
-  render();
-}
-
-async function golfLockAim() {
-  const me = myPlayer();
-  const gs = room.game_state?.golf;
-  if (!me || !gs || golfAlreadyAnswered(gs)) return;
-  if (local.golf.subPhase !== "aim") return;
-  const aim = sweepValue(Date.now() - local.golf.phaseStart, GOLF_SWEEP_PERIOD_MS);
   const hole = GOLF_HOLES[gs.holeIndex];
   if (!hole) return;
+  e.preventDefault();
+  local.golf = {
+    ...local.golf,
+    subPhase: "dragging",
+    ballPos: golfMyBall(gs, hole),
+    courseRect: courseEl.getBoundingClientRect(),
+    startClient: { x: e.clientX, y: e.clientY },
+    currentClient: { x: e.clientX, y: e.clientY },
+    dragPointerId: e.pointerId,
+  };
+  render();
+  // Capture on the freshly-rendered element — it'll persist for the rest
+  // of the gesture since we won't render() again until pointerup/cancel.
+  document.querySelector(".golf-course")?.setPointerCapture(e.pointerId);
+}
 
+function golfPointerMove(e) {
+  if (local.golf.subPhase !== "dragging") return;
+  e.preventDefault();
+  local.golf.currentClient = { x: e.clientX, y: e.clientY };
+  scheduleDragVisualUpdate(local.golf);
+}
+
+async function golfPointerUp() {
+  if (local.golf.subPhase !== "dragging") return;
+  const { ballPos, courseRect, startClient, currentClient } = local.golf;
+  const shot = golfDragToShot(courseRect, ballPos, startClient, currentClient);
+  // A drag too small to call a real swing (a stray tap, or a touch that
+  // barely moved) cancels instead of firing a near-zero shot.
+  if (shot.dragMagnitude < GOLF_MIN_DRAG_PERCENT) {
+    local.golf = { ...local.golf, subPhase: local.golf.lastShot ? "recap" : "ready", dragPointerId: null };
+    render();
+    return;
+  }
+  await golfSubmitShot(shot);
+}
+
+function golfPointerCancel() {
+  if (local.golf.subPhase !== "dragging") return;
+  local.golf = { ...local.golf, subPhase: local.golf.lastShot ? "recap" : "ready", dragPointerId: null };
+  render();
+}
+
+async function golfSubmitShot(shot) {
+  const me = myPlayer();
+  const gs = room.game_state?.golf;
+  if (!me || !gs) return;
+  const hole = GOLF_HOLES[gs.holeIndex];
+  if (!hole) return;
   const currentBall = golfMyBall(gs, hole);
-  const shot = computeShotResult(hole, currentBall, local.golf.power, aim);
+  const newDistToPin = Math.hypot(hole.pin.x - shot.endX, hole.pin.y - shot.endY);
+  const holed = newDistToPin <= GOLF_HOLED_THRESHOLD;
   const strokes = currentBall.strokes + 1;
-  const holedOut = shot.holed || strokes >= hole.par + GOLF_MERCY_STROKES;
-  const balls = { ...gs.balls, [me.id]: { x: shot.x, y: shot.y, strokes, holedOut } };
+  const holedOut = holed || strokes >= hole.par + GOLF_MERCY_STROKES;
+  const balls = { ...gs.balls, [me.id]: { x: shot.endX, y: shot.endY, strokes, holedOut } };
 
   let results = gs.results;
   if (holedOut) {
@@ -1008,7 +1099,16 @@ async function golfLockAim() {
     results = { ...gs.results, [me.id]: [...(gs.results[me.id] || []), result] };
   }
 
-  local.golf = { ...local.golf, subPhase: "recap", phaseStart: null, power: null, lastShot: shot };
+  local.golf = {
+    ...local.golf,
+    subPhase: "recap",
+    lastShot: { power: shot.power, holed },
+    dragPointerId: null,
+    ballPos: null,
+    courseRect: null,
+    startClient: null,
+    currentClient: null,
+  };
   await updateRoom({ game_state: { golf: { ...gs, balls, results } } });
 }
 
@@ -1061,57 +1161,71 @@ function ensureGolfAnim() {
   }
 }
 
-
 // ── football golf: driving range ────────────────────────────
-// A shared, unscored warm-up screen off the golf launcher — everyone's
-// on the same room state together (so everyone genuinely sees everyone),
-// but each player's swing is their own repeatable loop, same mechanic as
-// the real round, minus strokes/par/results. Only the latest swing per
-// player is kept (no history), just enough to show "here's roughly how
-// I'm doing" in each player's own lane.
+// A shared, unscored warm-up screen off the golf launcher — everyone's on
+// the same room state together (so everyone genuinely sees everyone), but
+// each player's swing is their own repeatable loop: same drag mechanic as
+// the real round, always shooting from the same fixed practice tee (not
+// cumulative — every swing is a fresh attempt, good for calibrating how
+// hard to pull), no strokes/par/results. Only the latest swing per player
+// is kept (no history), just enough to see roughly how everyone's doing.
 async function showGolfPractice() {
   await updateRoom({ status: "golf-practice", game_state: { golfPractice: { swings: {} } } });
 }
 
-function practiceBeginSwing() {
+function practicePointerDown(courseEl, e) {
   if (local.practice.subPhase !== "ready" && local.practice.subPhase !== "recap") return;
-  local.practice = { ...local.practice, subPhase: "power", phaseStart: Date.now(), power: null };
+  e.preventDefault();
+  local.practice = {
+    ...local.practice,
+    subPhase: "dragging",
+    ballPos: GOLF_PRACTICE_HOLE.tee,
+    courseRect: courseEl.getBoundingClientRect(),
+    startClient: { x: e.clientX, y: e.clientY },
+    currentClient: { x: e.clientX, y: e.clientY },
+    dragPointerId: e.pointerId,
+  };
   render();
+  document.querySelector(".golf-course")?.setPointerCapture(e.pointerId);
 }
 
-function practiceLockPower() {
-  if (local.practice.subPhase !== "power") return;
-  const power = sweepValue(Date.now() - local.practice.phaseStart, GOLF_SWEEP_PERIOD_MS);
-  local.practice = { ...local.practice, subPhase: "aim", phaseStart: Date.now(), power };
-  render();
+function practicePointerMove(e) {
+  if (local.practice.subPhase !== "dragging") return;
+  e.preventDefault();
+  local.practice.currentClient = { x: e.clientX, y: e.clientY };
+  scheduleDragVisualUpdate(local.practice);
 }
 
-// The driving range has no real course to aim at (no tee/pin), just a
-// timing test — this is the same power/aim accuracy math computeShotResult
-// uses internally, without the 2D position side of it.
-function computeSwingQuality(radius, power, aim) {
-  const powerAcc = clamp(1 - Math.abs(power - 50) / radius, 0, 1);
-  const aimAcc = clamp(1 - Math.abs(aim - 50) / radius, 0, 1);
-  return (powerAcc + aimAcc) / 2;
-}
-
-async function practiceLockAim() {
+async function practicePointerUp() {
+  if (local.practice.subPhase !== "dragging") return;
+  const { ballPos, courseRect, startClient, currentClient } = local.practice;
+  const shot = golfDragToShot(courseRect, ballPos, startClient, currentClient);
   const me = myPlayer();
-  if (!me || local.practice.subPhase !== "aim") return;
-  const aim = sweepValue(Date.now() - local.practice.phaseStart, GOLF_SWEEP_PERIOD_MS);
-  const quality = computeSwingQuality(GOLF_PRACTICE_RADIUS, local.practice.power, aim);
-  local.practice = { ...local.practice, subPhase: "recap", phaseStart: null, power: null, lastQuality: quality };
+  if (shot.dragMagnitude < GOLF_MIN_DRAG_PERCENT || !me) {
+    local.practice = { ...local.practice, subPhase: local.practice.lastShot ? "recap" : "ready", dragPointerId: null };
+    render();
+    return;
+  }
+  const holed = Math.hypot(GOLF_PRACTICE_HOLE.pin.x - shot.endX, GOLF_PRACTICE_HOLE.pin.y - shot.endY) <= GOLF_HOLED_THRESHOLD;
+  local.practice = {
+    ...local.practice,
+    subPhase: "recap",
+    lastShot: { power: shot.power, holed },
+    dragPointerId: null,
+    ballPos: null,
+    courseRect: null,
+    startClient: null,
+    currentClient: null,
+  };
   render();
   const gs = room.game_state?.golfPractice || { swings: {} };
-  await updateRoom({ game_state: { golfPractice: { swings: { ...gs.swings, [me.id]: quality } } } });
+  await updateRoom({ game_state: { golfPractice: { swings: { ...gs.swings, [me.id]: { x: shot.endX, y: shot.endY, holed } } } } });
 }
 
-function practiceQualityLabel(quality) {
-  if (quality == null) return "⏳ Hasn't swung yet";
-  if (quality >= 0.85) return "🔥 Great strike!";
-  if (quality >= 0.55) return "👍 Solid contact";
-  if (quality >= 0.25) return "😬 Mishit";
-  return "🫣 Total shank!";
+function practicePointerCancel() {
+  if (local.practice.subPhase !== "dragging") return;
+  local.practice = { ...local.practice, subPhase: local.practice.lastShot ? "recap" : "ready", dragPointerId: null };
+  render();
 }
 
 // ── dev mode: solo-test any screen without a full lobby ────
@@ -1123,10 +1237,28 @@ function resetLocalGameState() {
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
   local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
-  local.golf = { holeIndex: null, subPhase: "ready", phaseStart: null, power: null, lastShot: null };
+  local.golf = {
+    holeIndex: null,
+    subPhase: "ready",
+    lastShot: null,
+    dragPointerId: null,
+    ballPos: null,
+    courseRect: null,
+    startClient: null,
+    currentClient: null,
+  };
   local.golfBallAnim = {};
   local.golfAnim = { key: null, revealed: false };
-  local.practice = { subPhase: "ready", phaseStart: null, power: null, lastQuality: null };
+  local.practice = {
+    subPhase: "ready",
+    lastShot: null,
+    dragPointerId: null,
+    ballPos: null,
+    courseRect: null,
+    startClient: null,
+    currentClient: null,
+  };
+  local.practiceBallAnim = {};
 }
 
 async function ensureDevBotIfNeeded() {
@@ -2066,7 +2198,7 @@ function renderGolfIntro() {
       <p>A fixed ${GOLF_HOLES.length}-hole course, played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>Two taps per swing. First, a power meter sweeps back and forth — tap to lock it wherever it's sitting, which controls distance. Then an aim meter does the same, controlling direction — dead-center flies straight at the pin, off-center curves the shot left or right. Both meters are always centered on the same spot each time — the closer to dead-center, the better the shot. A mishit still crawls forward a bit off-line, so you're never fully stuck, just taking more strokes to get there.</p>
+      <p>One drag per swing, right on the ball — like a slingshot. Press down and pull back in the <b>opposite</b> direction from where you want to shoot (pull down-left, the ball flies up-right), then let go. How far you pull sets the power; the angle sets the direction. There's no timer and no hidden target to guess — what you drag is exactly what you get, so it's entirely about judging distance and angle by eye.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
@@ -2099,46 +2231,46 @@ function renderGolfIntro() {
     </div>`;
 }
 
-function renderGolfPractice() {
-  const me = myPlayer();
-  const isHost = me?.is_host;
-  const gs = room.game_state.golfPractice || { swings: {} };
+function practiceSwingLabel(swing) {
+  if (!swing) return "⏳ Hasn't swung yet";
+  if (swing.holed) return "🎯 Reached the green!";
+  const dist = Math.hypot(GOLF_PRACTICE_HOLE.pin.x - swing.x, GOLF_PRACTICE_HOLE.pin.y - swing.y);
+  if (dist <= 15) return "👍 Close!";
+  if (dist <= 30) return "😬 On the fairway";
+  return "🫣 Way off";
+}
 
-  let swingUi;
-  if (local.practice.subPhase === "power" || local.practice.subPhase === "aim") {
-    const label = local.practice.subPhase === "power" ? "Tap when the power looks right." : "Now tap to set your aim.";
-    const action = local.practice.subPhase === "power" ? "practice-lock-power" : "practice-lock-aim";
-    const btnLabel = local.practice.subPhase === "power" ? "🏌️ Swing!" : "🎯 Strike!";
-    swingUi = `
-      <div class="golf-hole-card">
-        <p class="sub">${label}</p>
-        <div class="golf-meter">
-          <div class="golf-meter-track"><div class="golf-meter-marker golf-sweep"></div></div>
-        </div>
-        <button class="btn primary" data-action="${action}">${btnLabel}</button>
-      </div>`;
+function renderGolfPractice() {
+  const isHost = myPlayer()?.is_host;
+  const gs = room.game_state.golfPractice || { swings: {} };
+  const positions = {};
+  for (const p of players) {
+    const s = gs.swings[p.id];
+    if (s) positions[p.id] = { x: s.x, y: s.y, holedOut: s.holed };
+  }
+
+  let instructions;
+  if (local.practice.subPhase === "dragging") {
+    instructions = "Release to shoot!";
+  } else if (local.practice.subPhase === "recap" && local.practice.lastShot) {
+    instructions = local.practice.lastShot.holed ? "🎯 Nice, reached the green! Drag again for another go." : "Drag again for another practice swing.";
   } else {
-    swingUi = `
-      <div class="golf-hole-card">
-        ${
-          local.practice.subPhase === "recap"
-            ? `<p class="sub">${practiceQualityLabel(local.practice.lastQuality)}</p>`
-            : `<p class="sub">No pressure — swing as many times as you like.</p>`
-        }
-        <button class="btn primary" data-action="practice-begin-swing">🏌️ ${local.practice.subPhase === "recap" ? "Swing again" : "Take a swing"}</button>
-      </div>`;
+    instructions = "No pressure — press and drag your ball to aim, release to shoot, as many times as you like.";
   }
 
   return `
     <div class="card">
       <h2>🏌️ Driving Range</h2>
-      <p class="sub">Practice swings only — nothing here counts. Get a feel for the timing before the real round.</p>
+      <p class="sub">Practice swings only — nothing here counts. Get a feel for the drag before the real round.</p>
       <div class="side-layout">
-        <div class="side-main">${swingUi}</div>
+        <div class="side-main">
+          <p class="sub" style="text-align:center">${instructions}</p>
+          ${renderGolfCourse(GOLF_PRACTICE_HOLE, positions, local.practiceBallAnim, local.practice, true)}
+        </div>
         <div class="side-roster">
           <h3>Lanes</h3>
           <ul class="player-list compact">
-            ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceQualityLabel(gs.swings[p.id])}</li>`).join("")}
+            ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceSwingLabel(gs.swings[p.id])}</li>`).join("")}
           </ul>
         </div>
       </div>
@@ -2170,53 +2302,32 @@ function renderGolf() {
     }))
     .sort((a, b) => b.total - a.total);
 
-  let swingUi;
+  let instructions;
   if (answered) {
     const myResult = gs.results[me?.id]?.[holeIndex];
-    swingUi = myResult
-      ? `<p class="waiting">You holed out in ${myResult.strokes} — ${GOLF_TERM_LABEL[myResult.term]} (+${myResult.points} points). ${isHost ? "" : "Waiting for host to continue…"}</p>`
-      : `<p class="waiting">${isHost ? "" : "Waiting for host to continue…"}</p>`;
-  } else if (local.golf.subPhase === "power" || local.golf.subPhase === "aim") {
-    const label = local.golf.subPhase === "power" ? "Tap when the power looks right." : "Now tap to set your aim.";
-    const action = local.golf.subPhase === "power" ? "golf-lock-power" : "golf-lock-aim";
-    const btnLabel = local.golf.subPhase === "power" ? "🏌️ Swing!" : "🎯 Strike!";
-    swingUi = `
-      <div class="golf-hole-card">
-        <h3>Stroke ${myStrokes + 1} — ${escapeHtml(hole.name)}</h3>
-        <p class="sub">${label}</p>
-        <div class="golf-meter">
-          <div class="golf-meter-track"><div class="golf-meter-marker golf-sweep"></div></div>
-        </div>
-        <button class="btn primary" data-action="${action}">${btnLabel}</button>
-      </div>`;
+    instructions = myResult
+      ? `You holed out in ${myResult.strokes} — ${GOLF_TERM_LABEL[myResult.term]} (+${myResult.points} points). ${isHost ? "" : "Waiting for host to continue…"}`
+      : isHost
+        ? ""
+        : "Waiting for host to continue…";
+  } else if (local.golf.subPhase === "dragging") {
+    instructions = "Release to shoot!";
   } else if (local.golf.subPhase === "recap" && local.golf.lastShot) {
-    const s = local.golf.lastShot;
-    const shotLabel =
-      s.quality >= 0.85 ? "🔥 Great strike!" : s.quality >= 0.55 ? "👍 Solid contact" : s.quality >= 0.25 ? "😬 Mishit" : "🫣 Total shank!";
-    swingUi = `
-      <div class="golf-hole-card">
-        <h3>${shotLabel}</h3>
-        <p class="sub">Stroke ${myStrokes} down — check the course below to see where it landed.</p>
-        <button class="btn primary" data-action="golf-begin-swing">🏌️ Next shot</button>
-      </div>`;
+    instructions = local.golf.lastShot.holed
+      ? "🎯 In the hole!"
+      : `Stroke ${myStrokes} down — drag your ball again for your next shot.`;
   } else {
-    // "ready" — the very first shot of the hole
-    swingUi = `
-      <div class="golf-hole-card">
-        <h3>${escapeHtml(hole.name)} — Par ${hole.par}</h3>
-        <p class="sub">${escapeHtml(hole.description)}</p>
-        <button class="btn primary" data-action="golf-begin-swing">⚡ Tee off!</button>
-      </div>`;
+    instructions = `${escapeHtml(hole.description)} Drag your ball to aim, release to shoot.`;
   }
 
   return `
     <div class="card">
       <h2>⛳ Football Golf</h2>
-      <p class="sub">Hole ${holeIndex + 1} of ${GOLF_HOLES.length}: ${escapeHtml(hole.name)} — Par ${hole.par}</p>
+      <p class="sub">Hole ${holeIndex + 1} of ${GOLF_HOLES.length}: ${escapeHtml(hole.name)} — Par ${hole.par}${!answered ? ` — Stroke ${myStrokes + 1}` : ""}</p>
       <div class="side-layout">
         <div class="side-main">
-          ${swingUi}
-          ${renderGolfCourse(hole, gs)}
+          ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
+          ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered)}
         </div>
         <div class="side-roster">
           <h3>Totals</h3>
@@ -2234,27 +2345,37 @@ function renderGolf() {
     </div>`;
 }
 
-// The shared top-down course. Since render() fully replaces the DOM on
-// every call (no persisting elements), a CSS `transition` on left/top
-// would have nothing to animate FROM — freshly-inserted elements just
-// snap to their final style. `@keyframes` don't have that problem (they
-// auto-play from their own `from` state on insertion), so each ball that
-// moved since the last render gets an inline `--from-x/--from-y` ->
-// `--to-x/--to-y` pair and a `flying` class that runs a keyframe
-// animation between them; balls that haven't moved just render statically
-// at rest. local.golfBallAnim remembers each ball's last-rendered spot so
-// we can tell which is which.
-function renderGolfCourse(hole, gs) {
+// The shared top-down course — reused for both the real round and the
+// driving range, so `ballPositions` is always pre-normalized by the
+// caller to {playerId: {x, y, holedOut}}, and `animMap` is whichever of
+// local.golfBallAnim/local.practiceBallAnim belongs to the caller (kept
+// separate so switching between the two screens can't cause a stray
+// cross-context "flying" animation).
+//
+// Since render() fully replaces the DOM on every call (no persisting
+// elements), a CSS `transition` on left/top would have nothing to animate
+// FROM — freshly-inserted elements just snap to their final style.
+// `@keyframes` don't have that problem (they auto-play from their own
+// `from` state on insertion), so each ball that moved since the last
+// render gets an inline `--from-x/--from-y` -> `--to-x/--to-y` pair and a
+// `flying` class that runs a keyframe animation between them.
+//
+// `dragState` (local.golf or local.practice) drives the live aim-line
+// preview while `dragState.subPhase === "dragging"` — the preview itself
+// is drawn here (for the initial render when a drag begins) but updated
+// afterwards via direct DOM mutation, not further render() calls; see
+// golfPointerDown for why.
+function renderGolfCourse(hole, ballPositions, animMap, dragState, canDrag) {
   const bunkers = (hole.bunkers || [])
     .map((b) => `<div class="golf-bunker" style="left:${b.x}%; top:${b.y}%; width:${b.w}%; height:${b.h}%;"></div>`)
     .join("");
   const balls = players
     .map((p) => {
-      const ball = gs.balls[p.id] || hole.tee;
-      const prev = local.golfBallAnim[p.id];
+      const ball = ballPositions[p.id] || hole.tee;
+      const prev = animMap[p.id];
       const moved = prev && (prev.x !== ball.x || prev.y !== ball.y);
-      local.golfBallAnim[p.id] = { x: ball.x, y: ball.y };
-      const holedOut = !!gs.balls[p.id]?.holedOut;
+      animMap[p.id] = { x: ball.x, y: ball.y };
+      const holedOut = !!ball.holedOut;
       const style = moved
         ? `--from-x:${prev.x}%; --from-y:${prev.y}%; --to-x:${ball.x}%; --to-y:${ball.y}%;`
         : `left:${ball.x}%; top:${ball.y}%;`;
@@ -2265,13 +2386,27 @@ function renderGolfCourse(hole, gs) {
         </div>`;
     })
     .join("");
+
+  let aimOverlay = "";
+  if (dragState?.subPhase === "dragging" && dragState.ballPos) {
+    const shot = golfDragToShot(dragState.courseRect, dragState.ballPos, dragState.startClient, dragState.currentClient);
+    aimOverlay = `
+      <svg class="golf-aim-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <line class="golf-aim-line" x1="${dragState.ballPos.x}" y1="${dragState.ballPos.y}" x2="${shot.endX}" y2="${shot.endY}"></line>
+        <circle class="golf-aim-dot" cx="${shot.endX}" cy="${shot.endY}" r="2.2"></circle>
+      </svg>
+      <p class="golf-power-readout">Power ${Math.round(shot.power * 100)}%</p>`;
+  }
+
+  const dragging = dragState?.subPhase === "dragging";
   return `
-    <div class="golf-course">
+    <div class="golf-course${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}">
       ${bunkers}
       <div class="golf-green-circle" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-pin" style="left:${hole.pin.x}%; top:${hole.pin.y}%;">⛳</div>
       <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;">📍</div>
       ${balls}
+      ${aimOverlay}
     </div>`;
 }
 
