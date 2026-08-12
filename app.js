@@ -2913,9 +2913,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       ${waterEls}
       <div class="golf-tee-mat" style="left:${hole.tee.x}%; top:${hole.tee.y}%;"></div>
       ${obstacles}
-      <div class="golf-green-circle" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-cup" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
-      <div class="golf-pin" style="left:${hole.pin.x}%; top:${hole.pin.y}%;">⛳</div>
       <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;">📍</div>
       ${extraContent}
       ${balls}
