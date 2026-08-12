@@ -53,12 +53,26 @@ drop policy if exists "public write scores" on scores;
 create policy "public read scores" on scores for select using (true);
 create policy "public write scores" on scores for insert with check (true);
 
--- Turn on realtime change streaming for these tables.
--- If this errors saying the table is already a member, that's fine - ignore it.
--- (Alternatively: Database -> Replication -> toggle these three tables on.)
-alter publication supabase_realtime add table rooms;
-alter publication supabase_realtime add table players;
-alter publication supabase_realtime add table scores;
+-- Turn on realtime change streaming for these tables. Wrapped so it's
+-- actually safe to re-run: "alter publication add table" has no
+-- "if not exists" of its own, and errors outright on a table that's
+-- already a member (42710) -- which, unlike "create table if not
+-- exists" elsewhere in this file, would stop the whole pasted script
+-- right there and skip everything below it. Catching that one specific
+-- error and moving on keeps this file genuinely paste-and-run-again-safe
+-- top to bottom.
+do $$ begin
+  alter publication supabase_realtime add table rooms;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter publication supabase_realtime add table players;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter publication supabase_realtime add table scores;
+exception when duplicate_object then null;
+end $$;
 
 -- Draft Tracker
 -- -------------
@@ -87,4 +101,7 @@ drop policy if exists "public write draft_picks" on draft_picks;
 create policy "public read draft_picks" on draft_picks for select using (true);
 create policy "public write draft_picks" on draft_picks for insert with check (true);
 
-alter publication supabase_realtime add table draft_picks;
+do $$ begin
+  alter publication supabase_realtime add table draft_picks;
+exception when duplicate_object then null;
+end $$;
