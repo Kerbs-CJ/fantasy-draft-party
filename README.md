@@ -90,12 +90,12 @@ it updates automatically within a minute or two.
    bunkers, where every player's ball is visible moving across it live as
    shots land, not just a final result. Everyone plays the *same hole at
    once*, each in their own time on their own device, like Guess the
-   Missing Club. Swinging is a single drag, slingshot-style: press down on
-   your ball and pull back in the *opposite* direction from where you want
-   to shoot (pull south, the ball flies north) — a line shows exactly
-   where it'll land — then let go. How far you pull sets the power, the
-   angle sets the direction, no timer and nothing hidden, so it's purely
-   about judging distance and angle by eye. Watch the ball land on the
+   Missing Club. Swinging is a single drag, like a real slingshot: press
+   down on your ball and pull back — a line follows your hand, stretching
+   the way you pull — then let go and the ball fires the *opposite* way
+   (pull south, it flies north). How far you pull sets the power, the
+   angle sets the direction, no timer and nothing computed for you, so
+   it's purely about judging the pull-back by feel. Watch the ball land on the
    shared
    map, then keep swinging from there until it's holed. Fewer strokes
    scores more, same as real golf (🦅 Eagle down to a bogey). Host moves

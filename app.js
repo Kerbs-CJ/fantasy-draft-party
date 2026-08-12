@@ -12,8 +12,9 @@ const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only
 // shot's outcome is visible to everyone as a ball moving across the
 // shared course, not just a final result. The swing itself is a single
 // drag gesture on the ball, slingshot-style: pull back opposite of where
-// you want to shoot (the aim line always shows exactly where it's about
-// to land) and set power (how far you pull, capped at
+// you want to shoot — the aim line follows your hand like a real
+// slingshot band (it shows the pull, not the landing spot; the shot only
+// reveals itself on release) — and set power (how far you pull, capped at
 // GOLF_MAX_DRAG_PERCENT of the course's own size — device-independent
 // since it's a percentage of the rendered course, not raw pixels),
 // release to shoot. Nothing is randomized or timing-based — what you drag
@@ -939,6 +940,24 @@ function golfDragToShot(courseRect, ballPos, startClient, currentClient) {
   return { dragMagnitude, power, angle, endX, endY };
 }
 
+// The visible pull-back — this is deliberately NOT where the ball is
+// going (that's golfDragToShot, the opposite direction). Like a real
+// slingshot band, this indicator follows your hand: drag south and it
+// stretches south, so what you SEE while dragging is the pull, and the
+// shot direction only reveals itself on release. Magnitude is capped at
+// GOLF_MAX_DRAG_PERCENT (same point power maxes out) so the band doesn't
+// keep stretching indefinitely past full power.
+function golfPullPreview(courseRect, ballPos, startClient, currentClient) {
+  const dxPercent = ((currentClient.x - startClient.x) / courseRect.width) * 100;
+  const dyPercent = ((currentClient.y - startClient.y) / courseRect.height) * 100;
+  const dragMagnitude = Math.hypot(dxPercent, dyPercent);
+  const cappedMag = Math.min(dragMagnitude, GOLF_MAX_DRAG_PERCENT);
+  const scale = dragMagnitude > 0 ? cappedMag / dragMagnitude : 0;
+  const pullX = clamp(ballPos.x + dxPercent * scale, 0, 100);
+  const pullY = clamp(ballPos.y + dyPercent * scale, 0, 100);
+  return { pullX, pullY };
+}
+
 // Applies the live aim preview directly via the DOM, not render() — see
 // golfPointerDown. Shared by both the real round and the driving range,
 // since they use identical `.golf-aim-*` markup.
@@ -950,16 +969,17 @@ function scheduleDragVisualUpdate(state) {
     dragVisualRafScheduled = false;
     if (state.subPhase !== "dragging") return; // released mid-frame
     const shot = golfDragToShot(state.courseRect, state.ballPos, state.startClient, state.currentClient);
+    const pull = golfPullPreview(state.courseRect, state.ballPos, state.startClient, state.currentClient);
     const line = document.querySelector(".golf-aim-line");
     const dot = document.querySelector(".golf-aim-dot");
     const readout = document.querySelector(".golf-power-readout");
     if (line) {
-      line.setAttribute("x2", shot.endX);
-      line.setAttribute("y2", shot.endY);
+      line.setAttribute("x2", pull.pullX);
+      line.setAttribute("y2", pull.pullY);
     }
     if (dot) {
-      dot.setAttribute("cx", shot.endX);
-      dot.setAttribute("cy", shot.endY);
+      dot.setAttribute("cx", pull.pullX);
+      dot.setAttribute("cy", pull.pullY);
     }
     if (readout) readout.textContent = `Power ${Math.round(shot.power * 100)}%`;
   });
@@ -2200,7 +2220,7 @@ function renderGolfIntro() {
       <p>A fixed ${GOLF_HOLES.length}-hole course, played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>One drag per swing, right on the ball — like a slingshot. Press down and pull back in the <b>opposite</b> direction from where you want to shoot (pull south, the ball flies north) — a line shows exactly where it'll land as you move — then let go. How far you pull sets the power; the angle sets the direction. There's no timer and no hidden target to guess — what you see is exactly what you get, so it's entirely about judging distance and angle by eye.</p>
+      <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band. Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
@@ -2399,10 +2419,11 @@ function renderGolfCourse(hole, ballPositions, animMap, dragState, canDrag) {
   let aimOverlay = "";
   if (dragState?.subPhase === "dragging" && dragState.ballPos) {
     const shot = golfDragToShot(dragState.courseRect, dragState.ballPos, dragState.startClient, dragState.currentClient);
+    const pull = golfPullPreview(dragState.courseRect, dragState.ballPos, dragState.startClient, dragState.currentClient);
     aimOverlay = `
       <svg class="golf-aim-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <line class="golf-aim-line" x1="${dragState.ballPos.x}" y1="${dragState.ballPos.y}" x2="${shot.endX}" y2="${shot.endY}"></line>
-        <circle class="golf-aim-dot" cx="${shot.endX}" cy="${shot.endY}" r="2.2"></circle>
+        <line class="golf-aim-line" x1="${dragState.ballPos.x}" y1="${dragState.ballPos.y}" x2="${pull.pullX}" y2="${pull.pullY}"></line>
+        <circle class="golf-aim-dot" cx="${pull.pullX}" cy="${pull.pullY}" r="2.2"></circle>
       </svg>
       <p class="golf-power-readout">Power ${Math.round(shot.power * 100)}%</p>`;
   }
