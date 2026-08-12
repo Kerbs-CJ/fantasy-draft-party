@@ -2393,47 +2393,68 @@ function renderGolf() {
 
 // The shared top-down course — reused for both the real round and the
 // driving range, so `ballPositions` is always pre-normalized by the
-// caller to {playerId: {x, y, holedOut}}, and `animMap` is whichever of
+// caller to {playerId: {x, y, holedOut}}, and `trackMap` is whichever of
 // local.golfBallAnim/local.practiceBallAnim belongs to the caller (kept
 // separate so switching between the two screens can't cause a stray
-// cross-context "flying" animation).
+// cross-context roll animation).
 //
-// Since render() fully replaces the DOM on every call (no persisting
-// elements), a CSS `transition` on left/top would have nothing to animate
-// FROM — freshly-inserted elements just snap to their final style.
-// `@keyframes` don't have that problem (they auto-play from their own
-// `from` state on insertion), so each ball that moved since the last
-// render gets an inline `--from-x/--from-y` -> `--to-x/--to-y` pair and a
-// `flying` class that runs a keyframe animation between them.
+// Ball movement is driven directly via JS/rAF (animateGolfBallFlight),
+// NOT CSS — the realtime subscription echoes our own writes back to us
+// (Supabase broadcasts to the client that made the change too), so a
+// SECOND, redundant render() reliably fires a beat after every shot,
+// while the first render's animation is still mid-flight. A CSS
+// @keyframes animation gets silently destroyed by that (the redundant
+// render recreates the ball element fresh, without replaying the
+// animation), which looked like stuttering/teleporting. Direct DOM
+// mutation from a self-driving rAF loop — the same technique the PK
+// shootout's animateBallFlight already uses successfully — doesn't have
+// that problem: it looks up the ball element FRESH when it fires and
+// then re-asserts the correct in-flight position every single frame, so
+// even if a redundant render briefly snaps it to the final spot, the very
+// next frame (~16ms later) corrects it right back.
 //
 // `dragState` (local.golf or local.practice) drives the live aim-line
 // preview while `dragState.subPhase === "dragging"` — the preview itself
 // is drawn here (for the initial render when a drag begins) but updated
 // afterwards via direct DOM mutation, not further render() calls; see
 // golfPointerDown for why.
-function renderGolfCourse(hole, ballPositions, animMap, dragState, canDrag, extraContent = "") {
+function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, extraContent = "") {
   const bunkers = (hole.bunkers || [])
     .map((b) => `<div class="golf-bunker" style="left:${b.x}%; top:${b.y}%; width:${b.w}%; height:${b.h}%;"></div>`)
     .join("");
   const balls = players
     .map((p) => {
       const ball = ballPositions[p.id] || hole.tee;
-      const prev = animMap[p.id];
-      const moved = prev && (prev.x !== ball.x || prev.y !== ball.y);
-      animMap[p.id] = { x: ball.x, y: ball.y };
+      const track = trackMap[p.id];
       const holedOut = !!ball.holedOut;
-      let style;
-      if (moved) {
-        // Longer/harder shots take a beat longer to roll than a tap-in —
-        // makes the animation read as an actual roll, not a snap.
-        const dist = Math.hypot(ball.x - prev.x, ball.y - prev.y);
-        const flyMs = Math.round(clamp(450 + dist * 9, 500, 1600));
-        style = `--from-x:${prev.x}%; --from-y:${prev.y}%; --to-x:${ball.x}%; --to-y:${ball.y}%; --fly-duration:${flyMs}ms;`;
-      } else {
-        style = `left:${ball.x}%; top:${ball.y}%;`;
+      let renderX = ball.x;
+      let renderY = ball.y;
+      if (!track) {
+        trackMap[p.id] = { x: ball.x, y: ball.y };
+      } else if (track.x !== ball.x || track.y !== ball.y) {
+        // A genuinely new landing spot — kick off the flight animation
+        // exactly once, then immediately record the new position so a
+        // redundant re-render of this same shot (see the note above)
+        // can't detect it as "new" again and re-trigger or interrupt it.
+        const from = { x: track.x, y: track.y };
+        const to = { x: ball.x, y: ball.y };
+        trackMap[p.id] = { x: ball.x, y: ball.y };
+        const dist = Math.hypot(to.x - from.x, to.y - from.y);
+        const durationMs = Math.round(clamp(450 + dist * 9, 500, 1600));
+        const ballId = `golf-ball-${p.id}`;
+        // Deferred one frame: renderGolfCourse only returns a string —
+        // the element doesn't exist in the live DOM until render()
+        // finishes assigning innerHTML, which happens synchronously
+        // AFTER this function returns. rAF fires on the next frame,
+        // by which point it does.
+        requestAnimationFrame(() => animateGolfBallFlight(ballId, from, to, durationMs));
+        // Paint at the START position right away, so there's no flash at
+        // the destination before the rAF loop takes over a frame later.
+        renderX = from.x;
+        renderY = from.y;
       }
       return `
-        <div class="golf-course-ball${moved ? " flying" : ""}${holedOut ? " holed" : ""}" style="${style}" title="${escapeHtml(p.name)}">
+        <div id="golf-ball-${p.id}" class="golf-course-ball${holedOut ? " holed" : ""}" style="left:${renderX}%; top:${renderY}%;" title="${escapeHtml(p.name)}">
           <span class="golf-ball-emoji">⚽</span>
           <span class="golf-course-ball-label">${escapeHtml(p.name)}</span>
         </div>`;
@@ -2463,6 +2484,43 @@ function renderGolfCourse(hole, ballPositions, animMap, dragState, canDrag, extr
       ${balls}
       ${aimOverlay}
     </div>`;
+}
+
+// Rolls a ball from `from` to `to` (course-percent coordinates) via direct
+// DOM mutation on its own requestAnimationFrame loop — see the note above
+// renderGolfCourse for why this has to be JS-driven rather than a CSS
+// animation. Looks up the element fresh by id rather than holding a
+// reference captured earlier, and re-asserts its position on every frame,
+// so it's self-correcting against any redundant render() that happens to
+// land mid-flight. Mirrors the PK shootout's animateBallFlight.
+function animateGolfBallFlight(ballId, from, to, durationMs) {
+  const ballEl = document.getElementById(ballId);
+  if (!ballEl) return;
+  const emojiEl = ballEl.querySelector(".golf-ball-emoji");
+  if (prefersReducedMotion()) {
+    ballEl.style.left = to.x + "%";
+    ballEl.style.top = to.y + "%";
+    return;
+  }
+  const spinDeg = 1080;
+  const t0 = performance.now();
+  function frame(now) {
+    // Re-fetch every frame — if a redundant render replaced the element
+    // since the last frame, `ballEl` (captured once, above) would be a
+    // detached node with no visual effect; querying fresh means this
+    // loop keeps controlling whichever element is actually on screen.
+    const el = document.getElementById(ballId) || ballEl;
+    const raw = Math.min(1, (now - t0) / durationMs);
+    const t = easeOutQuad(raw);
+    const x = from.x + (to.x - from.x) * t;
+    const y = from.y + (to.y - from.y) * t;
+    el.style.left = x + "%";
+    el.style.top = y + "%";
+    const emoji = el.querySelector(".golf-ball-emoji") || emojiEl;
+    if (emoji) emoji.style.transform = `translate(-50%, -50%) rotate(${spinDeg * t}deg)`;
+    if (raw < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 
 // Who's holed out on the current hole so far, and in how many strokes —

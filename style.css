@@ -287,34 +287,11 @@ input::placeholder { color: #6c9b83; }
   font-size: 15px;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
 }
-/* The app fully replaces the DOM on every render, so a `transition`
-   would have nothing to animate from — every ball element is freshly
-   inserted. `@keyframes` sidesteps that: it plays from its own `from`
-   state automatically whenever a `.flying` element is inserted, using
-   the per-ball --from-x/--from-y -> --to-x/--to-y custom properties set
-   inline by renderGolfCourse() (--fly-duration is set alongside them,
-   scaled to how far this particular shot travelled, so a short putt and
-   a full-power drive don't take the same time to roll). Every connected
-   client — the shooter and every spectator alike — independently detects
-   the position change on their own next render and plays this same
-   animation, since the ball's new position comes from shared room state. */
-@keyframes golf-ball-fly {
-  from { left: var(--from-x); top: var(--from-y); }
-  to { left: var(--to-x); top: var(--to-y); }
-}
-@keyframes golf-ball-roll {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to { transform: translate(-50%, -50%) rotate(1080deg); }
-}
-.golf-course-ball.flying {
-  animation-name: golf-ball-fly;
-  animation-duration: var(--fly-duration, 700ms);
-  animation-timing-function: ease-out;
-  animation-fill-mode: forwards;
-}
-.golf-course-ball.flying .golf-ball-emoji {
-  animation: golf-ball-roll var(--fly-duration, 700ms) linear;
-}
+/* Ball movement is driven directly by JS (animateGolfBallFlight in
+   app.js), not CSS — a redundant render mid-flight (the realtime echo of
+   our own write reliably fires one) would otherwise silently cut off a
+   CSS animation, since the element gets recreated without it. See the
+   comment above renderGolfCourse for the full story. */
 .golf-course-ball.holed { opacity: 0.5; }
 .golf-course-ball-label {
   position: absolute;
