@@ -32,24 +32,30 @@ const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only
 // physics and the CSS box it's rendered as always agree exactly, even
 // though the course itself isn't square) `{x, y, w, h}` (center + full
 // size), or a circular pillar `{x, y, r, shape: "circle"}` (center +
-// radius). Both are solid — see golfCollideBallObstacle.
+// radius). Both are solid — see golfCollideBallObstacle. `slopes` are the
+// same rectangle shape but pass-through, not solid — see GOLF_SLOPE_ACCEL.
 const GOLF_HOLES = [
   {
     club: "Arsenal",
     crest: "AFC",
     colors: { primary: "#EF0107", secondary: "#FFFFFF" },
     name: "The Emirates",
-    description: "Down the cannon barrel, weaving past a couple of loose cannonballs.",
+    description: "Down the cannon barrel, threading three loose cannonballs.",
     par: 3,
     tee: { x: 12, y: 50 },
     pin: { x: 86, y: 50 },
     obstacles: [
-      { x: 50, y: 38, w: 44, h: 4 }, // barrel — top rail
-      { x: 50, y: 62, w: 44, h: 4 }, // barrel — bottom rail
-      { x: 42, y: 46, r: 3.5, shape: "circle" }, // loose cannonball
-      { x: 60, y: 54, r: 3.5, shape: "circle" }, // loose cannonball
-      { x: 78, y: 42, w: 6, h: 4 }, // muzzle flare
-      { x: 78, y: 58, w: 6, h: 4 }, // muzzle flare
+      { x: 50, y: 40, w: 44, h: 4 }, // barrel — top rail
+      { x: 50, y: 60, w: 44, h: 4 }, // barrel — bottom rail
+      { x: 40, y: 45, r: 3.5, shape: "circle" }, // loose cannonball
+      { x: 50, y: 52, r: 3.5, shape: "circle" }, // loose cannonball
+      { x: 62, y: 45, r: 3.5, shape: "circle" }, // loose cannonball
+      { x: 76, y: 43, w: 6, h: 4 }, // muzzle flare
+      { x: 76, y: 57, w: 6, h: 4 }, // muzzle flare
+    ],
+    slopes: [
+      { x: 30, y: 50, w: 14, h: 16, dir: "down" }, // drifts you south early — aim high to compensate
+      { x: 66, y: 50, w: 14, h: 16, dir: "up" }, // drifts you north right at the muzzle
     ],
   },
   {
@@ -63,9 +69,15 @@ const GOLF_HOLES = [
     pin: { x: 84, y: 16 },
     obstacles: [
       { x: 50, y: 50, w: 34, h: 10 }, // the Kop — the stand itself, blocks the straight line
+      { x: 58, y: 36, w: 14, h: 8 }, // the Kop, upper tier — closes off the easy route over the top
       { x: 20, y: 65, w: 14, h: 6 }, // terrace step
       { x: 68, y: 32, w: 14, h: 6 }, // terrace step
       { x: 35, y: 30, r: 4, shape: "circle" }, // a steward's post
+      { x: 60, y: 70, r: 4, shape: "circle" }, // a steward's post
+    ],
+    slopes: [
+      { x: 25, y: 75, w: 16, h: 14, dir: "up" }, // an early boost off the tee
+      { x: 72, y: 25, w: 16, h: 14, dir: "down" }, // fights your final approach to the green
     ],
   },
   {
@@ -78,12 +90,16 @@ const GOLF_HOLES = [
     tee: { x: 50, y: 88 },
     pin: { x: 50, y: 16 },
     obstacles: [
-      { x: 40, y: 55, w: 14, h: 6 }, // approach chicane
-      { x: 62, y: 65, w: 14, h: 6 }, // approach chicane
+      { x: 40, y: 58, w: 14, h: 6 }, // approach chicane
+      { x: 62, y: 68, w: 14, h: 6 }, // approach chicane
+      { x: 50, y: 40, r: 3, shape: "circle" }, // a lone post before the ring
       { x: 61, y: 20, r: 5, shape: "circle" }, // badge ring
       { x: 39, y: 20, r: 5, shape: "circle" }, // badge ring
       { x: 43, y: 11, r: 5, shape: "circle" }, // badge ring
       { x: 57, y: 11, r: 5, shape: "circle" }, // badge ring — gap left open facing the tee
+    ],
+    slopes: [
+      { x: 50, y: 72, w: 22, h: 14, dir: "down" }, // resists the whole approach
     ],
   },
   {
@@ -91,15 +107,20 @@ const GOLF_HOLES = [
     crest: "MUFC",
     colors: { primary: "#DA291C", secondary: "#FBE122" },
     name: "Old Trafford (Theatre of Dreams)",
-    description: "A dramatic double-bend — slalom the tunnel wall to wall.",
+    description: "A dramatic triple-bend — slalom the tunnel wall to wall.",
     par: 4,
     tee: { x: 88, y: 80 },
     pin: { x: 12, y: 18 },
     obstacles: [
-      { x: 65, y: 60, w: 6, h: 34 }, // bend 1
-      { x: 45, y: 42, w: 34, h: 6 }, // bend 2
-      { x: 25, y: 30, w: 6, h: 30 }, // bend 3
-      { x: 55, y: 72, r: 4, shape: "circle" }, // a stray post
+      { x: 78, y: 68, w: 14, h: 6 }, // an immediate dodge right off the tee
+      { x: 65, y: 58, w: 6, h: 32 }, // bend 1
+      { x: 45, y: 40, w: 34, h: 6 }, // bend 2
+      { x: 25, y: 28, w: 6, h: 28 }, // bend 3
+      { x: 55, y: 70, r: 4, shape: "circle" }, // a stray post
+    ],
+    slopes: [
+      { x: 70, y: 66, w: 14, h: 12, dir: "down" }, // resists right after the tee
+      { x: 33, y: 33, w: 14, h: 12, dir: "down" }, // resists again just before the pin
     ],
   },
   {
@@ -112,6 +133,7 @@ const GOLF_HOLES = [
     tee: { x: 8, y: 90 },
     pin: { x: 92, y: 10 },
     obstacles: [
+      { x: 15, y: 82, r: 4, shape: "circle" }, // a tight one right off the tee
       { x: 22, y: 72, w: 16, h: 8 },
       { x: 38, y: 80, w: 16, h: 8 },
       { x: 50, y: 55, w: 18, h: 8 },
@@ -120,6 +142,11 @@ const GOLF_HOLES = [
       { x: 84, y: 42, w: 14, h: 8 },
       { x: 80, y: 20, r: 5, shape: "circle" }, // guarding the green
       { x: 88, y: 25, r: 4, shape: "circle" }, // guarding the green
+    ],
+    slopes: [
+      { x: 30, y: 68, w: 16, h: 14, dir: "down" }, // resists early
+      { x: 55, y: 48, w: 16, h: 14, dir: "up" }, // a breather in the middle
+      { x: 78, y: 25, w: 16, h: 14, dir: "down" }, // toughest test, right before the green
     ],
   },
 ];
@@ -145,6 +172,7 @@ const GOLF_PRACTICE_HOLE = {
     { x: 50, y: 50, w: 24, h: 6 },
     { x: 28, y: 65, r: 5, shape: "circle" },
   ],
+  slopes: [{ x: 50, y: 72, w: 20, h: 14, dir: "down" }],
 };
 // ── golf shot physics ───────────────────────────────────────
 // A real simulated roll, not a straight line — the ball moves tick by
@@ -169,6 +197,16 @@ const GOLF_BOUNDARY_RESTITUTION = 0.8; // energy kept bouncing off the course ed
 const GOLF_STOP_SPEED = 0.05; // below this speed (percent/tick) the ball is considered stopped
 const GOLF_MAX_SIM_TICKS = 240; // hard safety cap — a shot pinballing in a corner can't simulate forever
 const GOLF_SIM_SUBSTEPS = 4; // each tick's movement is split into smaller steps so a fast ball can't tunnel straight through a thin obstacle before a collision check sees it
+// A hole's `slopes` are rectangular ground zones (same axis-aligned shape
+// as a wall, but the ball rolls freely through — no collision, just a
+// constant vertical pull the whole time it's inside, like gravity on a
+// tilted patch of grass) — "down" pulls toward the bottom of the screen
+// (speeds up a ball already heading that way, drags on one heading the
+// other), "up" pulls toward the top. Deliberately vertical-only (not an
+// arbitrary slope angle) for the same reason obstacles are axis-aligned:
+// it's simple enough to always render correctly (a plain ▼/▲, no
+// rotation) regardless of the course's own aspect ratio.
+const GOLF_SLOPE_ACCEL = 0.05; // percent/tick² added to vy per tick while inside a slope zone — subtle next to a full shot's ~2.1 percent/tick starting speed, but adds up over a few dozen ticks
 
 // Circle-vs-obstacle collision (the ball is always treated as a circle).
 // Returns null for no collision, or the surface normal plus how far to
@@ -228,6 +266,7 @@ function golfSimulateShot(hole, start, angle, power) {
   let x = start.x;
   let y = start.y;
   const obstacles = hole.obstacles || [];
+  const slopes = hole.slopes || [];
   const path = [{ x, y }];
   let holed = false;
   for (let tick = 0; tick < GOLF_MAX_SIM_TICKS && !holed; tick++) {
@@ -247,6 +286,11 @@ function golfSimulateShot(hole, start, angle, power) {
       } else if (y > GOLF_BOUND_MAX) {
         y = GOLF_BOUND_MAX - (y - GOLF_BOUND_MAX);
         vy = -vy * GOLF_BOUNDARY_RESTITUTION;
+      }
+      for (const slope of slopes) {
+        if (Math.abs(x - slope.x) <= slope.w / 2 && Math.abs(y - slope.y) <= slope.h / 2) {
+          vy += ((slope.dir === "down" ? 1 : -1) * GOLF_SLOPE_ACCEL) / GOLF_SIM_SUBSTEPS;
+        }
       }
       for (const obstacle of obstacles) {
         const hit = golfCollideBallObstacle(x, y, GOLF_BALL_RADIUS, obstacle);
@@ -2437,7 +2481,7 @@ function renderGolfIntro() {
       <p>A fixed ${GOLF_HOLES.length}-hole course, each hole themed after a club (${GOLF_HOLES.map((h) => escapeHtml(h.club)).join(", ")}), played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band. Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing. Every hole is a real obstacle course — the ball actually bounces off walls, pillars and the boundary as it rolls, so reading the course matters as much as the swing itself.</p>
+      <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band. Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing. Every hole is a real obstacle course — the ball actually bounces off walls, pillars and the boundary as it rolls, and patches of sloped ground (darker grass with ▼ pulls you faster downhill, lighter grass with ▲ drags on you going uphill) speed it up or slow it down as it crosses them — so reading the course matters as much as the swing itself.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
@@ -2614,6 +2658,15 @@ function renderGolf() {
 // afterwards via direct DOM mutation, not further render() calls; see
 // golfPointerDown for why.
 function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, extraContent = "") {
+  // Ground first (slopes — tinted grass the ball rolls over, not through),
+  // then solid obstacles on top, matching how they behave: a slope is
+  // just terrain, a wall/pillar is really there.
+  const slopeEls = (hole.slopes || [])
+    .map((s) => {
+      const arrow = s.dir === "down" ? "▼" : "▲";
+      return `<div class="golf-slope ${s.dir}" style="left:${s.x}%; top:${s.y}%; width:${s.w}%; height:${s.h}%;">${arrow}&nbsp;${arrow}&nbsp;${arrow}</div>`;
+    })
+    .join("");
   const obstacles = (hole.obstacles || [])
     .map((o) =>
       o.shape === "circle"
@@ -2684,6 +2737,8 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
   return `
     <div class="golf-course${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}" style="${colorStyle}">
       ${tint}
+      ${slopeEls}
+      <div class="golf-tee-mat" style="left:${hole.tee.x}%; top:${hole.tee.y}%;"></div>
       ${obstacles}
       <div class="golf-green-circle" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-pin" style="left:${hole.pin.x}%; top:${hole.pin.y}%;">⛳</div>

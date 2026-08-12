@@ -93,19 +93,22 @@ it updates automatically within a minute or two.
    course, a shared birds-eye map with a tee, a green, and a course full of
    solid walls and pillars loosely shaped around that club (a cannon
    barrel, a stand blocking the direct line, a badge-shaped ring, a
-   slalom), where every player's ball is visible moving — and actually
-   bouncing off things — across it live as shots land, not just a final
-   result. Everyone plays the *same hole at once*, each in their own time
-   on their own device, like Guess the Missing Club. Swinging is a single
-   drag, like a real slingshot: press down on your ball and pull back — a
-   line follows your hand, stretching the way you pull — then let go and
-   the ball fires the *opposite* way (pull south, it flies north). How far
-   you pull sets the power, the angle sets the direction, no timer and
-   nothing computed for you, so it's purely about judging the pull-back by
-   feel — and, now, reading the course. Watch the ball roll, bounce off
-   walls and pillars, and land on the shared map, then keep swinging from
-   there until it's holed. Fewer strokes scores more, same as real golf
-   (🦅 Eagle down to a bogey). Host moves
+   slalom), plus patches of sloped ground — darker grass marked with ▼
+   speeds the ball up heading that way, lighter grass marked with ▲ drags
+   on it — where every player's ball is visible moving, bouncing off
+   obstacles and speeding up or slowing down on the slopes, across it live
+   as shots land, not just a final result. Everyone plays the *same hole
+   at once*, each in their own time on their own device, like Guess the
+   Missing Club. Swinging is a single drag, like a real slingshot: press
+   down on your ball and pull back — a line follows your hand, stretching
+   the way you pull — then let go and the ball fires the *opposite* way
+   (pull south, it flies north). How far you pull sets the power, the
+   angle sets the direction, no timer and nothing computed for you, so
+   it's purely about judging the pull-back by feel — and, now, reading the
+   course. Watch the ball roll, bounce off walls and pillars, ride the
+   slopes, and land on the shared map, then keep swinging from there until
+   it's holed. Fewer strokes scores more, same as real golf (🦅 Eagle down
+   to a bogey). Host moves
    the group to the next hole whenever ready — no need to
    wait on stragglers (a hole that's dragging on also force-finishes a few
    strokes over par). After all 5 holes, host clicks **Show final
