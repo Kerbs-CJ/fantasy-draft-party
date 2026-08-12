@@ -945,16 +945,21 @@ function golfDragToShot(courseRect, ballPos, startClient, currentClient) {
 // slingshot band, this indicator follows your hand: drag south and it
 // stretches south, so what you SEE while dragging is the pull, and the
 // shot direction only reveals itself on release. Magnitude is capped at
-// GOLF_MAX_DRAG_PERCENT (same point power maxes out) so the band doesn't
-// keep stretching indefinitely past full power.
+// a generous multiple of GOLF_MAX_DRAG_PERCENT (past which more pull
+// doesn't add more power anyway) rather than at the course's own 0-100
+// bounds — pulling back below the map, or off either side, is normal
+// (there's often not enough room on a phone screen to pull back while
+// staying inside the box), so the line/dot are allowed to draw outside
+// the course entirely; see the matching overflow:visible on .golf-course
+// and .golf-aim-svg.
 function golfPullPreview(courseRect, ballPos, startClient, currentClient) {
   const dxPercent = ((currentClient.x - startClient.x) / courseRect.width) * 100;
   const dyPercent = ((currentClient.y - startClient.y) / courseRect.height) * 100;
   const dragMagnitude = Math.hypot(dxPercent, dyPercent);
-  const cappedMag = Math.min(dragMagnitude, GOLF_MAX_DRAG_PERCENT);
+  const cappedMag = Math.min(dragMagnitude, GOLF_MAX_DRAG_PERCENT * 2.5);
   const scale = dragMagnitude > 0 ? cappedMag / dragMagnitude : 0;
-  const pullX = clamp(ballPos.x + dxPercent * scale, 0, 100);
-  const pullY = clamp(ballPos.y + dyPercent * scale, 0, 100);
+  const pullX = ballPos.x + dxPercent * scale;
+  const pullY = ballPos.y + dyPercent * scale;
   return { pullX, pullY };
 }
 
@@ -2265,11 +2270,18 @@ function practiceSwingLabel(swing) {
 function renderGolfPractice() {
   const isHost = myPlayer()?.is_host;
   const gs = room.game_state.golfPractice || { swings: {} };
-  const positions = {};
-  for (const p of players) {
-    const s = gs.swings[p.id];
-    if (s) positions[p.id] = { x: s.x, y: s.y, holedOut: s.holed };
-  }
+  // The ball icon always renders at the tee (see renderGolfCourse's
+  // ballPositions[p.id] || hole.tee fallback) since every practice swing
+  // restarts from there — passing {} here means it never "moves" the
+  // interactive ball, which would otherwise drift away from where the
+  // drag actually anchors. Last attempts show as separate dots instead.
+  const landingMarkers = players
+    .map((p) => {
+      const s = gs.swings[p.id];
+      if (!s) return "";
+      return `<div class="golf-landing-marker${s.holed ? " holed" : ""}" style="left:${s.x}%; top:${s.y}%;" title="${escapeHtml(p.name)}'s last shot"></div>`;
+    })
+    .join("");
 
   let instructions;
   if (local.practice.subPhase === "dragging") {
@@ -2287,7 +2299,7 @@ function renderGolfPractice() {
       <div class="side-layout">
         <div class="side-main">
           <p class="sub" style="text-align:center">${instructions}</p>
-          ${renderGolfCourse(GOLF_PRACTICE_HOLE, positions, local.practiceBallAnim, local.practice, true)}
+          ${renderGolfCourse(GOLF_PRACTICE_HOLE, {}, local.practiceBallAnim, local.practice, true, landingMarkers)}
         </div>
         <div class="side-roster">
           <h3>Lanes</h3>
@@ -2387,7 +2399,7 @@ function renderGolf() {
 // is drawn here (for the initial render when a drag begins) but updated
 // afterwards via direct DOM mutation, not further render() calls; see
 // golfPointerDown for why.
-function renderGolfCourse(hole, ballPositions, animMap, dragState, canDrag) {
+function renderGolfCourse(hole, ballPositions, animMap, dragState, canDrag, extraContent = "") {
   const bunkers = (hole.bunkers || [])
     .map((b) => `<div class="golf-bunker" style="left:${b.x}%; top:${b.y}%; width:${b.w}%; height:${b.h}%;"></div>`)
     .join("");
@@ -2435,6 +2447,7 @@ function renderGolfCourse(hole, ballPositions, animMap, dragState, canDrag) {
       <div class="golf-green-circle" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-pin" style="left:${hole.pin.x}%; top:${hole.pin.y}%;">⛳</div>
       <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;">📍</div>
+      ${extraContent}
       ${balls}
       ${aimOverlay}
     </div>`;

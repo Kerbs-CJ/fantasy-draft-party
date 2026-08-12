@@ -208,14 +208,19 @@ input::placeholder { color: #6c9b83; }
   border-radius: 14px;
   background: radial-gradient(ellipse at center, #2e7d4f 0%, #256840 70%, #1c4f31 100%);
   border: 1px solid var(--card-border);
-  overflow: hidden;
+  /* Deliberately NOT hidden — the pull-back aim line is allowed to draw
+     outside the course box (see golfPullPreview), since there's often not
+     enough screen room to pull back while staying inside it. Every other
+     child (bunkers/pin/tee/balls) always sits within the box anyway, so
+     this doesn't affect how the course itself looks. */
+  overflow: visible;
 }
 /* touch-action:none stops the browser treating a drag on the course as a
    page-scroll gesture — without it, dragging on a touchscreen would
    scroll the page instead of aiming the shot. */
 .golf-course.draggable { cursor: grab; touch-action: none; }
 .golf-course.dragging { cursor: grabbing; }
-.golf-aim-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.golf-aim-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .golf-aim-line {
   stroke: #fff;
   stroke-width: 0.7;
@@ -315,6 +320,22 @@ input::placeholder { color: #6c9b83; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Driving range only — the ball itself always sits at the practice tee
+   (every swing restarts from there), so a player's last attempt is shown
+   as this separate marker instead of moving the ball icon, which would
+   otherwise drift away from where the drag actually anchors. */
+.golf-landing-marker {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.6);
+  border: 1.5px solid rgba(0,0,0,0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.golf-landing-marker.holed { background: var(--accent2); border-color: rgba(0,0,0,0.3); }
 
 .golf-finishers {
   margin-top: 16px;
