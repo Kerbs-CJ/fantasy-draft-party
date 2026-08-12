@@ -353,30 +353,45 @@ input::placeholder { color: #6c9b83; }
   transform: translate(-50%, -50%);
 }
 /* Slope zones — ground the ball rolls over (not through, see
-   GOLF_SLOPE_ACCEL) with a tinted-grass look and repeated arrows showing
-   which way it pulls: darker + ▼ for downhill (speeds you up heading that
-   way), lighter + ▲ for uphill (slows you down). Sits under obstacles/pin
-   /tee/balls (see the DOM order in renderGolfCourse), so it reads as
-   terrain, not a thing in the way. */
+   GOLF_SLOPE_ACCEL) with a tinted-grass look and a tidy grid of arrows
+   showing which way it pulls: darker + ▼ for downhill (speeds you up
+   heading that way), lighter + ▲ for uphill (slows you down). Sits under
+   obstacles/pin/tee/balls (see the DOM order in renderGolfCourse), so it
+   reads as terrain, not a thing in the way. The arrow count adapts to the
+   zone's own size (see renderGolfCourse) so small and large patches both
+   stay legible instead of a fixed grid looking sparse or crowded. */
 .golf-slope {
   position: absolute;
   transform: translate(-50%, -50%);
   border-radius: 10px;
   pointer-events: none;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16px, 1fr));
   align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  letter-spacing: 1px;
+  justify-items: center;
   overflow: hidden;
 }
+.golf-slope span {
+  font-size: 12px;
+  line-height: 1;
+}
 .golf-slope.down {
-  background: linear-gradient(180deg, rgba(10,40,20,0.1) 0%, rgba(8,32,16,0.55) 100%);
-  color: rgba(255,255,255,0.65);
+  background: linear-gradient(180deg, rgba(11,46,24,0.12) 0%, rgba(7,28,15,0.62) 100%);
+  border: 1px solid rgba(6,24,13,0.55);
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.35);
+}
+.golf-slope.down span {
+  color: rgba(255,255,255,0.8);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.6);
 }
 .golf-slope.up {
-  background: linear-gradient(0deg, rgba(180,230,190,0.08) 0%, rgba(200,240,210,0.45) 100%);
-  color: rgba(20,50,30,0.75);
+  background: linear-gradient(0deg, rgba(203,247,214,0.14) 0%, rgba(226,253,232,0.6) 100%);
+  border: 1px solid rgba(180,235,195,0.6);
+  box-shadow: inset 0 0 10px rgba(255,255,255,0.35);
+}
+.golf-slope.up span {
+  color: rgba(13,46,25,0.85);
+  text-shadow: 0 1px 1px rgba(255,255,255,0.5);
 }
 /* The outer .golf-course-ball is just an anchor (left/top % = the ball's
    true position, no transform of its own) — it does NOT get centered as
@@ -417,22 +432,6 @@ input::placeholder { color: #6c9b83; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* Driving range only — the ball itself always sits at the practice tee
-   (every swing restarts from there), so a player's last attempt is shown
-   as this separate marker instead of moving the ball icon, which would
-   otherwise drift away from where the drag actually anchors. */
-.golf-landing-marker {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.6);
-  border: 1.5px solid rgba(0,0,0,0.45);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-.golf-landing-marker.holed { background: var(--accent2); border-color: rgba(0,0,0,0.3); }
 
 .golf-finishers {
   margin-top: 16px;
