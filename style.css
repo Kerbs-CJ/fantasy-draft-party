@@ -397,6 +397,40 @@ input::placeholder { color: #6c9b83; }
   color: rgba(13,46,25,0.85);
   text-shadow: 0 1px 1px rgba(255,255,255,0.5);
 }
+/* Sand — bogs the ball down (GOLF_SAND_FRICTION), pass-through like a
+   slope. A gritty tan patch with a subtle grain texture so it reads as
+   a different surface, not just a lighter bit of grass. */
+.golf-sand {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 40%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25) 0%, transparent 45%),
+    linear-gradient(135deg, #e0c384 0%, #cfa85f 55%, #bd9750 100%);
+  border: 1px solid rgba(120,90,40,0.5);
+  box-shadow: inset 0 0 12px rgba(90,60,20,0.35);
+}
+/* Water — ends the shot on contact and sends the ball back to the tee
+   (see golfSimulateShot), pass-through going in. An animated shimmer
+   (safe here — it's on its own element, not a full-DOM-replace concern
+   like the ball animations, since @keyframes autoplay fine on a static
+   decorative element that never needs to survive a redundant render). */
+.golf-water {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 40%;
+  pointer-events: none;
+  background: linear-gradient(120deg, #1a6f9c 0%, #2f8fc4 35%, #1a6f9c 65%, #2f8fc4 100%);
+  background-size: 220% 220%;
+  border: 1px solid rgba(10,50,75,0.6);
+  box-shadow: inset 0 0 14px rgba(5,30,50,0.5);
+  animation: golfWaterShimmer 5s ease-in-out infinite;
+}
+@keyframes golfWaterShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
 /* The outer .golf-course-ball is just an anchor (left/top % = the ball's
    true position, no transform of its own) — it does NOT get centered as
    a whole block, because it also contains the name label below the
