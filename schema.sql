@@ -1,5 +1,5 @@
--- Fantasy Draft Party — Supabase schema
--- Run this once in your Supabase project: SQL Editor → New query → paste → Run.
+-- Fantasy Draft Party - Supabase schema
+-- Run this once in your Supabase project: SQL Editor -> New query -> paste -> Run.
 
 create extension if not exists pgcrypto;
 
@@ -54,21 +54,21 @@ create policy "public read scores" on scores for select using (true);
 create policy "public write scores" on scores for insert with check (true);
 
 -- Turn on realtime change streaming for these tables.
--- If this errors saying the table is already a member, that's fine — ignore it.
--- (Alternatively: Database → Replication → toggle these three tables on.)
+-- If this errors saying the table is already a member, that's fine - ignore it.
+-- (Alternatively: Database -> Replication -> toggle these three tables on.)
 alter publication supabase_realtime add table rooms;
 alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table scores;
 
 -- Draft Tracker
--- ------------
+-- -------------
 -- A separate page (draft-tracker.html), reached from the reveal screen,
 -- for tracking an actual Premier League fantasy draft after the party's
 -- draft ORDER has been decided. Reuses the same room/players tables (a
--- drafter is just one of the existing `players` rows) — this table is
--- only the picks themselves. `pl_player_id` is a Premier League player's
+-- drafter is just one of the existing players rows) - this table is
+-- only the picks themselves. pl_player_id is a Premier League player's
 -- id from the static players.js pool (PL_PLAYERS), not a row in this
--- app's own `players` table — named differently to keep the two kinds
+-- app's own players table - named differently to keep the two kinds
 -- of "player" from being confused with each other.
 create table if not exists draft_picks (
   id uuid primary key default gen_random_uuid(),
@@ -78,7 +78,7 @@ create table if not exists draft_picks (
   drafter_id uuid not null references players(id) on delete cascade, -- who took them
   created_at timestamptz not null default now(),
   unique (room_code, pl_player_id), -- a footballer can only be drafted once per room
-  unique (room_code, pick_number) -- and a pick slot can only be filled once — the safety net against two people submitting the same turn at the same time
+  unique (room_code, pick_number) -- and a pick slot can only be filled once - the safety net against two people submitting the same turn at the same time
 );
 
 alter table draft_picks enable row level security;
