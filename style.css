@@ -203,7 +203,14 @@ input::placeholder { color: #6c9b83; }
   position: relative;
   width: 100%;
   max-width: 640px;
-  aspect-ratio: 2 / 3;
+  /* Landscape, not portrait — wider than tall, and max-height is a second
+     constraint so it can't push a laptop-height browser window into
+     scrolling even at full max-width. Current holes were laid out for a
+     tall box (mostly vertical tee-to-pin travel), so they'll look a
+     little squeezed until they're redesigned for a wider course — fine
+     for now. */
+  aspect-ratio: 3 / 2;
+  max-height: 58vh;
   margin: 16px auto;
   border-radius: 14px;
   background: radial-gradient(ellipse at center, #2e7d4f 0%, #256840 70%, #1c4f31 100%);
