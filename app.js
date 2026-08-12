@@ -68,6 +68,9 @@ const GOLF_HOLES = [
     slopes: [
       { x: 49, y: 50, w: 12, h: 20, dir: "down" }, // leg 2 — resists the cut through the middle
     ],
+    water: [
+      { x: 86, y: 62, w: 14, h: 8 }, // just past the green — overcook the approach and it's gone
+    ],
   },
   {
     club: "Liverpool",
@@ -92,6 +95,9 @@ const GOLF_HOLES = [
     ],
     slopes: [
       { x: 52, y: 45, w: 18, h: 16, dir: "up" }, // leg 2 — a boost through the long middle stretch
+    ],
+    water: [
+      { x: 22, y: 10, w: 10, h: 8 }, // drift too wide on the final approach and it's gone
     ],
   },
   {
@@ -118,6 +124,9 @@ const GOLF_HOLES = [
     slopes: [
       { x: 50, y: 78, w: 22, h: 14, dir: "down" }, // leg 1 — resists right off the tee
     ],
+    water: [
+      { x: 50, y: 24, w: 14, h: 4 }, // right at the back of the cup — overshoot the pin and it's gone
+    ],
   },
   {
     club: "Manchester United",
@@ -136,6 +145,9 @@ const GOLF_HOLES = [
     slopes: [
       { x: 82, y: 65, w: 14, h: 16, dir: "down" }, // leg 1 — resists right off the tee
       { x: 41, y: 50, w: 8, h: 14, dir: "up" }, // leg 2 — a boost through the tightest squeeze
+    ],
+    water: [
+      { x: 12, y: 30, w: 10, h: 8 }, // short-side miss on the final approach — splash
     ],
   },
   {
@@ -165,7 +177,7 @@ const GOLF_HOLES = [
       { x: 25, y: 35, w: 14, h: 10 }, // guarding the entry to gate 3
     ],
     water: [
-      { x: 50, y: 67, w: 24, h: 10 }, // the big cross-court swing between gates 1 and 2
+      { x: 42, y: 67, w: 12, h: 6 }, // a real risk cutting the corner on the big cross-court swing — but there's clear room to swing wider and miss it entirely (gates 1/2's gap is 11 units tall, this only eats a slice of it)
       { x: 82, y: 14, w: 14, h: 10 }, // guarding the final approach to the green
     ],
   },
@@ -1436,7 +1448,7 @@ async function golfSubmitShot(shot) {
   const holed = shot.holed;
   const strokes = currentBall.strokes + 1;
   const holedOut = holed || strokes >= GOLF_MAX_STROKES;
-  const balls = { ...gs.balls, [me.id]: { x: shot.endX, y: shot.endY, strokes, holedOut, path: shot.path } };
+  const balls = { ...gs.balls, [me.id]: { x: shot.endX, y: shot.endY, strokes, holedOut, holed, path: shot.path } };
 
   let results = gs.results;
   if (holedOut) {
@@ -1637,7 +1649,7 @@ function schedulePracticeReset(playerId) {
         },
       },
     });
-  }, 2900); // longer than animateGolfBallFlight's own duration cap (2600ms) so the roll-to-pin animation always finishes first
+  }, 3200); // longer than the roll's own duration cap (2600ms) plus the sink animation (380ms) so both always finish first
 }
 
 function practicePointerCancel() {
@@ -2830,8 +2842,10 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       const ball = ballPositions[p.id] || hole.tee;
       const track = trackMap[p.id];
       const holedOut = !!ball.holedOut;
+      const holed = !!ball.holed;
       let renderX = ball.x;
       let renderY = ball.y;
+      let animating = false;
       if (!track) {
         trackMap[p.id] = { x: ball.x, y: ball.y };
       } else if (track.x !== ball.x || track.y !== ball.y) {
@@ -2843,6 +2857,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         // golfSimulateShot; fall back to a straight line only if it's
         // missing (e.g. a hole/practice reset that jumps the ball
         // straight to the tee — nothing to replay there).
+        animating = true;
         const from = { x: track.x, y: track.y };
         const to = { x: ball.x, y: ball.y };
         const path = Array.isArray(ball.path) && ball.path.length > 1 ? ball.path : [from, to];
@@ -2856,12 +2871,17 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         // finishes assigning innerHTML, which happens synchronously
         // AFTER this function returns. rAF fires on the next frame,
         // by which point it does.
-        requestAnimationFrame(() => animateGolfBallFlight(ballId, path, durationMs));
+        requestAnimationFrame(() => animateGolfBallFlight(ballId, path, durationMs, holed));
         // Paint at the START position right away, so there's no flash at
         // the destination before the rAF loop takes over a frame later.
         renderX = path[0].x;
         renderY = path[0].y;
       }
+      // Once a genuinely-holed ball has finished its roll-and-sink (i.e.
+      // this ISN'T the render that just triggered that animation), it's
+      // gone — don't render it at all, rather than leaving a sunk (but
+      // technically still-present) element sitting there.
+      if (holed && !animating) return "";
       return `
         <div id="golf-ball-${p.id}" class="golf-course-ball${holedOut ? " holed" : ""}" style="left:${renderX}%; top:${renderY}%;" title="${escapeHtml(p.name)}">
           <span class="golf-ball-emoji">⚽</span>
@@ -2894,6 +2914,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       <div class="golf-tee-mat" style="left:${hole.tee.x}%; top:${hole.tee.y}%;"></div>
       ${obstacles}
       <div class="golf-green-circle" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
+      <div class="golf-cup" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-pin" style="left:${hole.pin.x}%; top:${hole.pin.y}%;">⛳</div>
       <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;">📍</div>
       ${extraContent}
@@ -2914,7 +2935,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
 // just a straight line from A to B. Walks it by arc length (total
 // distance travelled, not just point count) so the ball moves at a
 // roughly steady pace through however many bounces the shot took.
-function animateGolfBallFlight(ballId, path, durationMs) {
+function animateGolfBallFlight(ballId, path, durationMs, holed) {
   const ballEl = document.getElementById(ballId);
   if (!ballEl || path.length < 2) return;
   const emojiEl = ballEl.querySelector(".golf-ball-emoji");
@@ -2922,6 +2943,7 @@ function animateGolfBallFlight(ballId, path, durationMs) {
   if (prefersReducedMotion()) {
     ballEl.style.left = last.x + "%";
     ballEl.style.top = last.y + "%";
+    if (holed) ballEl.style.display = "none"; // straight to "in the cup", no animation to skip
     return;
   }
   // Cumulative arc length at each waypoint, so "40% of the way through
@@ -2956,7 +2978,42 @@ function animateGolfBallFlight(ballId, path, durationMs) {
     el.style.top = y + "%";
     const emoji = el.querySelector(".golf-ball-emoji") || emojiEl;
     if (emoji) emoji.style.transform = `translate(-50%, -50%) rotate(${spinDeg * raw}deg)`;
-    if (raw < 1) requestAnimationFrame(frame);
+    if (raw < 1) {
+      requestAnimationFrame(frame);
+    } else if (holed) {
+      animateGolfBallSink(ballId);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// The roll has finished right on the pin — shrink and fade the ball down
+// into the cup instead of just leaving it sitting there. Its own short
+// rAF loop (same fresh-lookup-every-frame pattern as the roll above) so
+// it's independently safe against a redundant render landing mid-sink.
+function animateGolfBallSink(ballId) {
+  if (prefersReducedMotion()) {
+    const el = document.getElementById(ballId);
+    if (el) el.style.display = "none";
+    return;
+  }
+  const t0 = performance.now();
+  const sinkMs = 380;
+  function frame(now) {
+    const el = document.getElementById(ballId);
+    if (!el) return; // gone from the DOM (redundant render already settled past it) — nothing left to animate
+    const emoji = el.querySelector(".golf-ball-emoji");
+    const raw = Math.min(1, (now - t0) / sinkMs);
+    if (emoji) {
+      const scale = (1 - raw).toFixed(3);
+      emoji.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      emoji.style.opacity = String(1 - raw);
+    }
+    if (raw < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      el.style.display = "none";
+    }
   }
   requestAnimationFrame(frame);
 }
