@@ -606,19 +606,6 @@ code {
   30%, 50%, 70% { transform: translateX(-5px); }
   40%, 60% { transform: translateX(5px); }
 }
-.pk-flash {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 998;
-  background: radial-gradient(circle at 50% 30%, rgba(255,224,140,0.9), rgba(255,209,102,0.25) 55%, transparent 78%);
-  animation: pkFlash 0.5s ease-out forwards;
-}
-@keyframes pkFlash {
-  0% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
 .zone-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -725,7 +712,7 @@ code {
 .pk-ball { font-size: 24px; z-index: 3; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pk-impact-goal, .pk-impact-save, .pk-flash, .pk-result-pop, .confetti { animation: none !important; }
+  .pk-impact-goal, .pk-impact-save, .pk-result-pop, .confetti { animation: none !important; }
 }
 
 /* dev-only testing affordances (?dev=1) */
