@@ -269,12 +269,21 @@ input::placeholder { color: #6c9b83; }
   font-size: 16px;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
 }
-.golf-course-ball {
+/* The outer .golf-course-ball is just an anchor (left/top % = the ball's
+   true position, no transform of its own) — it does NOT get centered as
+   a whole block, because it also contains the name label below the
+   emoji, and centering the whole flex column on the anchor point would
+   visually shift the emoji itself off-center (the aim line, anchored at
+   the exact same true position, would then look like it's not starting
+   from the ball). Instead .golf-ball-emoji centers ONLY itself on the
+   anchor via its own translate(-50%,-50%), independent of the label. */
+.golf-course-ball { position: absolute; }
+.golf-ball-emoji {
   position: absolute;
+  left: 0;
+  top: 0;
   transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: block;
   font-size: 15px;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
 }
@@ -294,8 +303,8 @@ input::placeholder { color: #6c9b83; }
   to { left: var(--to-x); top: var(--to-y); }
 }
 @keyframes golf-ball-roll {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(1080deg); }
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(1080deg); }
 }
 .golf-course-ball.flying {
   animation-name: golf-ball-fly;
@@ -304,17 +313,19 @@ input::placeholder { color: #6c9b83; }
   animation-fill-mode: forwards;
 }
 .golf-course-ball.flying .golf-ball-emoji {
-  display: inline-block;
   animation: golf-ball-roll var(--fly-duration, 700ms) linear;
 }
 .golf-course-ball.holed { opacity: 0.5; }
 .golf-course-ball-label {
+  position: absolute;
+  left: 0;
+  top: 9px;
+  transform: translateX(-50%);
   font-size: 8px;
   color: #fff;
   background: rgba(0,0,0,0.6);
   padding: 1px 4px;
   border-radius: 5px;
-  margin-top: 2px;
   white-space: nowrap;
   max-width: 60px;
   overflow: hidden;

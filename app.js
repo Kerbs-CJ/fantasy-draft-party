@@ -928,6 +928,18 @@ async function finishRoundRobin() {
 // fires the OPPOSITE way from the drag — slingshot convention: pull back
 // south, the ball (and the aim line/dot, which always shows exactly
 // where it's about to land) goes north.
+// Reflects v back into [min, max] like a ball bouncing between two walls,
+// instead of just sticking to the wall it hit — a shot that overshoots
+// the boundary bounces back in by however much it overshot, rather than
+// stacking every over-hit shot at the same spot on the edge.
+function golfBounceCoord(v, min, max) {
+  const range = max - min;
+  if (range <= 0) return min;
+  let x = (v - min) % (2 * range);
+  if (x < 0) x += 2 * range;
+  return x <= range ? min + x : max - (x - range);
+}
+
 function golfDragToShot(courseRect, ballPos, startClient, currentClient) {
   const dxPercent = ((currentClient.x - startClient.x) / courseRect.width) * 100;
   const dyPercent = ((currentClient.y - startClient.y) / courseRect.height) * 100;
@@ -935,8 +947,8 @@ function golfDragToShot(courseRect, ballPos, startClient, currentClient) {
   const power = clamp(dragMagnitude / GOLF_MAX_DRAG_PERCENT, 0, 1);
   const angle = Math.atan2(-dyPercent, -dxPercent);
   const travel = power * GOLF_MAX_SHOT_DISTANCE;
-  const endX = clamp(ballPos.x + Math.cos(angle) * travel, 3, 97);
-  const endY = clamp(ballPos.y + Math.sin(angle) * travel, 3, 97);
+  const endX = golfBounceCoord(ballPos.x + Math.cos(angle) * travel, 3, 97);
+  const endY = golfBounceCoord(ballPos.y + Math.sin(angle) * travel, 3, 97);
   return { dragMagnitude, power, angle, endX, endY };
 }
 
@@ -2225,7 +2237,7 @@ function renderGolfIntro() {
       <p>A fixed ${GOLF_HOLES.length}-hole course, played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band. Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing.</p>
+      <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band. Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing. Hit it out of bounds and it bounces back in off the boundary rather than just stopping dead at the edge.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
