@@ -5,7 +5,8 @@ order. Everyone joins a room from their own device, plays through four
 rounds — Guess the Missing Club from a player's career timeline, Guess the
 Footballer from progressive clues, a 1v1 penalty shootout round robin
 (everyone plays everyone once, standings by wins/goal difference), then
-Football Golf, real stroke play over a 3-hole course — and the combined
+Football Golf, real stroke play over a 5-hole course themed after Arsenal,
+Liverpool, Leeds United, Manchester United and Barcelona — and the combined
 leaderboard becomes the draft order, with a dramatic reveal at the end.
 
 No app install needed — it's just a web page. It's a plain static site (no
@@ -85,11 +86,14 @@ it updates automatically within a minute or two.
    Range** first — a shared, unscored warm-up screen where everyone's on
    the same room together and can take as many practice swings as they
    like, to get a feel for the drag before it counts. When ready, host
-   clicks **Start Football Golf**. It's real stroke play on an actual
-   top-down course — a shared birds-eye map with a tee, a green, and
-   bunkers, where every player's ball is visible moving across it live as
-   shots land, not just a final result. Everyone plays the *same hole at
-   once*, each in their own time on their own device, like Guess the
+   clicks **Start Football Golf**. It's real stroke play on 5 holes, each
+   one themed after a club — Arsenal's Emirates, Liverpool's Anfield
+   (Kop end), Leeds' Elland Road, Manchester United's Old Trafford, and
+   Barcelona's Camp Nou as the grand finale — each an actual top-down
+   course, a shared birds-eye map with a tee, a green, and bunkers loosely
+   shaped around that club, where every player's ball is visible moving
+   across it live as shots land, not just a final result. Everyone plays
+   the *same hole at once*, each in their own time on their own device, like Guess the
    Missing Club. Swinging is a single drag, like a real slingshot: press
    down on your ball and pull back — a line follows your hand, stretching
    the way you pull — then let go and the ball fires the *opposite* way
@@ -101,7 +105,7 @@ it updates automatically within a minute or two.
    scores more, same as real golf (🦅 Eagle down to a bogey). Host moves
    the group to the next hole whenever ready — no need to
    wait on stragglers (a hole that's dragging on also force-finishes a few
-   strokes over par). After all 3 holes, host clicks **Show final
+   strokes over par). After all 5 holes, host clicks **Show final
    standings** — final placement (highest total first) adds to the
    combined leaderboard.
 7. Host clicks **Reveal Draft Order!** for the big reveal.

@@ -21,41 +21,89 @@ const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only
 // is exactly what you get, so the only skill is judging distance and
 // angle by eye. `bunkers` are decorative only (visual variety per hole),
 // not a gameplay penalty yet.
+//
+// Each hole is themed after a club — `club`/`crest`/`colors` drive a small
+// badge and a subtle colour wash over the course (see renderGolfCourse),
+// and the bunker layout is loosely shaped around something about that
+// club (a cannon barrel, a stand end, a badge ring, etc). Purely cosmetic
+// — tee/pin/par/bunkers all still work exactly like any other hole, only
+// laid out for the course's current landscape (wider-than-tall) shape.
 const GOLF_HOLES = [
   {
-    name: "The Approach",
-    description: "A short, forgiving hole to warm up on.",
+    club: "Arsenal",
+    crest: "AFC",
+    colors: { primary: "#EF0107", secondary: "#FFFFFF" },
+    name: "The Emirates",
+    description: "Fire straight down the barrel — Arsenal's cannon, dead ahead.",
     par: 3,
-    tee: { x: 50, y: 90 },
-    pin: { x: 50, y: 12 },
+    tee: { x: 12, y: 50 },
+    pin: { x: 86, y: 50 },
     bunkers: [
-      { x: 30, y: 45, w: 16, h: 9 },
-      { x: 68, y: 60, w: 12, h: 7 },
+      { x: 35, y: 50, w: 22, h: 6 },
+      { x: 50, y: 38, w: 8, h: 8 },
+      { x: 58, y: 61, w: 7, h: 7 },
     ],
   },
   {
-    name: "The Dogleg",
-    description: "Bends away from the tee — line matters as much as power.",
+    club: "Liverpool",
+    crest: "LFC",
+    colors: { primary: "#C8102E", secondary: "#F6EB61" },
+    name: "Anfield (The Kop)",
+    description: "Hug the Kop end and let the noise carry you home.",
     par: 4,
-    tee: { x: 18, y: 90 },
-    pin: { x: 80, y: 14 },
+    tee: { x: 14, y: 85 },
+    pin: { x: 84, y: 16 },
     bunkers: [
-      { x: 55, y: 48, w: 16, h: 9 },
-      { x: 30, y: 65, w: 10, h: 6 },
-      { x: 70, y: 30, w: 12, h: 7 },
+      { x: 20, y: 60, w: 30, h: 10 },
+      { x: 55, y: 75, w: 14, h: 8 },
+      { x: 66, y: 35, w: 12, h: 7 },
     ],
   },
   {
-    name: "The Long Drive",
-    description: "A proper test — long enough that even a full-power drive won't reach in one.",
-    par: 5,
-    tee: { x: 50, y: 94 },
-    pin: { x: 50, y: 8 },
+    club: "Leeds United",
+    crest: "LUFC",
+    colors: { primary: "#1D428A", secondary: "#FFCD00" },
+    name: "Elland Road",
+    description: "A tight circle guards the green — Leeds' badge in miniature.",
+    par: 3,
+    tee: { x: 50, y: 88 },
+    pin: { x: 50, y: 16 },
     bunkers: [
-      { x: 35, y: 35, w: 12, h: 7 },
-      { x: 65, y: 55, w: 12, h: 7 },
-      { x: 30, y: 72, w: 10, h: 6 },
-      { x: 70, y: 20, w: 10, h: 6 },
+      { x: 50, y: 6, w: 9, h: 5 },
+      { x: 66, y: 16, w: 8, h: 6 },
+      { x: 50, y: 27, w: 9, h: 5 },
+      { x: 34, y: 16, w: 8, h: 6 },
+    ],
+  },
+  {
+    club: "Manchester United",
+    crest: "MUFC",
+    colors: { primary: "#DA291C", secondary: "#FBE122" },
+    name: "Old Trafford (Theatre of Dreams)",
+    description: "A dramatic double-bend down the tunnel and onto the pitch.",
+    par: 4,
+    tee: { x: 88, y: 80 },
+    pin: { x: 12, y: 18 },
+    bunkers: [
+      { x: 65, y: 60, w: 14, h: 9 },
+      { x: 45, y: 50, w: 12, h: 8 },
+      { x: 28, y: 35, w: 14, h: 9 },
+    ],
+  },
+  {
+    club: "Barcelona",
+    crest: "FCB",
+    colors: { primary: "#A50044", secondary: "#004D98" },
+    name: "Camp Nou",
+    description: "The grand finale — blaugrana stripes the whole length of the pitch.",
+    par: 5,
+    tee: { x: 8, y: 90 },
+    pin: { x: 92, y: 10 },
+    bunkers: [
+      { x: 25, y: 75, w: 10, h: 22 },
+      { x: 42, y: 60, w: 10, h: 22 },
+      { x: 58, y: 45, w: 10, h: 22 },
+      { x: 75, y: 30, w: 10, h: 22 },
     ],
   },
 ];
@@ -904,7 +952,8 @@ async function finishRoundRobin() {
 }
 
 // ── football golf ───────────────────────────────────────────
-// A fixed 3-hole course, played as actual stroke play on a real top-down
+// A fixed 5-hole course, each hole themed after a club, played as actual
+// stroke play on a real top-down
 // layout, swung with a single drag gesture — no timing, no hidden target,
 // just judging distance and angle by eye. Every player has an (x, y)
 // position on the hole, starting at the tee, that lives in shared room
@@ -1717,6 +1766,7 @@ function renderDevQuickStart() {
         <button class="dev-btn" data-action="dev-quickstart" data-status="missing-club">⚽ Guess the Missing Club</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="guess">🕵️ Guess the Footballer</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="round-robin">⚽ PK Round Robin</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="golf">🏌️ Football Golf</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="reveal">🏆 Reveal</button>
       </div>
     </div>`;
@@ -1764,7 +1814,7 @@ function renderPartyIntro() {
         <li><b>⚽ Guess the Missing Club</b> — a real footballer's club career shown as a timeline with one club redacted. Answer in your own time; the host reveals the correct club (and how many got it) to everyone at once.</li>
         <li><b>🕵️ Guess the Footballer</b> — a mystery player revealed one clue at a time, most obscure clue first. Guess earlier for more points, but guess wrong and you're frozen out for that round.</li>
         <li><b>🥅 Penalty Shootout</b> — a round-robin of 1v1 shootouts, everyone plays everyone once. Blind, simultaneous shot/dive picks; final standing adds placement points to the leaderboard.</li>
-        <li><b>⛳ Football Golf</b> — real stroke play over a 3-hole course. Tee off, then keep swinging (power + aim taps) from wherever you land until it's holed — fewer strokes scores more (eagle down to a bogey). Final total placement adds points too.</li>
+        <li><b>⛳ Football Golf</b> — real stroke play over a 5-hole course, each hole themed after a club. Tee off, then keep dragging to shoot, slingshot-style, from wherever you land until it's holed — fewer strokes scores more (eagle down to a bogey). Final total placement adds points too.</li>
       </ol>
       <p>You'll see a running leaderboard after each round, and the big reveal at the very end turns the final combined score into the draft order.</p>
 
@@ -2234,7 +2284,7 @@ function renderGolfIntro() {
       <h2>⛳ Football Golf</h2>
 
       <h3>The format</h3>
-      <p>A fixed ${GOLF_HOLES.length}-hole course, played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
+      <p>A fixed ${GOLF_HOLES.length}-hole course, each hole themed after a club (${GOLF_HOLES.map((h) => escapeHtml(h.club)).join(", ")}), played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
       <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band. Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing. Hit it out of bounds and it bounces back in off the boundary rather than just stopping dead at the edge.</p>
@@ -2253,7 +2303,7 @@ function renderGolfIntro() {
           </tbody>
         </table>
       </div>
-      <p>Each hole has a par (${GOLF_HOLES.map((h) => `${escapeHtml(h.name)}: Par ${h.par}`).join(", ")}) — a hole that's dragging on forcibly wraps up after ${GOLF_MERCY_STROKES} strokes over par, so nobody's stuck forever. Host moves the group to the next hole whenever ready — no need to wait for stragglers. Once all ${GOLF_HOLES.length} holes are done, total points decide final standing, which adds placement points to the combined leaderboard — same system as the penalty shootout.</p>
+      <p>Each hole has a par (${GOLF_HOLES.map((h) => `${escapeHtml(h.club)} — ${escapeHtml(h.name)}: Par ${h.par}`).join(", ")}) — a hole that's dragging on forcibly wraps up after ${GOLF_MERCY_STROKES} strokes over par, so nobody's stuck forever. Host moves the group to the next hole whenever ready — no need to wait for stragglers. Once all ${GOLF_HOLES.length} holes are done, total points decide final standing, which adds placement points to the combined leaderboard — same system as the penalty shootout.</p>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
@@ -2360,9 +2410,17 @@ function renderGolf() {
     instructions = `${escapeHtml(hole.description)} Drag your ball to aim, release to shoot.`;
   }
 
+  const badge = hole.colors
+    ? `<div class="golf-club-badge" style="--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};">
+        <span class="golf-club-crest">${escapeHtml(hole.crest)}</span>
+        <span class="golf-club-name">${escapeHtml(hole.club)}</span>
+      </div>`
+    : "";
+
   return `
     <div class="card">
       <h2>⛳ Football Golf</h2>
+      ${badge}
       <p class="sub">Hole ${holeIndex + 1} of ${GOLF_HOLES.length}: ${escapeHtml(hole.name)} — Par ${hole.par}${!answered ? ` — Stroke ${myStrokes + 1}` : ""}</p>
       ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
       ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered)}
@@ -2462,8 +2520,11 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
   }
 
   const dragging = dragState?.subPhase === "dragging";
+  const colorStyle = hole.colors ? `--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};` : "";
+  const tint = hole.colors ? `<div class="golf-course-tint"></div>` : "";
   return `
-    <div class="golf-course${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}">
+    <div class="golf-course${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}" style="${colorStyle}">
+      ${tint}
       ${bunkers}
       <div class="golf-green-circle" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-pin" style="left:${hole.pin.x}%; top:${hole.pin.y}%;">⛳</div>

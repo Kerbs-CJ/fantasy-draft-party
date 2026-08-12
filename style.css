@@ -262,6 +262,47 @@ input::placeholder { color: #6c9b83; }
   background: #d9c17a;
   opacity: 0.85;
 }
+/* Per-hole club theming — a faint colour wash over the grass using each
+   hole's --club-primary/--club-secondary (set inline per hole, see
+   renderGolfCourse), plus a small crest badge shown above the course in
+   renderGolf(). Both purely cosmetic, no gameplay effect. */
+.golf-course-tint {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--club-primary) 0%, transparent 38%, transparent 62%, var(--club-secondary) 100%);
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+.golf-club-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 10px;
+}
+.golf-club-crest {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--club-primary) 50%, var(--club-secondary) 50%);
+  border: 2px solid rgba(255,255,255,0.85);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.65);
+}
+.golf-club-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--sub);
+}
 .golf-green-circle {
   position: absolute;
   width: 30%;
