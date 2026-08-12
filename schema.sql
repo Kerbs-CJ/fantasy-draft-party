@@ -60,7 +60,8 @@ alter publication supabase_realtime add table rooms;
 alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table scores;
 
--- ── Draft Tracker ────────────────────────────────────────────
+-- Draft Tracker
+-- ------------
 -- A separate page (draft-tracker.html), reached from the reveal screen,
 -- for tracking an actual Premier League fantasy draft after the party's
 -- draft ORDER has been decided. Reuses the same room/players tables (a
