@@ -22,9 +22,16 @@ for the free real-time backend that syncs players/scores across devices.
 ### 2. Create the database tables
 1. In your new project, open **SQL Editor** → **New query**.
 2. Paste the entire contents of [`schema.sql`](./schema.sql) and click **Run**.
-3. If the last three `alter publication` lines complain about already being
+3. If the `alter publication` lines complain about already being
    added, that's fine — ignore it. Otherwise, double check under
-   **Database → Replication** that `rooms`, `players`, and `scores` are toggled on.
+   **Database → Replication** that `rooms`, `players`, `scores`, and
+   `draft_picks` are toggled on.
+
+Safe to re-run any time the schema changes (e.g. after pulling an update
+that adds a table) — every statement in it is idempotent
+(`if not exists` / `drop policy if exists`), so running the whole file
+again on a project that already has some of it won't error or duplicate
+anything.
 
 ### 3. Get your API keys
 1. Go to **Project Settings → API**.
@@ -117,7 +124,32 @@ it updates automatically within a minute or two.
    strokes over par). After all 5 holes, host clicks **Show final
    standings** — final placement (highest total first) adds to the
    combined leaderboard.
-7. Host clicks **Reveal Draft Order!** for the big reveal.
+7. Host clicks **Reveal Draft Order!** for the big reveal. Once it finishes
+   counting down, a **📋 Go to Draft Tracker** button appears — see below.
+
+## Draft Tracker
+
+A separate page (`draft-tracker.html`), reached from the button at the end
+of the reveal, for tracking the *actual* Fantasy Premier League draft live —
+every player picks real footballers in the order the party just decided,
+and everyone watching sees picks land instantly on every device.
+
+- The full current-season Premier League player pool (`players.js`, ~580
+  players from the official [Fantasy Premier League API](https://fantasy.premierleague.com/en/))
+  is searchable and filterable by position (GKP/DEF/MID/FWD) and club.
+- Straight pick order every round (same order the reveal showed, repeating
+  round after round — not a snake draft), 15 rounds per drafter (a
+  standard FPL squad: 2 GKP, 5 DEF, 5 MID, 3 FWD), no timer — whoever's
+  turn it is just picks when they're ready.
+- A footballer can only be taken once per room; the moment someone drafts
+  one, it's greyed out with their name on it for everyone, live.
+- This page reuses your existing party session (no separate login) — it
+  only works in a browser that already joined that room in the main app,
+  since the draft order is computed from that room's actual game results.
+- The player pool is a static snapshot fetched at build time (that FPL API
+  doesn't allow live requests from a browser on another site), so it'll
+  drift from reality as transfers happen — refresh `players.js` from the
+  same API each season/window if you want it current.
 
 Heads up: round robin means more matches than a knockout bracket would (10
 instead of 4 for a 5-player group) — plan for it to take a while longer,
@@ -167,9 +199,11 @@ with any static file server (`npx serve .`, VS Code Live Server, etc).
 
 ## Files
 
-- `index.html` / `style.css` — page shell and styling
-- `app.js` — all game logic and Supabase realtime wiring
+- `index.html` / `style.css` — page shell and styling (shared by both pages)
+- `app.js` — all party-game logic and Supabase realtime wiring
 - `content.js` — the Guess the Missing Club and Guess the Footballer content
   banks (add/edit entries here)
+- `draft-tracker.html` / `draft-tracker.js` — the separate Draft Tracker page
+- `players.js` — the static Premier League player pool the tracker drafts from
 - `config.js` — your Supabase project URL + anon key
 - `schema.sql` — database schema to run once in Supabase

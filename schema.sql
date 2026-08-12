@@ -59,3 +59,31 @@ create policy "public write scores" on scores for insert with check (true);
 alter publication supabase_realtime add table rooms;
 alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table scores;
+
+-- ── Draft Tracker ────────────────────────────────────────────
+-- A separate page (draft-tracker.html), reached from the reveal screen,
+-- for tracking an actual Premier League fantasy draft after the party's
+-- draft ORDER has been decided. Reuses the same room/players tables (a
+-- drafter is just one of the existing `players` rows) — this table is
+-- only the picks themselves. `pl_player_id` is a Premier League player's
+-- id from the static players.js pool (PL_PLAYERS), not a row in this
+-- app's own `players` table — named differently to keep the two kinds
+-- of "player" from being confused with each other.
+create table if not exists draft_picks (
+  id uuid primary key default gen_random_uuid(),
+  room_code text not null references rooms(code) on delete cascade,
+  pick_number int not null, -- 1-indexed overall pick, drives whose-turn-is-it math client-side
+  pl_player_id int not null, -- id into PL_PLAYERS (players.js), i.e. the real footballer taken
+  drafter_id uuid not null references players(id) on delete cascade, -- who took them
+  created_at timestamptz not null default now(),
+  unique (room_code, pl_player_id), -- a footballer can only be drafted once per room
+  unique (room_code, pick_number) -- and a pick slot can only be filled once — the safety net against two people submitting the same turn at the same time
+);
+
+alter table draft_picks enable row level security;
+drop policy if exists "public read draft_picks" on draft_picks;
+drop policy if exists "public write draft_picks" on draft_picks;
+create policy "public read draft_picks" on draft_picks for select using (true);
+create policy "public write draft_picks" on draft_picks for insert with check (true);
+
+alter publication supabase_realtime add table draft_picks;

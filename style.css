@@ -109,6 +109,9 @@ input::placeholder { color: #6c9b83; }
   font-weight: 600;
   cursor: pointer;
   margin-top: 10px;
+  text-decoration: none; /* .btn is also used on <a> tags (e.g. the draft tracker links) — buttons don't need this, but links otherwise get underlined */
+  text-align: center;
+  box-sizing: border-box;
 }
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -588,6 +591,19 @@ input::placeholder { color: #6c9b83; }
   to { transform: scale(1); opacity: 1; }
 }
 
+/* Present in the DOM from the moment the reveal card renders (not
+   inserted later), just invisible — startRevealAnimation toggles
+   .visible via a plain class change once the countdown finishes, which
+   transition can animate correctly (there's a real prior painted state
+   to animate FROM here, unlike inserting an already-revealed element —
+   see the note above renderReveal). */
+.reveal-tracker-btn {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.reveal-tracker-btn.visible { opacity: 1; pointer-events: auto; }
+
 .confetti {
   position: fixed;
   top: -20px;
@@ -947,3 +963,128 @@ code {
   color: #2a1a00;
   font-weight: 700;
 }
+
+/* ── Draft Tracker (draft-tracker.html/js) ──────────────────── */
+/* Wider than the party app's #app — this page is a filterable list of
+   580+ players plus a roster panel, not a single-column card flow, so it
+   benefits from real horizontal room on anything wider than a phone. */
+body.draft-tracker #app { max-width: 900px; }
+
+.dt-banner {
+  text-align: center;
+  padding: 16px 20px;
+}
+.dt-banner.mine {
+  border-color: var(--accent2);
+  box-shadow: 0 0 0 1px var(--accent2), 0 10px 30px rgba(6,214,160,0.25);
+}
+.dt-banner-done { border-color: var(--accent); }
+
+.dt-rosters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.dt-roster {
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+}
+.dt-roster.on-clock {
+  border-color: var(--accent2);
+  box-shadow: 0 0 0 1px var(--accent2);
+}
+.dt-roster-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.dt-roster-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.dt-pos-count {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  color: var(--sub);
+}
+.dt-pos-count.full { background: rgba(6,214,160,0.18); color: var(--accent2); }
+.dt-roster .player-list.compact {
+  margin-top: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.dt-filters { padding: 16px 20px; }
+.dt-filter-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.dt-filter-row select {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.dt-player-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-top: 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+}
+.dt-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.dt-player-row:last-child { border-bottom: none; }
+.dt-player-row.taken { opacity: 0.5; }
+.dt-player-pos {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 6px;
+  min-width: 34px;
+  text-align: center;
+}
+.dt-pos-gkp { background: rgba(255,209,102,0.2); color: var(--accent); }
+.dt-pos-def { background: rgba(6,214,160,0.2); color: var(--accent2); }
+.dt-pos-mid { background: rgba(17,138,178,0.25); color: #7fd4f0; }
+.dt-pos-fwd { background: rgba(239,71,111,0.2); color: #ff9bb3; }
+.dt-player-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-player-team { flex: none; font-size: 12px; width: 38px; }
+.dt-taken-by {
+  flex: none;
+  font-size: 12px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-draft-btn {
+  flex: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, var(--accent2), #04a97f);
+  color: #04241a;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.dt-draft-btn:active { transform: scale(0.97); }

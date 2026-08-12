@@ -3054,10 +3054,19 @@ function renderReveal() {
   const totals = totalsByPlayer();
   const order = totals.slice().reverse(); // reveal last pick first, building to #1
   setTimeout(startRevealAnimation, 50);
+  // The "Go to draft tracker" link is in the DOM from the start rather
+  // than added later, but hidden (opacity:0, see .reveal-tracker-btn) —
+  // startRevealAnimation reveals it via a plain class toggle once the
+  // countdown actually finishes, not a render() call. A render() here
+  // would replace the whole card, including #reveal-list, which only
+  // ever gets its content from direct DOM appends during the animation
+  // (see showNext below) — re-rendering mid- or post-animation would
+  // wipe it back to empty.
   return `
     <div class="card">
       <h2>🏆 Draft Order</h2>
       <div id="reveal-list" class="reveal-list"></div>
+      <a id="draft-tracker-link" class="btn primary reveal-tracker-btn" href="draft-tracker.html?room=${encodeURIComponent(room.code)}">📋 Go to Draft Tracker</a>
     </div>`;
 }
 
@@ -3072,6 +3081,7 @@ function startRevealAnimation() {
   const showNext = () => {
     if (i >= order.length) {
       spawnConfetti();
+      document.getElementById("draft-tracker-link")?.classList.add("visible");
       return;
     }
     const pickNumber = order.length - i;
