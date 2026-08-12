@@ -1020,6 +1020,8 @@ body.draft-tracker #app { max-width: 900px; }
   max-height: 140px;
   overflow-y: auto;
 }
+.dt-roster-budget { font-variant-numeric: tabular-nums; }
+.dt-roster-budget.tight { color: var(--danger); font-weight: 700; }
 
 .dt-filters { padding: 16px 20px; }
 .dt-filter-row {
@@ -1053,6 +1055,7 @@ body.draft-tracker #app { max-width: 900px; }
 }
 .dt-player-row:last-child { border-bottom: none; }
 .dt-player-row.taken { opacity: 0.5; }
+.dt-player-row.unaffordable { opacity: 0.55; }
 .dt-player-pos {
   flex: none;
   font-size: 11px;
@@ -1068,6 +1071,14 @@ body.draft-tracker #app { max-width: 900px; }
 .dt-pos-fwd { background: rgba(239,71,111,0.2); color: #ff9bb3; }
 .dt-player-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dt-player-team { flex: none; font-size: 12px; width: 38px; }
+.dt-player-price {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  width: 44px;
+  font-variant-numeric: tabular-nums;
+}
 .dt-taken-by {
   flex: none;
   font-size: 12px;

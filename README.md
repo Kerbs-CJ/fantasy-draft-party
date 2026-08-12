@@ -141,15 +141,26 @@ and everyone watching sees picks land instantly on every device.
   round after round — not a snake draft), 15 rounds per drafter (a
   standard FPL squad: 2 GKP, 5 DEF, 5 MID, 3 FWD), no timer — whoever's
   turn it is just picks when they're ready.
+- A real £100m budget, spent down by each player's actual FPL price as
+  you draft them (shown on every player and every roster) — you can't
+  draft anyone you can't afford, and the tracker always keeps enough
+  left over for at least the cheapest player in the pool for every
+  remaining empty slot, so nobody can spend themselves into a corner
+  and get stuck unable to fill their squad later.
 - A footballer can only be taken once per room; the moment someone drafts
   one, it's greyed out with their name on it for everyone, live.
+- If a 🤖 dev-test bot is still in the room's player list when it reaches
+  their turn, the host's browser auto-picks a random player they can
+  afford for them after a short pause, so the draft never stalls waiting
+  on one.
 - This page reuses your existing party session (no separate login) — it
   only works in a browser that already joined that room in the main app,
   since the draft order is computed from that room's actual game results.
 - The player pool is a static snapshot fetched at build time (that FPL API
   doesn't allow live requests from a browser on another site), so it'll
-  drift from reality as transfers happen — refresh `players.js` from the
-  same API each season/window if you want it current.
+  drift from reality — both the roster and prices — as transfers happen;
+  refresh `players.js` from the same API each season/window if you want
+  it current.
 
 Heads up: round robin means more matches than a knockout bracket would (10
 instead of 4 for a 5-player group) — plan for it to take a while longer,

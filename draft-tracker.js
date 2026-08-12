@@ -21,6 +21,25 @@ const POSITIONS = ["GKP", "DEF", "MID", "FWD"];
 const SQUAD_SHAPE = { GKP: 2, DEF: 5, MID: 5, FWD: 3 }; // informational only — not enforced pick by pick
 const RENDER_CAP = 150; // keep the DOM bounded on an unfiltered browse of 580+ players; search/filter to see more
 
+// A real budget, not just a squad-size limit — £100m, same convention FPL
+// itself uses, spent down by each player's price (see players.js) as a
+// drafter picks. A pick is only allowed if there's enough LEFT OVER after
+// it to still afford the cheapest player in the pool for every remaining
+// empty slot (see maxAffordableForPick) — without that guard, someone
+// could spend big early and get mathematically stuck later, unable to
+// afford anyone for a mandatory remaining pick.
+const BUDGET = 100;
+const MIN_PRICE = Math.min(...window.PL_PLAYERS.map((p) => p.price));
+
+// Bots are the same 🤖-prefixed dev-mode test players the main party app
+// uses (see DEV_BOT_PREFIX/isDevBot in app.js) — if one's still sitting in
+// the room's player list when the real draft happens, it needs someone to
+// actually take its turns. See ensureBotAutoPick.
+const DEV_BOT_PREFIX = "🤖 ";
+function isDevBot(player) {
+  return !!player && player.name.startsWith(DEV_BOT_PREFIX);
+}
+
 let sb = null;
 let session = null; // {roomCode, playerId, name, isHost} — from the main app's localStorage
 let room = null;
@@ -35,6 +54,7 @@ const local = {
   teamFilter: "All",
   error: "",
   submitting: false,
+  botScheduledForPick: null, // pick_number a bot pick's already been scheduled for on this device, so a later render doesn't double-schedule it
 };
 
 init();
@@ -161,11 +181,31 @@ function teamsList() {
   return Array.from(new Set(window.PL_PLAYERS.map((p) => p.team))).sort();
 }
 
-async function draftPlayer(plPlayerId) {
+// How much a drafter has spent / has left of their £100m.
+function spentBy(drafterId) {
+  return rosterFor(drafterId).reduce((sum, pl) => sum + pl.price, 0);
+}
+function budgetRemaining(drafterId) {
+  return BUDGET - spentBy(drafterId);
+}
+// The most a drafter can spend on THIS pick specifically — their full
+// remaining budget, minus enough to still afford the cheapest player in
+// the whole pool for every slot that'll still be empty after this pick.
+function maxAffordableForPick(drafterId) {
+  const roster = rosterFor(drafterId);
+  const slotsLeftAfterThisPick = ROUNDS - roster.length - 1;
+  const reserve = MIN_PRICE * Math.max(0, slotsLeftAfterThisPick);
+  return budgetRemaining(drafterId) - reserve;
+}
+
+// The one place an actual draft_picks row gets written — used by both a
+// human's own click (draftPlayer) and a bot's auto-pick
+// (ensureBotAutoPick), so there's exactly one insert/error-handling path
+// regardless of who's picking.
+async function submitPick(plPlayerId, drafterId) {
   const info = currentPickInfo();
   if (info.done || local.submitting) return;
-  const me = myPlayer();
-  if (!me || !info.drafter || info.drafter.id !== me.id) return; // not your turn — the button shouldn't even be visible, but double-check
+  if (!info.drafter || info.drafter.id !== drafterId) return;
   if (pickedPlayerIds().has(plPlayerId)) return;
   local.submitting = true;
   local.error = "";
@@ -174,7 +214,7 @@ async function draftPlayer(plPlayerId) {
     room_code: room.code,
     pick_number: info.pickNumber,
     pl_player_id: plPlayerId,
-    drafter_id: me.id,
+    drafter_id: drafterId,
   });
   local.submitting = false;
   if (error) {
@@ -191,6 +231,50 @@ async function draftPlayer(plPlayerId) {
   }
   await loadPicks();
   render();
+}
+
+async function draftPlayer(plPlayerId) {
+  const me = myPlayer();
+  if (!me) return;
+  const info = currentPickInfo();
+  if (info.done || !info.drafter || info.drafter.id !== me.id) return; // not your turn — the button shouldn't even be visible, but double-check
+  const pl = window.PL_PLAYERS.find((p) => p.id === plPlayerId);
+  if (pl && pl.price > maxAffordableForPick(me.id)) return; // over budget — the button shouldn't be visible for this either, but double-check
+  await submitPick(plPlayerId, me.id);
+}
+
+// If it's a bot's turn, have this browser pick for it after a short,
+// human-feeling pause — but only ONE browser should actually do this
+// (whoever's viewing as host), not every device watching the board at
+// once; the unique constraints on draft_picks would stop an actual
+// double-pick either way, but there's no reason to have every viewer's
+// browser racing to submit the same insert.
+function ensureBotAutoPick() {
+  const info = currentPickInfo();
+  if (info.done || !info.drafter || !isDevBot(info.drafter)) return;
+  if (!myPlayer()?.is_host) return;
+  if (local.botScheduledForPick === info.pickNumber) return;
+  local.botScheduledForPick = info.pickNumber;
+  const drafterId = info.drafter.id;
+  const pickNumber = info.pickNumber;
+  setTimeout(async () => {
+    // Re-check nothing moved on while this was waiting (a human elsewhere
+    // could have taken over, or someone else's browser already covered
+    // this exact pick).
+    const fresh = currentPickInfo();
+    if (fresh.done || !fresh.drafter || fresh.drafter.id !== drafterId || fresh.pickNumber !== pickNumber) return;
+    const choice = randomAffordablePlayer(drafterId);
+    if (!choice) return; // shouldn't happen given the budget reserve, but don't crash if it somehow does
+    await submitPick(choice.id, drafterId);
+  }, 1200 + Math.random() * 900);
+}
+
+function randomAffordablePlayer(drafterId) {
+  const taken = pickedPlayerIds();
+  const maxPrice = maxAffordableForPick(drafterId);
+  const pool = window.PL_PLAYERS.filter((p) => !taken.has(p.id) && p.price <= maxPrice);
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function onClick(e) {
@@ -233,6 +317,7 @@ function render() {
     return;
   }
   APP_EL.innerHTML = renderTopBar() + renderBoard();
+  ensureBotAutoPick();
 }
 
 function renderTopBar() {
@@ -283,11 +368,17 @@ function renderTurnBanner(info, me) {
       </div>`;
   }
   const isMine = !!me && info.drafter.id === me.id;
+  const left = budgetRemaining(info.drafter.id);
   return `
     <div class="card dt-banner${isMine ? " mine" : ""}">
       <p class="sub" style="margin-bottom:4px">Round ${info.round} of ${ROUNDS} · Pick ${info.pickNumber} of ${info.totalPicks}</p>
       <h2>${isMine ? "🟢 You're on the clock!" : `⏳ ${escapeHtml(info.drafter.name)}'s pick`}</h2>
+      <p class="sub" style="margin:6px 0 0">${fmtMoney(left)} left of ${fmtMoney(BUDGET)}</p>
     </div>`;
+}
+
+function fmtMoney(n) {
+  return `£${n.toFixed(1)}m`;
 }
 
 function renderRosters(info) {
@@ -301,18 +392,20 @@ function renderRosters(info) {
             const counts = { GKP: 0, DEF: 0, MID: 0, FWD: 0 };
             for (const pl of roster) counts[pl.pos]++;
             const onClock = !info.done && info.drafter.id === p.id;
+            const left = budgetRemaining(p.id);
             return `
               <div class="dt-roster${onClock ? " on-clock" : ""}">
                 <div class="dt-roster-head">
                   <b>${escapeHtml(p.name)}</b>
                   <span class="sub">${roster.length}/${ROUNDS}</span>
                 </div>
+                <p class="sub dt-roster-budget${left < MIN_PRICE * 2 ? " tight" : ""}" style="margin:2px 0 0">${fmtMoney(left)} left</p>
                 <div class="dt-roster-counts">
                   ${POSITIONS.map((pos) => `<span class="dt-pos-count${counts[pos] >= SQUAD_SHAPE[pos] ? " full" : ""}">${pos} ${counts[pos]}/${SQUAD_SHAPE[pos]}</span>`).join("")}
                 </div>
                 ${
                   roster.length
-                    ? `<ul class="player-list compact">${roster.map((pl) => `<li>${escapeHtml(pl.name)} <span class="sub">(${pl.pos} · ${escapeHtml(pl.teamShort)})</span></li>`).join("")}</ul>`
+                    ? `<ul class="player-list compact">${roster.map((pl) => `<li>${escapeHtml(pl.name)} <span class="sub">(${pl.pos} · ${escapeHtml(pl.teamShort)} · ${fmtMoney(pl.price)})</span></li>`).join("")}</ul>`
                     : `<p class="sub" style="margin:6px 0 0">No picks yet</p>`
                 }
               </div>`;
@@ -353,32 +446,39 @@ function renderPlayerList(info, me) {
   filtered.sort((a, b) => a.name.localeCompare(b.name));
   const total = filtered.length;
   const shown = filtered.slice(0, RENDER_CAP);
-  const canDraft = !local.submitting && !info.done && !!me && info.drafter.id === me.id;
+  const myTurn = !local.submitting && !info.done && !!me && info.drafter.id === me.id;
+  const maxPrice = myTurn ? maxAffordableForPick(me.id) : -1;
 
   return `
     <div class="card">
       <h3>Players${total ? ` (${total})` : ""}</h3>
+      ${myTurn ? `<p class="sub" style="margin-top:-8px">You can spend up to ${fmtMoney(maxPrice)} on this pick (keeping enough for the rest of your squad).</p>` : ""}
       <div class="dt-player-list">
-        ${shown.length ? shown.map((p) => renderPlayerRow(p, taken, canDraft)).join("") : `<p class="sub">No players match.</p>`}
+        ${shown.length ? shown.map((p) => renderPlayerRow(p, taken, myTurn, maxPrice)).join("") : `<p class="sub">No players match.</p>`}
       </div>
       ${total > RENDER_CAP ? `<p class="sub" style="margin-top:10px">+${total - RENDER_CAP} more — narrow your search to see them.</p>` : ""}
     </div>`;
 }
 
-function renderPlayerRow(p, taken, canDraft) {
+function renderPlayerRow(p, taken, myTurn, maxPrice) {
   const takenPick = taken.has(p.id) ? picks.find((pk) => pk.pl_player_id === p.id) : null;
   const takenBy = takenPick ? players.find((pl) => pl.id === takenPick.drafter_id) : null;
+  const affordable = p.price <= maxPrice;
+  const canDraft = myTurn && affordable;
   return `
-    <div class="dt-player-row${takenPick ? " taken" : ""}">
+    <div class="dt-player-row${takenPick ? " taken" : ""}${!takenPick && myTurn && !affordable ? " unaffordable" : ""}">
       <span class="dt-player-pos dt-pos-${p.pos.toLowerCase()}">${p.pos}</span>
       <span class="dt-player-name">${escapeHtml(p.name)}</span>
       <span class="dt-player-team sub">${escapeHtml(p.teamShort)}</span>
+      <span class="dt-player-price">${fmtMoney(p.price)}</span>
       ${
         takenPick
           ? `<span class="dt-taken-by">${escapeHtml(takenBy?.name || "someone")}</span>`
           : canDraft
             ? `<button class="dt-draft-btn" data-action="draft" data-id="${p.id}">Draft</button>`
-            : `<span class="dt-taken-by sub">—</span>`
+            : myTurn && !affordable
+              ? `<span class="dt-taken-by sub">Over budget</span>`
+              : `<span class="dt-taken-by sub">—</span>`
       }
     </div>`;
 }
