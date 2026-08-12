@@ -11,14 +11,15 @@ const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only
 // the bottom, pin near the top) that's part of shared room state, so a
 // shot's outcome is visible to everyone as a ball moving across the
 // shared course, not just a final result. The swing itself is a single
-// drag gesture on the ball, joystick-style: drag toward where you want to
-// shoot (the aim line shows exactly where it'll land) and set power (how
-// far you drag, capped at GOLF_MAX_DRAG_PERCENT of the course's own size —
-// device-independent since it's a percentage of the rendered course, not
-// raw pixels), release to shoot. Nothing is randomized or timing-based —
-// what you drag is exactly what you get, so the only skill is judging
-// distance and angle by eye. `bunkers` are decorative only (visual
-// variety per hole), not a gameplay penalty yet.
+// drag gesture on the ball, slingshot-style: pull back opposite of where
+// you want to shoot (the aim line always shows exactly where it's about
+// to land) and set power (how far you pull, capped at
+// GOLF_MAX_DRAG_PERCENT of the course's own size — device-independent
+// since it's a percentage of the rendered course, not raw pixels),
+// release to shoot. Nothing is randomized or timing-based — what you drag
+// is exactly what you get, so the only skill is judging distance and
+// angle by eye. `bunkers` are decorative only (visual variety per hole),
+// not a gameplay penalty yet.
 const GOLF_HOLES = [
   {
     name: "The Approach",
@@ -923,15 +924,15 @@ async function finishRoundRobin() {
 // element's own on-screen size — dividing by it turns the raw pixel drag
 // into a percentage of the course, so results are the same shot on a
 // phone or a tablet, not just "same number of pixels dragged". The shot
-// fires the SAME way you drag — direct/joystick convention, not a
-// slingshot pull-back — so the aim line always shows exactly where the
-// ball's about to go, and dragging it onto the spot you want is the shot.
+// fires the OPPOSITE way from the drag — slingshot convention: pull back
+// south, the ball (and the aim line/dot, which always shows exactly
+// where it's about to land) goes north.
 function golfDragToShot(courseRect, ballPos, startClient, currentClient) {
   const dxPercent = ((currentClient.x - startClient.x) / courseRect.width) * 100;
   const dyPercent = ((currentClient.y - startClient.y) / courseRect.height) * 100;
   const dragMagnitude = Math.hypot(dxPercent, dyPercent);
   const power = clamp(dragMagnitude / GOLF_MAX_DRAG_PERCENT, 0, 1);
-  const angle = Math.atan2(dyPercent, dxPercent);
+  const angle = Math.atan2(-dyPercent, -dxPercent);
   const travel = power * GOLF_MAX_SHOT_DISTANCE;
   const endX = clamp(ballPos.x + Math.cos(angle) * travel, 3, 97);
   const endY = clamp(ballPos.y + Math.sin(angle) * travel, 3, 97);
@@ -2199,7 +2200,7 @@ function renderGolfIntro() {
       <p>A fixed ${GOLF_HOLES.length}-hole course, played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>One drag per swing, right on the ball. Press down and drag in the direction you want to shoot — a line shows exactly where it'll land as you move — then let go. How far you drag sets the power; the angle sets the direction. There's no timer and no hidden target to guess — what you see is exactly what you get, so it's entirely about judging distance and angle by eye.</p>
+      <p>One drag per swing, right on the ball — like a slingshot. Press down and pull back in the <b>opposite</b> direction from where you want to shoot (pull south, the ball flies north) — a line shows exactly where it'll land as you move — then let go. How far you pull sets the power; the angle sets the direction. There's no timer and no hidden target to guess — what you see is exactly what you get, so it's entirely about judging distance and angle by eye.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
