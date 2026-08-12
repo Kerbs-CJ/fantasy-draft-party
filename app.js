@@ -2308,18 +2308,12 @@ function renderGolfPractice() {
     <div class="card">
       <h2>🏌️ Driving Range</h2>
       <p class="sub">Practice swings only — nothing here counts. Get a feel for the drag before the real round.</p>
-      <div class="side-layout">
-        <div class="side-main">
-          <p class="sub" style="text-align:center">${instructions}</p>
-          ${renderGolfCourse(GOLF_PRACTICE_HOLE, {}, local.practiceBallAnim, local.practice, true, landingMarkers)}
-        </div>
-        <div class="side-roster">
-          <h3>Lanes</h3>
-          <ul class="player-list compact">
-            ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceSwingLabel(gs.swings[p.id])}</li>`).join("")}
-          </ul>
-        </div>
-      </div>
+      <p class="sub" style="text-align:center">${instructions}</p>
+      ${renderGolfCourse(GOLF_PRACTICE_HOLE, {}, local.practiceBallAnim, local.practice, true, landingMarkers)}
+      <h3>Lanes</h3>
+      <ul class="player-list compact">
+        ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceSwingLabel(gs.swings[p.id])}</li>`).join("")}
+      </ul>
       ${
         isHost
           ? `<div class="guess-host-controls">
@@ -2370,18 +2364,12 @@ function renderGolf() {
     <div class="card">
       <h2>⛳ Football Golf</h2>
       <p class="sub">Hole ${holeIndex + 1} of ${GOLF_HOLES.length}: ${escapeHtml(hole.name)} — Par ${hole.par}${!answered ? ` — Stroke ${myStrokes + 1}` : ""}</p>
-      <div class="side-layout">
-        <div class="side-main">
-          ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
-          ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered)}
-        </div>
-        <div class="side-roster">
-          <h3>Totals</h3>
-          <ul class="player-list compact">
-            ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total}</li>`).join("")}
-          </ul>
-        </div>
-      </div>
+      ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
+      ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered)}
+      <h3>Totals</h3>
+      <ul class="player-list compact">
+        ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total}</li>`).join("")}
+      </ul>
       ${renderGolfFinishers(gs, holeIndex, finished)}
       ${
         isHost
