@@ -11,14 +11,14 @@ const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only
 // the bottom, pin near the top) that's part of shared room state, so a
 // shot's outcome is visible to everyone as a ball moving across the
 // shared course, not just a final result. The swing itself is a single
-// drag gesture on the ball, slingshot-style: pull back to aim (the shot
-// fires the opposite way) and set power (how far you pull, capped at
-// GOLF_MAX_DRAG_PERCENT of the course's own size — device-independent
-// since it's a percentage of the rendered course, not raw pixels), release
-// to shoot. Nothing is randomized or timing-based — what you drag is
-// exactly what you get, so the only skill is judging distance and angle
-// by eye, same as a real mini-golf/slingshot mechanic. `bunkers` are
-// decorative only (visual variety per hole), not a gameplay penalty yet.
+// drag gesture on the ball, joystick-style: drag toward where you want to
+// shoot (the aim line shows exactly where it'll land) and set power (how
+// far you drag, capped at GOLF_MAX_DRAG_PERCENT of the course's own size —
+// device-independent since it's a percentage of the rendered course, not
+// raw pixels), release to shoot. Nothing is randomized or timing-based —
+// what you drag is exactly what you get, so the only skill is judging
+// distance and angle by eye. `bunkers` are decorative only (visual
+// variety per hole), not a gameplay penalty yet.
 const GOLF_HOLES = [
   {
     name: "The Approach",
@@ -57,14 +57,14 @@ const GOLF_HOLES = [
     ],
   },
 ];
-// Dragging back GOLF_MAX_DRAG_PERCENT of the course's own rendered
+// Dragging GOLF_MAX_DRAG_PERCENT of the course's own rendered
 // width/height (whichever axis the drag lies closer to) maxes out power.
 // A full-power shot travels GOLF_MAX_SHOT_DISTANCE course-percent units —
 // deliberately less than any hole's tee-to-pin distance, so even a
 // perfect shot can't 1-putt a hole from the tee; you're always judging
 // how much of the remaining distance to commit to.
-const GOLF_MAX_DRAG_PERCENT = 55;
-const GOLF_MAX_SHOT_DISTANCE = 42;
+const GOLF_MAX_DRAG_PERCENT = 45;
+const GOLF_MAX_SHOT_DISTANCE = 60;
 const GOLF_MIN_DRAG_PERCENT = 4; // below this, a release cancels instead of firing a near-zero shot
 const GOLF_HOLED_THRESHOLD = 5; // how close (course %) counts as "in the hole"
 const GOLF_MERCY_STROKES = 3; // holes forcibly finish at par + this, however far short
@@ -923,14 +923,15 @@ async function finishRoundRobin() {
 // element's own on-screen size — dividing by it turns the raw pixel drag
 // into a percentage of the course, so results are the same shot on a
 // phone or a tablet, not just "same number of pixels dragged". The shot
-// fires the OPPOSITE way from the drag (slingshot / mini-golf
-// convention): pull back down-left, the ball flies up-right.
+// fires the SAME way you drag — direct/joystick convention, not a
+// slingshot pull-back — so the aim line always shows exactly where the
+// ball's about to go, and dragging it onto the spot you want is the shot.
 function golfDragToShot(courseRect, ballPos, startClient, currentClient) {
   const dxPercent = ((currentClient.x - startClient.x) / courseRect.width) * 100;
   const dyPercent = ((currentClient.y - startClient.y) / courseRect.height) * 100;
   const dragMagnitude = Math.hypot(dxPercent, dyPercent);
   const power = clamp(dragMagnitude / GOLF_MAX_DRAG_PERCENT, 0, 1);
-  const angle = Math.atan2(-dyPercent, -dxPercent);
+  const angle = Math.atan2(dyPercent, dxPercent);
   const travel = power * GOLF_MAX_SHOT_DISTANCE;
   const endX = clamp(ballPos.x + Math.cos(angle) * travel, 3, 97);
   const endY = clamp(ballPos.y + Math.sin(angle) * travel, 3, 97);
@@ -2198,7 +2199,7 @@ function renderGolfIntro() {
       <p>A fixed ${GOLF_HOLES.length}-hole course, played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>One drag per swing, right on the ball — like a slingshot. Press down and pull back in the <b>opposite</b> direction from where you want to shoot (pull down-left, the ball flies up-right), then let go. How far you pull sets the power; the angle sets the direction. There's no timer and no hidden target to guess — what you drag is exactly what you get, so it's entirely about judging distance and angle by eye.</p>
+      <p>One drag per swing, right on the ball. Press down and drag in the direction you want to shoot — a line shows exactly where it'll land as you move — then let go. How far you drag sets the power; the angle sets the direction. There's no timer and no hidden target to guess — what you see is exactly what you get, so it's entirely about judging distance and angle by eye.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
@@ -2376,12 +2377,19 @@ function renderGolfCourse(hole, ballPositions, animMap, dragState, canDrag) {
       const moved = prev && (prev.x !== ball.x || prev.y !== ball.y);
       animMap[p.id] = { x: ball.x, y: ball.y };
       const holedOut = !!ball.holedOut;
-      const style = moved
-        ? `--from-x:${prev.x}%; --from-y:${prev.y}%; --to-x:${ball.x}%; --to-y:${ball.y}%;`
-        : `left:${ball.x}%; top:${ball.y}%;`;
+      let style;
+      if (moved) {
+        // Longer/harder shots take a beat longer to roll than a tap-in —
+        // makes the animation read as an actual roll, not a snap.
+        const dist = Math.hypot(ball.x - prev.x, ball.y - prev.y);
+        const flyMs = Math.round(clamp(450 + dist * 9, 500, 1600));
+        style = `--from-x:${prev.x}%; --from-y:${prev.y}%; --to-x:${ball.x}%; --to-y:${ball.y}%; --fly-duration:${flyMs}ms;`;
+      } else {
+        style = `left:${ball.x}%; top:${ball.y}%;`;
+      }
       return `
         <div class="golf-course-ball${moved ? " flying" : ""}${holedOut ? " holed" : ""}" style="${style}" title="${escapeHtml(p.name)}">
-          <span>⚽</span>
+          <span class="golf-ball-emoji">⚽</span>
           <span class="golf-course-ball-label">${escapeHtml(p.name)}</span>
         </div>`;
     })

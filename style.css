@@ -216,8 +216,20 @@ input::placeholder { color: #6c9b83; }
 .golf-course.draggable { cursor: grab; touch-action: none; }
 .golf-course.dragging { cursor: grabbing; }
 .golf-aim-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.golf-aim-line { stroke: var(--accent); stroke-width: 0.8; stroke-linecap: round; stroke-dasharray: 2 1.5; }
-.golf-aim-dot { fill: var(--accent); stroke: rgba(0,0,0,0.4); stroke-width: 0.3; }
+.golf-aim-line {
+  stroke: #fff;
+  stroke-width: 0.7;
+  stroke-linecap: round;
+  stroke-dasharray: 2.4 2.2;
+  opacity: 0.92;
+  filter: drop-shadow(0 0 2px rgba(255,255,255,0.7));
+}
+.golf-aim-dot {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 0.6;
+  filter: drop-shadow(0 0 3px rgba(255,255,255,0.85));
+}
 .golf-power-readout {
   position: absolute;
   bottom: 8px;
@@ -266,13 +278,29 @@ input::placeholder { color: #6c9b83; }
    inserted. `@keyframes` sidesteps that: it plays from its own `from`
    state automatically whenever a `.flying` element is inserted, using
    the per-ball --from-x/--from-y -> --to-x/--to-y custom properties set
-   inline by renderGolfCourse(). */
+   inline by renderGolfCourse() (--fly-duration is set alongside them,
+   scaled to how far this particular shot travelled, so a short putt and
+   a full-power drive don't take the same time to roll). Every connected
+   client — the shooter and every spectator alike — independently detects
+   the position change on their own next render and plays this same
+   animation, since the ball's new position comes from shared room state. */
 @keyframes golf-ball-fly {
   from { left: var(--from-x); top: var(--from-y); }
   to { left: var(--to-x); top: var(--to-y); }
 }
+@keyframes golf-ball-roll {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(1080deg); }
+}
 .golf-course-ball.flying {
-  animation: golf-ball-fly 0.6s ease-out forwards;
+  animation-name: golf-ball-fly;
+  animation-duration: var(--fly-duration, 700ms);
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
+.golf-course-ball.flying .golf-ball-emoji {
+  display: inline-block;
+  animation: golf-ball-roll var(--fly-duration, 700ms) linear;
 }
 .golf-course-ball.holed { opacity: 0.5; }
 .golf-course-ball-label {
