@@ -2,7 +2,7 @@
 
 const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
-const MISSING_CLUB_COUNT = 5;
+const MISSING_CLUB_COUNT = 10;
 const MISSING_CLUB_POINTS = 20; // flat — no timer, so no speed bonus
 const GUESS_PLAYER_COUNT = 7;
 const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
@@ -728,12 +728,12 @@ function resolveHeadToHead(group, matches) {
 }
 
 // 100/80/60/40/20 for a 5-player field (a clean 20-point step per place),
-// scaled to whatever the actual player count is. That keeps the shootout's
-// max swing (80, top to bottom) in the same ballpark as Guess the Missing
-// Club's max swing (100 — 5 rounds at up to 20pts each), noticeably gentler than
-// Guess the Footballer's (210 — 7 rounds at up to 30pts each), since the
-// shootout is one placement rather than several independently-scored
-// rounds. rank is 0-indexed (0 = 1st place).
+// scaled to whatever the actual player count is. The shootout's max swing
+// (80, top to bottom) is deliberately gentler than the independently-scored
+// rounds' max swings — Guess the Missing Club's 200 (10 rounds at up to
+// 20pts each) and Guess the Footballer's 210 (7 rounds at up to 30pts
+// each) — since the shootout is one placement rather than several
+// separately-scored rounds. rank is 0-indexed (0 = 1st place).
 function placementPoints(rank, n) {
   return n > 1 ? Math.round(100 - (80 * rank) / (n - 1)) : 100;
 }

@@ -58,7 +58,7 @@ it updates automatically within a minute or two.
    also gets its own explainer screen (format + scoring) right before it
    starts — Guess the Missing Club's, then Guess the Footballer's, then
    the penalty shootout's.
-4. Guess the Missing Club plays first (5 random player career timelines,
+4. Guess the Missing Club plays first (10 random player career timelines,
    one club redacted — everyone answers in their own time on their own
    device, tapping a club then confirming to lock it in; a side panel
    shows who's still deciding. Nobody's answer is revealed until the host
