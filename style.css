@@ -205,10 +205,8 @@ input::placeholder { color: #6c9b83; }
   max-width: 640px;
   /* Landscape, not portrait — wider than tall, and max-height is a second
      constraint so it can't push a laptop-height browser window into
-     scrolling even at full max-width. Current holes were laid out for a
-     tall box (mostly vertical tee-to-pin travel), so they'll look a
-     little squeezed until they're redesigned for a wider course — fine
-     for now. */
+     scrolling even at full max-width. Every hole is laid out for this
+     shape (mostly horizontal/diagonal tee-to-pin travel). */
   aspect-ratio: 4 / 3;
   max-height: 62vh;
   margin: 16px auto;
@@ -218,7 +216,7 @@ input::placeholder { color: #6c9b83; }
   /* Deliberately NOT hidden — the pull-back aim line is allowed to draw
      outside the course box (see golfPullPreview), since there's often not
      enough screen room to pull back while staying inside it. Every other
-     child (bunkers/pin/tee/balls) always sits within the box anyway, so
+     child (obstacles/pin/tee/balls) always sits within the box anyway, so
      this doesn't affect how the course itself looks. */
   overflow: visible;
 }
@@ -255,12 +253,32 @@ input::placeholder { color: #6c9b83; }
   font-weight: 700;
   pointer-events: none;
 }
-.golf-bunker {
+/* Real, solid obstacles (golfCollideBallObstacle in app.js) — the ball
+   actually bounces off these, not just decoration. `.golf-wall` is
+   axis-aligned only (see the note above golfSimulateShot for why —
+   rotation would visually mismatch the physics on this non-square
+   course), sized via plain left/top/width/height percentages same as
+   everything else on the course. `.golf-pillar` uses the same
+   fixed-aspect-ratio trick as .golf-green-circle (width set, height
+   derived from the rendered pixel width) so it's always a true circle on
+   screen regardless of the course's own aspect ratio. */
+.golf-wall {
   position: absolute;
   transform: translate(-50%, -50%);
+  border-radius: 3px;
+  background: linear-gradient(160deg, #9a6a3f 0%, #6b4423 100%);
+  border: 1px solid rgba(0,0,0,0.35);
+  border-top: 3px solid var(--club-secondary, rgba(255,255,255,0.5));
+  box-shadow: 0 2px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.golf-pillar {
+  position: absolute;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: #d9c17a;
-  opacity: 0.85;
+  background: radial-gradient(circle at 35% 30%, #c3c8cd 0%, #6b7075 65%, #45494d 100%);
+  border: 1px solid rgba(0,0,0,0.4);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.45);
 }
 /* Per-hole club theming — a faint colour wash over the grass using each
    hole's --club-primary/--club-secondary (set inline per hole, see

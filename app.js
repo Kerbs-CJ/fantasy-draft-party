@@ -17,31 +17,39 @@ const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only
 // reveals itself on release) — and set power (how far you pull, capped at
 // GOLF_MAX_DRAG_PERCENT of the course's own size — device-independent
 // since it's a percentage of the rendered course, not raw pixels),
-// release to shoot. Nothing is randomized or timing-based — what you drag
-// is exactly what you get, so the only skill is judging distance and
-// angle by eye. `bunkers` are decorative only (visual variety per hole),
-// not a gameplay penalty yet.
+// release to shoot. Shots are a real simulated roll (see golfSimulateShot)
+// — the ball actually bounces off the course boundary and every one of
+// the hole's `obstacles`, losing speed to friction as it goes, not just a
+// straight line from A to B. The only skill is judging distance and angle
+// by eye and reading the course, same as real mini golf.
 //
 // Each hole is themed after a club — `club`/`crest`/`colors` drive a small
-// badge and a subtle colour wash over the course (see renderGolfCourse),
-// and the bunker layout is loosely shaped around something about that
-// club (a cannon barrel, a stand end, a badge ring, etc). Purely cosmetic
-// — tee/pin/par/bunkers all still work exactly like any other hole, only
-// laid out for the course's current landscape (wider-than-tall) shape.
+// badge and a subtle colour wash over the course (see renderGolfCourse) —
+// and `obstacles` are real solid geometry loosely shaped around something
+// about that club (a cannon barrel, a stand end, a badge ring, etc), laid
+// out for the course's current landscape (wider-than-tall) shape. Two
+// obstacle shapes: a rectangle (axis-aligned only — no rotation, so the
+// physics and the CSS box it's rendered as always agree exactly, even
+// though the course itself isn't square) `{x, y, w, h}` (center + full
+// size), or a circular pillar `{x, y, r, shape: "circle"}` (center +
+// radius). Both are solid — see golfCollideBallObstacle.
 const GOLF_HOLES = [
   {
     club: "Arsenal",
     crest: "AFC",
     colors: { primary: "#EF0107", secondary: "#FFFFFF" },
     name: "The Emirates",
-    description: "Fire straight down the barrel — Arsenal's cannon, dead ahead.",
+    description: "Down the cannon barrel, weaving past a couple of loose cannonballs.",
     par: 3,
     tee: { x: 12, y: 50 },
     pin: { x: 86, y: 50 },
-    bunkers: [
-      { x: 35, y: 50, w: 22, h: 6 },
-      { x: 50, y: 38, w: 8, h: 8 },
-      { x: 58, y: 61, w: 7, h: 7 },
+    obstacles: [
+      { x: 50, y: 38, w: 44, h: 4 }, // barrel — top rail
+      { x: 50, y: 62, w: 44, h: 4 }, // barrel — bottom rail
+      { x: 42, y: 46, r: 3.5, shape: "circle" }, // loose cannonball
+      { x: 60, y: 54, r: 3.5, shape: "circle" }, // loose cannonball
+      { x: 78, y: 42, w: 6, h: 4 }, // muzzle flare
+      { x: 78, y: 58, w: 6, h: 4 }, // muzzle flare
     ],
   },
   {
@@ -49,14 +57,15 @@ const GOLF_HOLES = [
     crest: "LFC",
     colors: { primary: "#C8102E", secondary: "#F6EB61" },
     name: "Anfield (The Kop)",
-    description: "Hug the Kop end and let the noise carry you home.",
+    description: "A stand blocks the direct line — go round it, or bank a shot off the terrace.",
     par: 4,
     tee: { x: 14, y: 85 },
     pin: { x: 84, y: 16 },
-    bunkers: [
-      { x: 20, y: 60, w: 30, h: 10 },
-      { x: 55, y: 75, w: 14, h: 8 },
-      { x: 66, y: 35, w: 12, h: 7 },
+    obstacles: [
+      { x: 50, y: 50, w: 34, h: 10 }, // the Kop — the stand itself, blocks the straight line
+      { x: 20, y: 65, w: 14, h: 6 }, // terrace step
+      { x: 68, y: 32, w: 14, h: 6 }, // terrace step
+      { x: 35, y: 30, r: 4, shape: "circle" }, // a steward's post
     ],
   },
   {
@@ -64,15 +73,17 @@ const GOLF_HOLES = [
     crest: "LUFC",
     colors: { primary: "#1D428A", secondary: "#FFCD00" },
     name: "Elland Road",
-    description: "A tight circle guards the green — Leeds' badge in miniature.",
+    description: "The badge ring guards the green — find the gap facing the tee.",
     par: 3,
     tee: { x: 50, y: 88 },
     pin: { x: 50, y: 16 },
-    bunkers: [
-      { x: 50, y: 6, w: 9, h: 5 },
-      { x: 66, y: 16, w: 8, h: 6 },
-      { x: 50, y: 27, w: 9, h: 5 },
-      { x: 34, y: 16, w: 8, h: 6 },
+    obstacles: [
+      { x: 40, y: 55, w: 14, h: 6 }, // approach chicane
+      { x: 62, y: 65, w: 14, h: 6 }, // approach chicane
+      { x: 61, y: 20, r: 5, shape: "circle" }, // badge ring
+      { x: 39, y: 20, r: 5, shape: "circle" }, // badge ring
+      { x: 43, y: 11, r: 5, shape: "circle" }, // badge ring
+      { x: 57, y: 11, r: 5, shape: "circle" }, // badge ring — gap left open facing the tee
     ],
   },
   {
@@ -80,14 +91,15 @@ const GOLF_HOLES = [
     crest: "MUFC",
     colors: { primary: "#DA291C", secondary: "#FBE122" },
     name: "Old Trafford (Theatre of Dreams)",
-    description: "A dramatic double-bend down the tunnel and onto the pitch.",
+    description: "A dramatic double-bend — slalom the tunnel wall to wall.",
     par: 4,
     tee: { x: 88, y: 80 },
     pin: { x: 12, y: 18 },
-    bunkers: [
-      { x: 65, y: 60, w: 14, h: 9 },
-      { x: 45, y: 50, w: 12, h: 8 },
-      { x: 28, y: 35, w: 14, h: 9 },
+    obstacles: [
+      { x: 65, y: 60, w: 6, h: 34 }, // bend 1
+      { x: 45, y: 42, w: 34, h: 6 }, // bend 2
+      { x: 25, y: 30, w: 6, h: 30 }, // bend 3
+      { x: 55, y: 72, r: 4, shape: "circle" }, // a stray post
     ],
   },
   {
@@ -95,32 +107,175 @@ const GOLF_HOLES = [
     crest: "FCB",
     colors: { primary: "#A50044", secondary: "#004D98" },
     name: "Camp Nou",
-    description: "The grand finale — blaugrana stripes the whole length of the pitch.",
+    description: "The grand finale — a long blaugrana slalom the full length of the pitch.",
     par: 5,
     tee: { x: 8, y: 90 },
     pin: { x: 92, y: 10 },
-    bunkers: [
-      { x: 25, y: 75, w: 10, h: 22 },
-      { x: 42, y: 60, w: 10, h: 22 },
-      { x: 58, y: 45, w: 10, h: 22 },
-      { x: 75, y: 30, w: 10, h: 22 },
+    obstacles: [
+      { x: 22, y: 72, w: 16, h: 8 },
+      { x: 38, y: 80, w: 16, h: 8 },
+      { x: 50, y: 55, w: 18, h: 8 },
+      { x: 64, y: 62, w: 16, h: 8 },
+      { x: 72, y: 35, w: 16, h: 8 },
+      { x: 84, y: 42, w: 14, h: 8 },
+      { x: 80, y: 20, r: 5, shape: "circle" }, // guarding the green
+      { x: 88, y: 25, r: 4, shape: "circle" }, // guarding the green
     ],
   },
 ];
 // Dragging GOLF_MAX_DRAG_PERCENT of the course's own rendered
 // width/height (whichever axis the drag lies closer to) maxes out power.
-// A full-power shot travels GOLF_MAX_SHOT_DISTANCE course-percent units —
-// deliberately less than any hole's tee-to-pin distance, so even a
-// perfect shot can't 1-putt a hole from the tee; you're always judging
-// how much of the remaining distance to commit to.
+// A full-power, completely unobstructed shot rolls GOLF_MAX_SHOT_DISTANCE
+// course-percent units before friction stops it — deliberately less than
+// any hole's tee-to-pin distance, so even a perfect shot can't 1-putt a
+// hole from the tee; you're always judging how much of the remaining
+// distance to commit to (and now, with real obstacles, which line to take).
 const GOLF_MAX_DRAG_PERCENT = 45;
 const GOLF_MAX_SHOT_DISTANCE = 60;
 const GOLF_MIN_DRAG_PERCENT = 4; // below this, a release cancels instead of firing a near-zero shot
 const GOLF_HOLED_THRESHOLD = 5; // how close (course %) counts as "in the hole"
 const GOLF_MERCY_STROKES = 3; // holes forcibly finish at par + this, however far short
 // The driving range has no real hole to play, just somewhere to practice
-// dragging — every practice swing fires from this same fixed spot.
-const GOLF_PRACTICE_HOLE = { tee: { x: 50, y: 88 }, pin: { x: 50, y: 15 }, bunkers: [] };
+// dragging (and, now, bouncing off something) — every practice swing
+// fires from this same fixed spot.
+const GOLF_PRACTICE_HOLE = {
+  tee: { x: 50, y: 88 },
+  pin: { x: 50, y: 15 },
+  obstacles: [
+    { x: 50, y: 50, w: 24, h: 6 },
+    { x: 28, y: 65, r: 5, shape: "circle" },
+  ],
+};
+// ── golf shot physics ───────────────────────────────────────
+// A real simulated roll, not a straight line — the ball moves tick by
+// tick, losing speed to friction, bouncing off the course boundary and
+// any obstacle in the way, until it either drops in the hole or rolls to
+// a stop. All in the same 0–100 course-percent coordinate space as
+// everything else golf (tee/pin/obstacles/drag math), which is why
+// obstacles are axis-aligned only — a rotated shape would need to rotate
+// in real on-screen pixel space to look right, but the course itself
+// isn't square (it's landscape), so a rotation computed in this percent
+// space wouldn't visually line up with the CSS box it's rendered as. An
+// axis-aligned rectangle (or circle, rendered via the same
+// fixed-aspect-ratio trick as the pin's green circle) has no such
+// mismatch — what physics computes and what's on screen always agree.
+const GOLF_BALL_RADIUS = 2.2; // collision radius, course-percent units — not tied to the emoji's rendered pixel size
+const GOLF_BOUND_MIN = 3;
+const GOLF_BOUND_MAX = 97;
+const GOLF_SHOT_V0_MAX = GOLF_MAX_SHOT_DISTANCE * 0.035; // per-tick speed at full power — see GOLF_FRICTION for why 0.035
+const GOLF_FRICTION = 0.965; // multiplicative speed decay per tick — an unobstructed shot's total roll distance converges to roughly v0 / (1 - GOLF_FRICTION), which is how GOLF_SHOT_V0_MAX above is calibrated back to GOLF_MAX_SHOT_DISTANCE
+const GOLF_WALL_RESTITUTION = 0.72; // energy kept on an obstacle bounce
+const GOLF_BOUNDARY_RESTITUTION = 0.8; // energy kept bouncing off the course edge
+const GOLF_STOP_SPEED = 0.05; // below this speed (percent/tick) the ball is considered stopped
+const GOLF_MAX_SIM_TICKS = 240; // hard safety cap — a shot pinballing in a corner can't simulate forever
+const GOLF_SIM_SUBSTEPS = 4; // each tick's movement is split into smaller steps so a fast ball can't tunnel straight through a thin obstacle before a collision check sees it
+
+// Circle-vs-obstacle collision (the ball is always treated as a circle).
+// Returns null for no collision, or the surface normal plus how far to
+// push the ball back out along it so it's no longer overlapping —
+// standard "closest point" circle-vs-shape test, same idea for both
+// obstacle kinds.
+function golfCollideBallObstacle(bx, by, r, obstacle) {
+  if (obstacle.shape === "circle") {
+    const dx = bx - obstacle.x;
+    const dy = by - obstacle.y;
+    const dist = Math.hypot(dx, dy);
+    const minDist = r + obstacle.r;
+    if (dist >= minDist) return null;
+    if (dist === 0) return { nx: 0, ny: -1, pushX: 0, pushY: -minDist };
+    const nx = dx / dist;
+    const ny = dy / dist;
+    return { nx, ny, pushX: nx * (minDist - dist), pushY: ny * (minDist - dist) };
+  }
+  const hw = obstacle.w / 2;
+  const hh = obstacle.h / 2;
+  const dx = bx - obstacle.x;
+  const dy = by - obstacle.y;
+  const closestX = clamp(dx, -hw, hw);
+  const closestY = clamp(dy, -hh, hh);
+  const distX = dx - closestX;
+  const distY = dy - closestY;
+  const distSq = distX * distX + distY * distY;
+  if (distSq >= r * r) return null;
+  if (distSq > 0) {
+    const dist = Math.sqrt(distSq);
+    const nx = distX / dist;
+    const ny = distY / dist;
+    return { nx, ny, pushX: nx * (r - dist), pushY: ny * (r - dist) };
+  }
+  // Ball's center is already inside the rectangle (deep penetration from
+  // a fast-moving shot) — push out along whichever axis has less
+  // distance to escape rather than picking an arbitrary direction.
+  const penX = hw - Math.abs(dx);
+  const penY = hh - Math.abs(dy);
+  if (penX < penY) {
+    const nx = dx < 0 ? -1 : 1;
+    return { nx, ny: 0, pushX: nx * (penX + r), pushY: 0 };
+  }
+  const ny = dy < 0 ? -1 : 1;
+  return { nx: 0, ny, pushX: 0, pushY: ny * (penY + r) };
+}
+
+// Simulates an entire shot from the first roll to the final resting spot
+// (or the hole). Pure function of the hole + a starting angle/power, so
+// it's the single source of truth for both the real round and the
+// driving range. Returns the full path (course-percent waypoints, one
+// per tick) so the caller can animate the actual roll — bounces and all
+// — rather than a straight line from A to B.
+function golfSimulateShot(hole, start, angle, power) {
+  let vx = Math.cos(angle) * power * GOLF_SHOT_V0_MAX;
+  let vy = Math.sin(angle) * power * GOLF_SHOT_V0_MAX;
+  let x = start.x;
+  let y = start.y;
+  const obstacles = hole.obstacles || [];
+  const path = [{ x, y }];
+  let holed = false;
+  for (let tick = 0; tick < GOLF_MAX_SIM_TICKS && !holed; tick++) {
+    for (let sub = 0; sub < GOLF_SIM_SUBSTEPS; sub++) {
+      x += vx / GOLF_SIM_SUBSTEPS;
+      y += vy / GOLF_SIM_SUBSTEPS;
+      if (x < GOLF_BOUND_MIN) {
+        x = GOLF_BOUND_MIN + (GOLF_BOUND_MIN - x);
+        vx = -vx * GOLF_BOUNDARY_RESTITUTION;
+      } else if (x > GOLF_BOUND_MAX) {
+        x = GOLF_BOUND_MAX - (x - GOLF_BOUND_MAX);
+        vx = -vx * GOLF_BOUNDARY_RESTITUTION;
+      }
+      if (y < GOLF_BOUND_MIN) {
+        y = GOLF_BOUND_MIN + (GOLF_BOUND_MIN - y);
+        vy = -vy * GOLF_BOUNDARY_RESTITUTION;
+      } else if (y > GOLF_BOUND_MAX) {
+        y = GOLF_BOUND_MAX - (y - GOLF_BOUND_MAX);
+        vy = -vy * GOLF_BOUNDARY_RESTITUTION;
+      }
+      for (const obstacle of obstacles) {
+        const hit = golfCollideBallObstacle(x, y, GOLF_BALL_RADIUS, obstacle);
+        if (!hit) continue;
+        x += hit.pushX;
+        y += hit.pushY;
+        // Only reflect if actually still moving into the surface — skips
+        // re-reflecting a ball that's just resting against it.
+        const dot = vx * hit.nx + vy * hit.ny;
+        if (dot < 0) {
+          vx -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.nx;
+          vy -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.ny;
+        }
+      }
+      if (Math.hypot(hole.pin.x - x, hole.pin.y - y) <= GOLF_HOLED_THRESHOLD) {
+        holed = true;
+        x = hole.pin.x;
+        y = hole.pin.y;
+        break;
+      }
+    }
+    path.push({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+    if (holed) break;
+    vx *= GOLF_FRICTION;
+    vy *= GOLF_FRICTION;
+    if (Math.hypot(vx, vy) < GOLF_STOP_SPEED) break;
+  }
+  return { path, endX: x, endY: y, holed };
+}
 const GOLF_TERM_POINTS = { eagle: 50, birdie: 35, par: 25, bogey: 15, "double-bogey": 8, "triple-plus": 3 };
 const GOLF_TERM_LABEL = {
   eagle: "🦅 Eagle!",
@@ -968,41 +1123,30 @@ async function finishRoundRobin() {
 // the resolved shot (new position, stroke count) gets written to shared
 // state, once per swing.
 
-// A pure function of the drag gesture, reused for both the live aim
-// preview (every pointermove) and the committed shot (on release) so
-// there's exactly one place this math lives. `courseRect` is the course
-// element's own on-screen size — dividing by it turns the raw pixel drag
-// into a percentage of the course, so results are the same shot on a
-// phone or a tablet, not just "same number of pixels dragged". The shot
-// fires the OPPOSITE way from the drag — slingshot convention: pull back
-// south, the ball (and the aim line/dot, which always shows exactly
-// where it's about to land) goes north.
-// Reflects v back into [min, max] like a ball bouncing between two walls,
-// instead of just sticking to the wall it hit — a shot that overshoots
-// the boundary bounces back in by however much it overshot, rather than
-// stacking every over-hit shot at the same spot on the edge.
-function golfBounceCoord(v, min, max) {
-  const range = max - min;
-  if (range <= 0) return min;
-  let x = (v - min) % (2 * range);
-  if (x < 0) x += 2 * range;
-  return x <= range ? min + x : max - (x - range);
-}
-
-function golfDragToShot(courseRect, ballPos, startClient, currentClient) {
+// `courseRect` is the course element's own on-screen size — dividing by
+// it turns the raw pixel drag into a percentage of the course, so results
+// are the same shot on a phone or a tablet, not just "same number of
+// pixels dragged". The shot fires the OPPOSITE way from the drag —
+// slingshot convention: pull back south, the ball goes north (see
+// golfSimulateShot for what actually happens to it after that; boundary
+// bouncing now lives there too, as part of the real roll).
+//
+// Just the drag geometry — magnitude/power/angle, no physics. Cheap
+// enough to run on every pointermove (for the live power readout); the
+// actual shot resolution (golfSimulateShot) only runs once, on release,
+// since it's a full physics simulation and the outcome deliberately isn't
+// previewed while dragging (see golfPullPreview).
+function golfDragVector(courseRect, ballPos, startClient, currentClient) {
   const dxPercent = ((currentClient.x - startClient.x) / courseRect.width) * 100;
   const dyPercent = ((currentClient.y - startClient.y) / courseRect.height) * 100;
   const dragMagnitude = Math.hypot(dxPercent, dyPercent);
   const power = clamp(dragMagnitude / GOLF_MAX_DRAG_PERCENT, 0, 1);
   const angle = Math.atan2(-dyPercent, -dxPercent);
-  const travel = power * GOLF_MAX_SHOT_DISTANCE;
-  const endX = golfBounceCoord(ballPos.x + Math.cos(angle) * travel, 3, 97);
-  const endY = golfBounceCoord(ballPos.y + Math.sin(angle) * travel, 3, 97);
-  return { dragMagnitude, power, angle, endX, endY };
+  return { dragMagnitude, power, angle };
 }
 
 // The visible pull-back — this is deliberately NOT where the ball is
-// going (that's golfDragToShot, the opposite direction). Like a real
+// going (that's golfDragVector's angle, the opposite direction). Like a real
 // slingshot band, this indicator follows your hand: drag south and it
 // stretches south, so what you SEE while dragging is the pull, and the
 // shot direction only reveals itself on release. Magnitude is capped at
@@ -1034,7 +1178,7 @@ function scheduleDragVisualUpdate(state) {
   requestAnimationFrame(() => {
     dragVisualRafScheduled = false;
     if (state.subPhase !== "dragging") return; // released mid-frame
-    const shot = golfDragToShot(state.courseRect, state.ballPos, state.startClient, state.currentClient);
+    const vec = golfDragVector(state.courseRect, state.ballPos, state.startClient, state.currentClient);
     const pull = golfPullPreview(state.courseRect, state.ballPos, state.startClient, state.currentClient);
     const line = document.querySelector(".golf-aim-line");
     const dot = document.querySelector(".golf-aim-dot");
@@ -1047,7 +1191,7 @@ function scheduleDragVisualUpdate(state) {
       dot.setAttribute("cx", pull.pullX);
       dot.setAttribute("cy", pull.pullY);
     }
-    if (readout) readout.textContent = `Power ${Math.round(shot.power * 100)}%`;
+    if (readout) readout.textContent = `Power ${Math.round(vec.power * 100)}%`;
   });
 }
 
@@ -1150,15 +1294,19 @@ function golfPointerMove(e) {
 async function golfPointerUp() {
   if (local.golf.subPhase !== "dragging") return;
   const { ballPos, courseRect, startClient, currentClient } = local.golf;
-  const shot = golfDragToShot(courseRect, ballPos, startClient, currentClient);
+  const vec = golfDragVector(courseRect, ballPos, startClient, currentClient);
   // A drag too small to call a real swing (a stray tap, or a touch that
   // barely moved) cancels instead of firing a near-zero shot.
-  if (shot.dragMagnitude < GOLF_MIN_DRAG_PERCENT) {
+  if (vec.dragMagnitude < GOLF_MIN_DRAG_PERCENT) {
     local.golf = { ...local.golf, subPhase: local.golf.lastShot ? "recap" : "ready", dragPointerId: null };
     render();
     return;
   }
-  await golfSubmitShot(shot);
+  const gs = room.game_state?.golf;
+  const hole = gs && GOLF_HOLES[gs.holeIndex];
+  if (!hole) return;
+  const sim = golfSimulateShot(hole, ballPos, vec.angle, vec.power);
+  await golfSubmitShot({ power: vec.power, ...sim });
 }
 
 function golfPointerCancel() {
@@ -1167,6 +1315,9 @@ function golfPointerCancel() {
   render();
 }
 
+// `shot` is { power, path, endX, endY, holed } — path/endX/endY/holed
+// come straight from golfSimulateShot, already resolved against the
+// hole's real obstacles, so this function just has to record the result.
 async function golfSubmitShot(shot) {
   const me = myPlayer();
   const gs = room.game_state?.golf;
@@ -1174,11 +1325,10 @@ async function golfSubmitShot(shot) {
   const hole = GOLF_HOLES[gs.holeIndex];
   if (!hole) return;
   const currentBall = golfMyBall(gs, hole);
-  const newDistToPin = Math.hypot(hole.pin.x - shot.endX, hole.pin.y - shot.endY);
-  const holed = newDistToPin <= GOLF_HOLED_THRESHOLD;
+  const holed = shot.holed;
   const strokes = currentBall.strokes + 1;
   const holedOut = holed || strokes >= hole.par + GOLF_MERCY_STROKES;
-  const balls = { ...gs.balls, [me.id]: { x: shot.endX, y: shot.endY, strokes, holedOut } };
+  const balls = { ...gs.balls, [me.id]: { x: shot.endX, y: shot.endY, strokes, holedOut, path: shot.path } };
 
   let results = gs.results;
   if (holedOut) {
@@ -1287,18 +1437,18 @@ function practicePointerMove(e) {
 async function practicePointerUp() {
   if (local.practice.subPhase !== "dragging") return;
   const { ballPos, courseRect, startClient, currentClient } = local.practice;
-  const shot = golfDragToShot(courseRect, ballPos, startClient, currentClient);
+  const vec = golfDragVector(courseRect, ballPos, startClient, currentClient);
   const me = myPlayer();
-  if (shot.dragMagnitude < GOLF_MIN_DRAG_PERCENT || !me) {
+  if (vec.dragMagnitude < GOLF_MIN_DRAG_PERCENT || !me) {
     local.practice = { ...local.practice, subPhase: local.practice.lastShot ? "recap" : "ready", dragPointerId: null };
     render();
     return;
   }
-  const holed = Math.hypot(GOLF_PRACTICE_HOLE.pin.x - shot.endX, GOLF_PRACTICE_HOLE.pin.y - shot.endY) <= GOLF_HOLED_THRESHOLD;
+  const sim = golfSimulateShot(GOLF_PRACTICE_HOLE, ballPos, vec.angle, vec.power);
   local.practice = {
     ...local.practice,
     subPhase: "recap",
-    lastShot: { power: shot.power, holed },
+    lastShot: { power: vec.power, holed: sim.holed },
     dragPointerId: null,
     ballPos: null,
     courseRect: null,
@@ -1307,7 +1457,7 @@ async function practicePointerUp() {
   };
   render();
   const gs = room.game_state?.golfPractice || { swings: {} };
-  await updateRoom({ game_state: { golfPractice: { swings: { ...gs.swings, [me.id]: { x: shot.endX, y: shot.endY, holed } } } } });
+  await updateRoom({ game_state: { golfPractice: { swings: { ...gs.swings, [me.id]: { x: sim.endX, y: sim.endY, holed: sim.holed } } } } });
 }
 
 function practicePointerCancel() {
@@ -2287,7 +2437,7 @@ function renderGolfIntro() {
       <p>A fixed ${GOLF_HOLES.length}-hole course, each hole themed after a club (${GOLF_HOLES.map((h) => escapeHtml(h.club)).join(", ")}), played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band. Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing. Hit it out of bounds and it bounces back in off the boundary rather than just stopping dead at the edge.</p>
+      <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band. Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing. Every hole is a real obstacle course — the ball actually bounces off walls, pillars and the boundary as it rolls, so reading the course matters as much as the swing itself.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
@@ -2421,7 +2571,6 @@ function renderGolf() {
     <div class="card">
       <h2>⛳ Football Golf</h2>
       ${badge}
-      <p class="sub">Hole ${holeIndex + 1} of ${GOLF_HOLES.length}: ${escapeHtml(hole.name)} — Par ${hole.par}${!answered ? ` — Stroke ${myStrokes + 1}` : ""}</p>
       ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
       ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered)}
       <h3>Totals</h3>
@@ -2465,8 +2614,12 @@ function renderGolf() {
 // afterwards via direct DOM mutation, not further render() calls; see
 // golfPointerDown for why.
 function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, extraContent = "") {
-  const bunkers = (hole.bunkers || [])
-    .map((b) => `<div class="golf-bunker" style="left:${b.x}%; top:${b.y}%; width:${b.w}%; height:${b.h}%;"></div>`)
+  const obstacles = (hole.obstacles || [])
+    .map((o) =>
+      o.shape === "circle"
+        ? `<div class="golf-pillar" style="left:${o.x}%; top:${o.y}%; width:${o.r * 2}%;"></div>`
+        : `<div class="golf-wall" style="left:${o.x}%; top:${o.y}%; width:${o.w}%; height:${o.h}%;"></div>`
+    )
     .join("");
   const balls = players
     .map((p) => {
@@ -2482,22 +2635,28 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         // exactly once, then immediately record the new position so a
         // redundant re-render of this same shot (see the note above)
         // can't detect it as "new" again and re-trigger or interrupt it.
+        // `ball.path` is the real bounced-off-everything roll from
+        // golfSimulateShot; fall back to a straight line only if it's
+        // missing (e.g. a hole/practice reset that jumps the ball
+        // straight to the tee — nothing to replay there).
         const from = { x: track.x, y: track.y };
         const to = { x: ball.x, y: ball.y };
+        const path = Array.isArray(ball.path) && ball.path.length > 1 ? ball.path : [from, to];
         trackMap[p.id] = { x: ball.x, y: ball.y };
-        const dist = Math.hypot(to.x - from.x, to.y - from.y);
-        const durationMs = Math.round(clamp(450 + dist * 9, 500, 1600));
+        let totalDist = 0;
+        for (let i = 1; i < path.length; i++) totalDist += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+        const durationMs = Math.round(clamp(500 + totalDist * 6, 600, 2600));
         const ballId = `golf-ball-${p.id}`;
         // Deferred one frame: renderGolfCourse only returns a string —
         // the element doesn't exist in the live DOM until render()
         // finishes assigning innerHTML, which happens synchronously
         // AFTER this function returns. rAF fires on the next frame,
         // by which point it does.
-        requestAnimationFrame(() => animateGolfBallFlight(ballId, from, to, durationMs));
+        requestAnimationFrame(() => animateGolfBallFlight(ballId, path, durationMs));
         // Paint at the START position right away, so there's no flash at
         // the destination before the rAF loop takes over a frame later.
-        renderX = from.x;
-        renderY = from.y;
+        renderX = path[0].x;
+        renderY = path[0].y;
       }
       return `
         <div id="golf-ball-${p.id}" class="golf-course-ball${holedOut ? " holed" : ""}" style="left:${renderX}%; top:${renderY}%;" title="${escapeHtml(p.name)}">
@@ -2509,14 +2668,14 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
 
   let aimOverlay = "";
   if (dragState?.subPhase === "dragging" && dragState.ballPos) {
-    const shot = golfDragToShot(dragState.courseRect, dragState.ballPos, dragState.startClient, dragState.currentClient);
+    const vec = golfDragVector(dragState.courseRect, dragState.ballPos, dragState.startClient, dragState.currentClient);
     const pull = golfPullPreview(dragState.courseRect, dragState.ballPos, dragState.startClient, dragState.currentClient);
     aimOverlay = `
       <svg class="golf-aim-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
         <line class="golf-aim-line" x1="${dragState.ballPos.x}" y1="${dragState.ballPos.y}" x2="${pull.pullX}" y2="${pull.pullY}"></line>
         <circle class="golf-aim-dot" cx="${pull.pullX}" cy="${pull.pullY}" r="2.2"></circle>
       </svg>
-      <p class="golf-power-readout">Power ${Math.round(shot.power * 100)}%</p>`;
+      <p class="golf-power-readout">Power ${Math.round(vec.power * 100)}%</p>`;
   }
 
   const dragging = dragState?.subPhase === "dragging";
@@ -2525,7 +2684,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
   return `
     <div class="golf-course${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}" style="${colorStyle}">
       ${tint}
-      ${bunkers}
+      ${obstacles}
       <div class="golf-green-circle" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-pin" style="left:${hole.pin.x}%; top:${hole.pin.y}%;">⛳</div>
       <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;">📍</div>
@@ -2542,15 +2701,29 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
 // reference captured earlier, and re-asserts its position on every frame,
 // so it's self-correcting against any redundant render() that happens to
 // land mid-flight. Mirrors the PK shootout's animateBallFlight.
-function animateGolfBallFlight(ballId, from, to, durationMs) {
+// `path` is a full polyline (course-percent waypoints) from
+// golfSimulateShot — a real roll with every bounce along the way, not
+// just a straight line from A to B. Walks it by arc length (total
+// distance travelled, not just point count) so the ball moves at a
+// roughly steady pace through however many bounces the shot took.
+function animateGolfBallFlight(ballId, path, durationMs) {
   const ballEl = document.getElementById(ballId);
-  if (!ballEl) return;
+  if (!ballEl || path.length < 2) return;
   const emojiEl = ballEl.querySelector(".golf-ball-emoji");
+  const last = path[path.length - 1];
   if (prefersReducedMotion()) {
-    ballEl.style.left = to.x + "%";
-    ballEl.style.top = to.y + "%";
+    ballEl.style.left = last.x + "%";
+    ballEl.style.top = last.y + "%";
     return;
   }
+  // Cumulative arc length at each waypoint, so "40% of the way through
+  // the animation" means 40% of the actual distance rolled, not just the
+  // 40th-percentile waypoint (bounces can bunch waypoints close together).
+  const cum = [0];
+  for (let i = 1; i < path.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y));
+  }
+  const total = cum[cum.length - 1] || 1;
   const spinDeg = 1080;
   const t0 = performance.now();
   function frame(now) {
@@ -2560,13 +2733,21 @@ function animateGolfBallFlight(ballId, from, to, durationMs) {
     // loop keeps controlling whichever element is actually on screen.
     const el = document.getElementById(ballId) || ballEl;
     const raw = Math.min(1, (now - t0) / durationMs);
-    const t = easeOutQuad(raw);
-    const x = from.x + (to.x - from.x) * t;
-    const y = from.y + (to.y - from.y) * t;
+    const eased = easeOutQuad(raw);
+    const targetDist = eased * total;
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < targetDist) i++;
+    const segStart = cum[i - 1];
+    const segEnd = cum[i];
+    const segT = segEnd > segStart ? (targetDist - segStart) / (segEnd - segStart) : 1;
+    const a = path[i - 1];
+    const b = path[i];
+    const x = a.x + (b.x - a.x) * segT;
+    const y = a.y + (b.y - a.y) * segT;
     el.style.left = x + "%";
     el.style.top = y + "%";
     const emoji = el.querySelector(".golf-ball-emoji") || emojiEl;
-    if (emoji) emoji.style.transform = `translate(-50%, -50%) rotate(${spinDeg * t}deg)`;
+    if (emoji) emoji.style.transform = `translate(-50%, -50%) rotate(${spinDeg * raw}deg)`;
     if (raw < 1) requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
