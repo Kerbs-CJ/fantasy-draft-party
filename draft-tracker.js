@@ -178,10 +178,16 @@ async function draftPlayer(plPlayerId) {
   });
   local.submitting = false;
   if (error) {
-    // Unique-constraint conflict (same pick slot or same footballer
-    // claimed twice at once) — don't trust local state, just reload
-    // what's actually in the database and let the render reflect it.
-    local.error = "That pick just got taken — refreshed the board.";
+    console.error("draft_picks insert failed:", error);
+    // Postgres unique_violation is the ONLY case that genuinely means
+    // "someone beat you to this pick slot or this footballer" — anything
+    // else (missing table, RLS rejection, a bad foreign key, a network
+    // hiccup) is a real problem and claiming it was "just taken" would be
+    // actively misleading, so show the actual error instead of guessing.
+    local.error =
+      error.code === "23505"
+        ? "That pick just got taken — refreshed the board."
+        : `Couldn't save that pick: ${error.message || error.code || "unknown error"}. Check the browser console for details.`;
   }
   await loadPicks();
   render();
