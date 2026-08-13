@@ -65,7 +65,7 @@ it updates automatically within a minute or two.
    has no control over outcomes — just pacing). From there, each round
    also gets its own explainer screen (format + scoring) right before it
    starts.
-4. Guess the Missing Club plays first (10 random player career timelines,
+4. Guess the Missing Club plays first (12 random player career timelines,
    one club redacted — everyone answers in their own time on their own
    device, tapping a club then confirming to lock it in; a side panel
    shows who's still deciding. Nobody's answer is revealed until the host
