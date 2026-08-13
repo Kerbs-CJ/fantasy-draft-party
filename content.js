@@ -21,8 +21,15 @@ window.MISSING_CLUB_PLAYERS = [
   {
     name: "Zlatan Ibrahimović",
     clubs: ["Malmö FF", "Ajax", "Juventus", "Inter Milan", "Barcelona", "AC Milan", "Paris Saint-Germain", "Manchester United", "LA Galaxy"],
-    missingIndex: 0,
-    decoys: ["IFK Göteborg", "Helsingborgs IF", "Djurgårdens IF", "AIK"],
+    missingIndex: 2,
+    // Real Serie A clubs from the same era as Juventus (2004-06) — none of
+    // them ones Zlatan actually played for. Deliberately NOT AC Milan/Inter
+    // Milan even though they're the "same league" — both already appear
+    // later in his own visible timeline above, so offering either as a
+    // decoy would be trivially eliminable ("that one's already shown") and
+    // technically wrong besides (he really did play for both, just not as
+    // the answer to this blank).
+    decoys: ["Roma", "Lazio", "Fiorentina", "Parma"],
   },
   {
     name: "David Beckham",
