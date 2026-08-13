@@ -641,6 +641,24 @@ function totalsByPlayer() {
     .map((p) => ({ player: p, total: totals[p.id] || 0 }))
     .sort((a, b) => b.total - a.total);
 }
+// Same shape as totalsByPlayer, but scoped to one game's own points only —
+// used by the interim per-round leaderboard checkpoints (renderLeaderboard),
+// so "Leaderboard, after the shootout" actually shows just the shootout's
+// placement points, not the running combined total. The COMBINED total
+// (totalsByPlayer, unfiltered) is still what the final reveal uses — that's
+// the one screen where the cumulative score across every round is the
+// actual point.
+function totalsForGame(gameIndex) {
+  const totals = {};
+  for (const p of players) totals[p.id] = 0;
+  for (const s of scores) {
+    if (s.game_index !== gameIndex) continue;
+    totals[s.player_id] = (totals[s.player_id] || 0) + Number(s.points);
+  }
+  return players
+    .map((p) => ({ player: p, total: totals[p.id] || 0 }))
+    .sort((a, b) => b.total - a.total);
+}
 function answeredPlayerIds(gameIndex, roundIndex) {
   return new Set(
     scores
@@ -949,12 +967,11 @@ async function missingClubNext() {
   const next = gs.qIndex + 1;
   if (next >= gs.order.length) {
     // Round order: Missing Club -> Penalty Shootout -> Guess the
-    // Footballer -> Football Golf (see the "leaderboard"/"final-
-    // leaderboard"/"guess-leaderboard" cases in render() for the rest of
-    // the chain). "leaderboard" is Missing Club's own checkpoint now, not
-    // a combined quiz screen with Guess the Footballer — those two rounds
-    // are no longer adjacent.
-    await updateRoom({ status: "leaderboard" });
+    // Footballer -> Football Golf (see the "missing-club-leaderboard"/
+    // "shootout-leaderboard"/"guess-leaderboard"/"golf-leaderboard" cases
+    // in render() for the rest of the chain — each one's name matches the
+    // round it actually follows, not a leftover "final"/generic label).
+    await updateRoom({ status: "missing-club-leaderboard" });
   } else {
     await updateRoom({ game_state: { ...gs, qIndex: next, revealed: false } });
   }
@@ -1005,8 +1022,8 @@ async function guessNext() {
   const gs = room.game_state || {};
   const next = gs.pIndex + 1;
   if (next >= gs.order.length) {
-    // "guess-leaderboard", not "leaderboard" — that status is Missing
-    // Club's own checkpoint now (see missingClubNext). Guess the
+    // "guess-leaderboard", not "missing-club-leaderboard" — that one's
+    // Missing Club's own checkpoint (see missingClubNext). Guess the
     // Footballer gets its own, distinct one, since the two quiz rounds
     // are no longer back to back in the round order.
     await updateRoom({ status: "guess-leaderboard" });
@@ -1273,8 +1290,8 @@ async function submitPick(role, zone) {
 // ── half-time show ("Who's That Pokémon?") ──────────────────
 // A pure-fun, zero-score interlude — no scores table write anywhere in
 // this whole section, deliberately. Sits as its own stage AFTER the whole
-// penalty shootout round robin is finished (between "final-leaderboard"
-// and "guess-intro" — see render()'s "final-leaderboard" case), not
+// penalty shootout round robin is finished (between "shootout-leaderboard"
+// and "guess-intro" — see render()'s "shootout-leaderboard" case), not
 // mid-tournament — deliberately kept out of the round-robin's own match
 // flow so it can't interfere with anything there.
 //
@@ -1363,7 +1380,7 @@ async function finishRoundRobin() {
     points: placementPoints(i, n),
   }));
   if (inserts.length) await sb.from("scores").insert(inserts);
-  await updateRoom({ status: "final-leaderboard" });
+  await updateRoom({ status: "shootout-leaderboard" });
 }
 
 // ── football golf ───────────────────────────────────────────
@@ -2425,8 +2442,8 @@ function renderInner() {
       ensureGuessReady();
       html += renderGuess();
       break;
-    case "leaderboard":
-      html += renderLeaderboard("the missing club round", "show-shootout-intro", "⚽ Continue to Penalty Shootout →");
+    case "missing-club-leaderboard":
+      html += renderLeaderboard("Guess the Missing Club", 1, "show-shootout-intro", "⚽ Continue to Penalty Shootout →");
       break;
     case "shootout-intro":
       html += renderShootoutIntro();
@@ -2439,14 +2456,14 @@ function renderInner() {
       ensureBotAutoPick();
       html += renderShootout();
       break;
-    case "final-leaderboard":
-      html += renderLeaderboard("the shootout", "start-halftime-show", "🎤 Half-Time Show →");
+    case "shootout-leaderboard":
+      html += renderLeaderboard("Penalty Shootout", 3, "start-halftime-show", "🎤 Half-Time Show →");
       break;
     case "halftime-show":
       html += renderHalftimeShow();
       break;
     case "guess-leaderboard":
-      html += renderLeaderboard("the footballer round", "show-golf-intro", "⛳ Continue to Football Golf →");
+      html += renderLeaderboard("Guess the Footballer", 2, "show-golf-intro", "⛳ Continue to Football Golf →");
       break;
     case "golf-intro":
       html += renderGolfIntro();
@@ -2462,7 +2479,7 @@ function renderInner() {
       html += renderGolf();
       break;
     case "golf-leaderboard":
-      html += renderLeaderboard("the golf course", "reveal", "🏆 Reveal Draft Order!");
+      html += renderLeaderboard("Football Golf", 4, "reveal", "🏆 Reveal Draft Order!");
       break;
     case "reveal":
       html += renderReveal();
@@ -2596,10 +2613,10 @@ function renderDevBar() {
     ["party-intro", "Party Intro"],
     ["missing-club-intro", "MC Intro"],
     ["missing-club", "Missing Club"],
-    ["leaderboard", "MC Leaderboard"],
+    ["missing-club-leaderboard", "MC Leaderboard"],
     ["shootout-intro", "PK Intro"],
     ["round-robin", "Round Robin"],
-    ["final-leaderboard", "Final LB"],
+    ["shootout-leaderboard", "Shootout Leaderboard"],
     ["halftime-show", "Half-Time Show"],
     ["guess-intro", "Guess Intro"],
     ["guess", "Guess"],
@@ -3042,7 +3059,7 @@ function renderRoundRobin() {
         isHost
           ? nextIndex >= 0
             ? `<button class="btn primary" data-action="start-rr-match" data-i="${nextIndex}">▶️ ${escapeHtml(nameOf(matches[nextIndex].p1))} vs ${escapeHtml(nameOf(matches[nextIndex].p2))}</button>`
-            : `<button class="btn primary" data-action="finish-round-robin">🏆 Show final leaderboard</button>`
+            : `<button class="btn primary" data-action="finish-round-robin">🏆 Show shootout leaderboard</button>`
           : `<p class="waiting">Waiting for host…</p>`
       }
     </div>`;
@@ -3681,14 +3698,14 @@ function renderGolfFinishers(gs, holeIndex, finished) {
     </div>`;
 }
 
-function renderLeaderboard(gameName, nextAction, nextLabel) {
+function renderLeaderboard(gameName, gameIndex, nextAction, nextLabel) {
   const me = myPlayer();
   const isHost = me?.is_host;
-  const totals = totalsByPlayer();
+  const totals = totalsForGame(gameIndex);
   return `
     <div class="card">
-      <h2>Leaderboard</h2>
-      <p class="sub">After ${gameName}</p>
+      <h2>${escapeHtml(gameName)} — Leaderboard</h2>
+      <p class="sub">Points from this round only, not the running total</p>
       <ol class="leaderboard">
         ${totals.map((t) => `<li><span>${escapeHtml(t.player.name)}</span><b>${t.total}</b></li>`).join("")}
       </ol>

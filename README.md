@@ -71,7 +71,9 @@ it updates automatically within a minute or two.
    shows who's still deciding. Nobody's answer is revealed until the host
    reveals — at which point that same side panel switches to showing
    exactly who got it right and who didn't, by name), with a leaderboard
-   at the end.
+   at the end. Every round's leaderboard shows only *that round's* points,
+   not a running combined total — the actual combined score across all
+   four rounds only comes together at the very end, in the reveal.
 5. Host clicks through to the shootout intro screen (full explainer: format,
    how a match works, how standings/tiebreaks are decided, and a table of
    exactly how many points each final placement is worth), then **Start
@@ -83,9 +85,13 @@ it updates automatically within a minute or two.
    blind and simultaneous, best-of-5 then sudden death. Everyone else
    spectates live. Each finished match updates a live standings table
    (Wins / Losses / Kicks For / Kicks Against / Goal Difference). Once every
-   match is played, host clicks **Show final leaderboard** — final placement
-   (ranked by wins, then goal difference, then head-to-head result) adds to the
-   same combined leaderboard.
+   match is played, host clicks **Show shootout leaderboard** — final placement
+   (ranked by wins, then goal difference, then head-to-head result) adds
+   placement points to each player's overall total. From there, host
+   clicks through to the **🎤 Half-Time Show** — a pure-fun, zero-points
+   detour: five Pokémon, one at a time, shown as a silhouette (everyone
+   shouts their guess) before the host reveals the real answer. Purely a
+   laugh, no scores touched.
 6. Guess the Footballer plays next (host reveals clues one at a time per
    round; guessing on fewer clues scores more), with a leaderboard at the
    end.
