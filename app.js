@@ -3546,7 +3546,7 @@ function renderLeaderboard(gameName, nextAction, nextLabel) {
   const totals = totalsByPlayer();
   return `
     <div class="card">
-      <h2>📊 Leaderboard</h2>
+      <h2>Leaderboard</h2>
       <p class="sub">After ${gameName}</p>
       <ol class="leaderboard">
         ${totals.map((t) => `<li><span>${escapeHtml(t.player.name)}</span><b>${t.total}</b></li>`).join("")}
