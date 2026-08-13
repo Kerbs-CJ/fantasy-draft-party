@@ -1025,6 +1025,26 @@ code {
   color: var(--text);
   font-size: 13px;
 }
+.host-add-score { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.host-add-score-select {
+  flex: 1 1 120px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-size: 13px;
+}
+.host-add-score-select option { background: var(--card); color: var(--text); } /* see the matching note on .dt-filter-row select option — same open-dropdown-on-white fix */
+.host-add-score-num {
+  width: 64px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-size: 13px;
+}
 
 /* ── Draft Tracker (draft-tracker.html/js) ──────────────────── */
 /* Wider than the party app's #app — this page is a filterable list of

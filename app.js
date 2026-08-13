@@ -727,6 +727,13 @@ async function onClick(e) {
     local.hostPanel.showScores = !local.hostPanel.showScores;
     return render();
   }
+  if (action === "host-add-score") {
+    const playerId = document.getElementById("host-add-score-player")?.value;
+    const gameIndex = Number(document.getElementById("host-add-score-game")?.value);
+    const round1Indexed = Number(document.getElementById("host-add-score-round")?.value);
+    const points = Number(document.getElementById("host-add-score-points")?.value);
+    return hostAddScore(playerId, gameIndex, round1Indexed - 1, points);
+  }
 }
 
 // ── home / lobby ────────────────────────────────────────────
@@ -1947,6 +1954,32 @@ async function hostVoidScore(id) {
   render();
 }
 
+// Inserts a brand-new scores row — unlike hostEditScore/hostVoidScore,
+// which only touch a row that already exists, this is for a point that
+// has NO row at all yet: crediting the host (who plays like everyone
+// else but has no built-in "give myself points" button anywhere in the
+// normal game flow), a bonus, or a genuinely missed submission. Player,
+// game, round and points all come from the host panel's own inputs,
+// already parsed by the caller in onClick — round is converted from the
+// form's 1-indexed display back to the stored 0-indexed round_index.
+async function hostAddScore(playerId, gameIndex, roundIndex, points) {
+  if (!playerId || !players.find((p) => p.id === playerId)) return;
+  if (!Number.isFinite(gameIndex) || !GAME_LABELS[gameIndex]) return;
+  if (!Number.isFinite(roundIndex) || roundIndex < 0) return;
+  if (!Number.isFinite(points)) return;
+  const { data, error } = await sb
+    .from("scores")
+    .insert({ room_code: room.code, player_id: playerId, game_index: gameIndex, round_index: roundIndex, points })
+    .select()
+    .maybeSingle();
+  if (error) {
+    local.error = `Couldn't add that score: ${error.message || error.code || "unknown error"}.`;
+  } else if (data && !scores.find((s) => s.id === data.id)) {
+    scores.push(data); // optimistic on this device — every OTHER client picks it up via the INSERT listener in subscribeToRoom
+  }
+  render();
+}
+
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
   local.missingClub = { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null };
@@ -2396,10 +2429,31 @@ function renderHostPanelBody() {
           : ""
       }
       <div class="host-panel-section">
+        <h4>Add a score</h4>
+        <p class="host-panel-note">For a point nobody has a row for yet — crediting yourself as host (there's no other "give myself points" button anywhere), a bonus, or a missed submission.</p>
+        ${renderHostAddScoreForm()}
+      </div>
+      <div class="host-panel-section">
         <h4>Edit or void scores</h4>
         <button class="btn" data-action="toggle-host-scores">${local.hostPanel.showScores ? "Hide" : "Show"} all score entries (${scores.length})</button>
         ${local.hostPanel.showScores ? renderHostScoreList() : ""}
       </div>
+    </div>`;
+}
+function renderHostAddScoreForm() {
+  return `
+    <div class="host-add-score">
+      <select id="host-add-score-player" class="host-add-score-select">
+        ${players.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+      <select id="host-add-score-game" class="host-add-score-select">
+        ${Object.entries(GAME_LABELS)
+          .map(([idx, label]) => `<option value="${idx}">${label}</option>`)
+          .join("")}
+      </select>
+      <input type="number" id="host-add-score-round" class="host-add-score-num" placeholder="Round #" value="1" min="1" title="Round # (1-indexed) — Shootout/Golf are always round 1">
+      <input type="number" id="host-add-score-points" class="host-add-score-num" placeholder="Points" title="Points to award">
+      <button class="btn small" data-action="host-add-score">➕ Add</button>
     </div>`;
 }
 function renderHostScoreList() {
