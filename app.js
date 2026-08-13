@@ -2067,8 +2067,13 @@ async function devJump(status) {
 // new log entry via the realtime subscription and plays the same replay
 // independently, so the room shares roughly the same moment without
 // needing any extra server-side orchestration.
-const SHOOTOUT_KICK_MS = 1200;
-const SHOOTOUT_RESULT_MS = 1700;
+const SHOOTOUT_KICK_MS = 1500;
+const SHOOTOUT_RESULT_MS = 2200;
+// The pause between both picks locking in and the ball actually starting
+// to move — was 180ms (barely a flicker), which combined with the two
+// picks resolving instantly made the whole picks-to-goal sequence feel
+// like it was happening on top of itself rather than as distinct beats.
+const PK_PRE_FLIGHT_PAUSE_MS = 450;
 
 function ensureShootoutAnim() {
   const match = room.game_state?.match;
@@ -2114,11 +2119,22 @@ function easeOutQuad(t) {
 // curved trajectory, plus a shrink (depth) and a full-blooded spin as it
 // travels. Driven by requestAnimationFrame rather than a CSS transition so
 // the curve and spin can be computed per-kick.
-function animateBallFlight(ball, start, end, durationMs) {
+//
+// Takes an element ID, not a captured node, and re-queries it fresh EVERY
+// frame — same survival trick used for the golf ball's flight/sink
+// animations. renderPkGoal always renders a fresh #pk-ball/#pk-keeper on
+// every render() (the whole #app subtree gets replaced), and the realtime
+// echo of this client's own DB write reliably fires a redundant render a
+// beat later — without re-querying, this loop would keep mutating the OLD
+// node after it's been silently swapped out from under it, so nothing
+// visible would happen for the rest of the flight.
+function animateBallFlight(ballId, start, end, durationMs) {
   const control = { x: (start.x + end.x) / 2 + (Math.random() * 14 - 7), y: Math.min(start.y, end.y) - 36 };
   const spinDeg = (Math.random() < 0.5 ? -1 : 1) * (600 + Math.random() * 260);
   const t0 = performance.now();
   function frame(now) {
+    const ball = document.getElementById(ballId);
+    if (!ball) return; // gone from the DOM (phase moved on) — nothing left to animate
     const raw = Math.min(1, (now - t0) / durationMs);
     const t = easeOutQuad(raw);
     const u = 1 - t;
@@ -2135,12 +2151,15 @@ function animateBallFlight(ball, start, end, durationMs) {
 
 // The keeper dives in a straight line (real keepers don't arc), but leans
 // into the direction of the dive for a bit of weight — no lean for a
-// straight-down center save.
-function animateKeeperDive(keeper, start, end, durationMs) {
+// straight-down center save. Same fresh-lookup-per-frame pattern as
+// animateBallFlight, for the same reason.
+function animateKeeperDive(keeperId, start, end, durationMs) {
   const dir = end.x - start.x;
   const tiltMax = dir === 0 ? 0 : dir > 0 ? 24 : -24;
   const t0 = performance.now();
   function frame(now) {
+    const keeper = document.getElementById(keeperId);
+    if (!keeper) return;
     const raw = Math.min(1, (now - t0) / durationMs);
     const t = easeOutQuad(raw);
     const x = start.x + (end.x - start.x) * t;
@@ -2167,8 +2186,8 @@ function triggerShotAnimation(entry) {
     return;
   }
   requestAnimationFrame(() => {
-    animateBallFlight(ball, PK_BALL_START, shooterPos, SHOOTOUT_KICK_MS);
-    animateKeeperDive(keeper, PK_KEEPER_START, keeperPos, SHOOTOUT_KICK_MS);
+    animateBallFlight("pk-ball", PK_BALL_START, shooterPos, SHOOTOUT_KICK_MS);
+    animateKeeperDive("pk-keeper", PK_KEEPER_START, keeperPos, SHOOTOUT_KICK_MS);
   });
 }
 
@@ -2198,10 +2217,24 @@ function generateCrowdDots() {
 }
 const PK_CROWD_HTML = generateCrowdDots();
 
-function renderPkGoal(entry, animate) {
-  const ballPos = animate ? PK_BALL_START : ZONE_POS[entry.shooterPick];
-  const keeperPos = animate ? PK_KEEPER_START : ZONE_POS[entry.keeperPick];
-  if (animate) setTimeout(() => triggerShotAnimation(entry), 180);
+// `kicking` is whether we're still in the flight phase at all (regardless
+// of whether THIS particular render is the one that triggers the
+// animation) — `doAnimate` is only true on the very first render of a
+// kick, to fire triggerShotAnimation exactly once. These used to be
+// conflated (a single `animate` flag drove both the ball/keeper's
+// position AND whether to trigger), which meant a redundant re-render
+// mid-flight (`doAnimate` correctly false, since it's not the first
+// render — but `kicking` still true) rendered the ball/keeper at their
+// FINAL resting spot instead of the flight's start position: a fresh DOM
+// node born already at the destination, while the real animation kept
+// running invisibly on the now-detached old node. That's what looked like
+// the ball/glove "snapping into place" — the animation was still
+// technically playing, just on an element no longer on screen, right up
+// until it also got discarded.
+function renderPkGoal(entry, kicking, doAnimate) {
+  const ballPos = kicking ? PK_BALL_START : ZONE_POS[entry.shooterPick];
+  const keeperPos = kicking ? PK_KEEPER_START : ZONE_POS[entry.keeperPick];
+  if (doAnimate) setTimeout(() => triggerShotAnimation(entry), PK_PRE_FLIGHT_PAUSE_MS);
   return `
     <div class="pk-goal">
       <div class="pk-crowd">${PK_CROWD_HTML}</div>
@@ -2995,7 +3028,7 @@ function renderShootout() {
         <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
         <p class="sub">${roundLabel}</p>
         ${renderPkScoreboard(match)}
-        ${renderPkGoal(entry, doAnimate)}
+        ${renderPkGoal(entry, anim.phase === "kicking", doAnimate)}
         ${
           anim.phase === "result"
             ? `<p class="kick-result ${entry.scored ? "goal" : "save"}${showImpact ? " pk-result-pop" : ""}">${entry.scored ? "⚽ GOAL!" : "🧤 SAVED!"} — ${escapeHtml(nameOf(entry.shooter))} shot ${ZONE_LABEL[entry.shooterPick]}, ${escapeHtml(nameOf(entry.keeper))} dove ${ZONE_LABEL[entry.keeperPick]}</p>`
