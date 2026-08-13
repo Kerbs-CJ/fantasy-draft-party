@@ -2067,13 +2067,13 @@ async function devJump(status) {
 // new log entry via the realtime subscription and plays the same replay
 // independently, so the room shares roughly the same moment without
 // needing any extra server-side orchestration.
-const SHOOTOUT_KICK_MS = 1500;
-const SHOOTOUT_RESULT_MS = 2200;
+const SHOOTOUT_KICK_MS = 1350;
+const SHOOTOUT_RESULT_MS = 1900;
 // The pause between both picks locking in and the ball actually starting
 // to move — was 180ms (barely a flicker), which combined with the two
 // picks resolving instantly made the whole picks-to-goal sequence feel
 // like it was happening on top of itself rather than as distinct beats.
-const PK_PRE_FLIGHT_PAUSE_MS = 450;
+const PK_PRE_FLIGHT_PAUSE_MS = 350;
 
 function ensureShootoutAnim() {
   const match = room.game_state?.match;
