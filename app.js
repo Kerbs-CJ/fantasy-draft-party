@@ -705,6 +705,9 @@ async function onClick(e) {
   if (action === "start-round-robin") return startRoundRobin();
   if (action === "start-rr-match") return startRRMatch(Number(btn.dataset.i));
   if (action === "finish-round-robin") return finishRoundRobin();
+  if (action === "start-halftime-show") return startHalftimeShow();
+  if (action === "halftime-reveal") return halftimeReveal();
+  if (action === "halftime-next") return halftimeNext();
   if (action === "show-guess-intro") return updateRoom({ status: "guess-intro" });
   if (action === "show-golf-intro") return updateRoom({ status: "golf-intro" });
   if (action === "show-golf-practice") return showGolfPractice();
@@ -1265,6 +1268,60 @@ async function submitPick(role, zone) {
   // client has had a chance to play that final kick's animation; see
   // finalizeMatchIfDecided(), called from ensureShootoutAnim().
   await updateRoom({ game_state: { ...gs, match: updated } });
+}
+
+// ── half-time show ("Who's That Pokémon?") ──────────────────
+// A pure-fun, zero-score interlude — no scores table write anywhere in
+// this whole section, deliberately. Triggers once, right when the
+// standings screen shows exactly PK_HALFTIME_AFTER_MATCHES matches played
+// (see the halftimeDue check in renderRoundRobin) — roundRobin.halftimeShown
+// then flips permanently true so it can't re-trigger on a later visit back
+// to that same screen once play count has moved past it.
+//
+// Sprites are hotlinked from PokeAPI's sprite mirror
+// (github.com/PokeAPI/sprites/.../official-artwork/{id}.png) — a
+// long-standing, widely-used community resource, not bundled into this
+// repo. The silhouette itself needs no separate asset: it's the same
+// official artwork with `filter: brightness(0)` (see .halftime-sprite in
+// style.css), which turns every non-transparent pixel solid black while
+// keeping the real outline, and un-filters on reveal.
+const PK_HALFTIME_AFTER_MATCHES = 5;
+const POKEMON_HALFTIME_COUNT = 5;
+const POKEMON_HALFTIME_POOL = [
+  { id: 25, name: "Pikachu" },
+  { id: 6, name: "Charizard" },
+  { id: 143, name: "Snorlax" },
+  { id: 94, name: "Gengar" },
+  { id: 7, name: "Squirtle" },
+  { id: 150, name: "Mewtwo" },
+  { id: 39, name: "Jigglypuff" },
+  { id: 54, name: "Psyduck" },
+  { id: 133, name: "Eevee" },
+  { id: 1, name: "Bulbasaur" },
+  { id: 52, name: "Meowth" },
+  { id: 68, name: "Machamp" },
+];
+
+async function startHalftimeShow() {
+  const gs = room.game_state;
+  const roundRobin = { ...gs.roundRobin, halftimeShown: true };
+  const order = shuffle(POKEMON_HALFTIME_POOL.map((_, i) => i)).slice(0, POKEMON_HALFTIME_COUNT);
+  await updateRoom({ status: "halftime-show", game_state: { roundRobin, match: null, halftime: { order, index: 0, revealed: false } } });
+}
+
+async function halftimeReveal() {
+  const gs = room.game_state;
+  await updateRoom({ game_state: { ...gs, halftime: { ...gs.halftime, revealed: true } } });
+}
+
+async function halftimeNext() {
+  const gs = room.game_state;
+  const next = gs.halftime.index + 1;
+  if (next >= gs.halftime.order.length) {
+    await updateRoom({ status: "round-robin", game_state: { roundRobin: gs.roundRobin, match: null } });
+  } else {
+    await updateRoom({ game_state: { ...gs, halftime: { order: gs.halftime.order, index: next, revealed: false } } });
+  }
 }
 
 async function finalizeMatchIfDecided() {
@@ -2044,6 +2101,18 @@ async function devJump(status) {
     await ensureDevBotIfNeeded();
     game_state = { roundRobin: { matches: generateRoundRobinMatches(players.map((p) => p.id)) } };
   }
+  if (status === "halftime-show") {
+    await ensureDevBotIfNeeded();
+    // Bootstraps a real roundRobin too (with halftimeShown already true),
+    // not just `halftime` — otherwise "Back to the Shootout" would try to
+    // write a nonexistent roundRobin.matches back and the round-robin
+    // screen would crash reading .matches off it.
+    const order = shuffle(POKEMON_HALFTIME_POOL.map((_, i) => i)).slice(0, POKEMON_HALFTIME_COUNT);
+    game_state = {
+      roundRobin: { matches: generateRoundRobinMatches(players.map((p) => p.id)), halftimeShown: true },
+      halftime: { order, index: 0, revealed: false },
+    };
+  }
   // Golf is turn-based (see golfCurrentTurnPlayerId) — a dev bot takes its
   // own turn automatically via ensureGolfBotSwing, so jumping straight
   // here still moves on its own without the host manually swinging for it.
@@ -2360,6 +2429,9 @@ function renderInner() {
     case "round-robin":
       html += renderRoundRobin();
       break;
+    case "halftime-show":
+      html += renderHalftimeShow();
+      break;
     case "shootout":
       ensureShootoutAnim();
       ensureBotAutoPick();
@@ -2522,6 +2594,7 @@ function renderDevBar() {
     ["leaderboard", "MC Leaderboard"],
     ["shootout-intro", "PK Intro"],
     ["round-robin", "Round Robin"],
+    ["halftime-show", "Half-Time Show"],
     ["final-leaderboard", "Final LB"],
     ["guess-intro", "Guess Intro"],
     ["guess", "Guess"],
@@ -2934,11 +3007,17 @@ function renderStandingsTable(standings) {
 function renderRoundRobin() {
   const me = myPlayer();
   const isHost = me?.is_host;
-  const matches = room.game_state.roundRobin.matches;
+  const roundRobin = room.game_state.roundRobin;
+  const matches = roundRobin.matches;
   const nameOf = (id) => players.find((p) => p.id === id)?.name || "?";
   const standings = computeStandings(matches, players);
   const played = matches.filter((m) => m.winner).length;
   const nextIndex = findNextRRMatch(matches);
+  // Fires exactly once, the moment the count hits PK_HALFTIME_AFTER_MATCHES
+  // — halftimeShown flips permanently true the moment the show starts, so
+  // returning to this screen afterward (still sitting at the same played
+  // count, before the next match changes it) doesn't re-offer it.
+  const halftimeDue = played === PK_HALFTIME_AFTER_MATCHES && !roundRobin.halftimeShown;
   return `
     <div class="card">
       <h2>🏁 Standings</h2>
@@ -2962,10 +3041,40 @@ function renderRoundRobin() {
       </ul>
       ${
         isHost
-          ? nextIndex >= 0
-            ? `<button class="btn primary" data-action="start-rr-match" data-i="${nextIndex}">▶️ ${escapeHtml(nameOf(matches[nextIndex].p1))} vs ${escapeHtml(nameOf(matches[nextIndex].p2))}</button>`
-            : `<button class="btn primary" data-action="finish-round-robin">🏆 Show final leaderboard</button>`
-          : `<p class="waiting">Waiting for host…</p>`
+          ? halftimeDue
+            ? `<button class="btn primary" data-action="start-halftime-show">🎤 Half-Time Show!</button>`
+            : nextIndex >= 0
+              ? `<button class="btn primary" data-action="start-rr-match" data-i="${nextIndex}">▶️ ${escapeHtml(nameOf(matches[nextIndex].p1))} vs ${escapeHtml(nameOf(matches[nextIndex].p2))}</button>`
+              : `<button class="btn primary" data-action="finish-round-robin">🏆 Show final leaderboard</button>`
+          : halftimeDue
+            ? `<p class="waiting">🎤 Half-time's coming up…</p>`
+            : `<p class="waiting">Waiting for host…</p>`
+      }
+    </div>`;
+}
+
+function renderHalftimeShow() {
+  const me = myPlayer();
+  const isHost = me?.is_host;
+  const hs = room.game_state.halftime;
+  const dex = POKEMON_HALFTIME_POOL[hs.order[hs.index]];
+  const spriteUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex.id}.png`;
+  const isLast = hs.index + 1 >= hs.order.length;
+  return `
+    <div class="card halftime-card">
+      <h2>🎤 Half-Time Show!</h2>
+      <p class="sub">Just for fun — no points on this one.</p>
+      <h3 class="halftime-title">Who's That Pokémon?</h3>
+      <div class="halftime-stage">
+        <img src="${spriteUrl}" alt="${hs.revealed ? escapeHtml(dex.name) : "Mystery Pokémon silhouette"}" class="halftime-sprite${hs.revealed ? " revealed" : ""}">
+      </div>
+      ${hs.revealed ? `<p class="halftime-answer">It's ${escapeHtml(dex.name)}!</p>` : `<p class="sub" style="text-align:center">${hs.index + 1} of ${hs.order.length}</p>`}
+      ${
+        isHost
+          ? hs.revealed
+            ? `<button class="btn primary" data-action="halftime-next">${isLast ? "⚽ Back to the Shootout" : "Next Pokémon →"}</button>`
+            : `<button class="btn primary" data-action="halftime-reveal">🔍 Reveal!</button>`
+          : `<p class="waiting">${hs.revealed ? "Waiting for host…" : "Shout out your guess!"}</p>`
       }
     </div>`;
 }

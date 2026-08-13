@@ -907,8 +907,37 @@ code {
 .pk-keeper { font-size: 34px; z-index: 2; }
 .pk-ball { font-size: 24px; z-index: 3; }
 
+/* ── half-time show ("Who's That Pokémon?", renderHalftimeShow) ─── */
+.halftime-title { text-align: center; margin: 4px 0 0; }
+.halftime-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  margin: 14px 0;
+  border-radius: 16px;
+  background: radial-gradient(circle at 50% 42%, rgba(255,209,102,0.16), rgba(0,0,0,0.4) 72%);
+  border: 1px solid var(--card-border);
+}
+.halftime-sprite {
+  width: 220px;
+  max-width: 70%;
+  height: auto;
+  filter: brightness(0); /* the silhouette — same artwork, no separate asset */
+  transition: filter 0.6s ease;
+}
+.halftime-sprite.revealed { filter: none; }
+.halftime-answer {
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent);
+  margin: 0 0 4px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pk-impact-goal, .pk-impact-save, .pk-result-pop, .confetti { animation: none !important; }
+  .halftime-sprite { transition: none; }
 }
 
 /* dev-only testing affordances (?dev=1) */
