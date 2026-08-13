@@ -2,9 +2,9 @@
 
 A tiny live multiplayer web app for deciding the Fantasy League Bugaloo draft
 order. Everyone joins a room from their own device, plays through four
-rounds — Guess the Missing Club from a player's career timeline, Guess the
-Footballer from progressive clues, a 1v1 penalty shootout round robin
-(everyone plays everyone once, standings by wins/goal difference), then
+rounds — Guess the Missing Club from a player's career timeline, a 1v1
+penalty shootout round robin (everyone plays everyone once, standings by
+wins/goal difference), Guess the Footballer from progressive clues, then
 Football Golf, real stroke play over a 5-hole course themed after Arsenal,
 Liverpool, Leeds United, Manchester United and Barcelona — and the combined
 leaderboard becomes the draft order, with a dramatic reveal at the end.
@@ -64,16 +64,14 @@ it updates automatically within a minute or two.
    either, this was built in a few days so bugs are likely, and the host
    has no control over outcomes — just pacing). From there, each round
    also gets its own explainer screen (format + scoring) right before it
-   starts — Guess the Missing Club's, then Guess the Footballer's, then
-   the penalty shootout's.
+   starts.
 4. Guess the Missing Club plays first (10 random player career timelines,
    one club redacted — everyone answers in their own time on their own
    device, tapping a club then confirming to lock it in; a side panel
    shows who's still deciding. Nobody's answer is revealed until the host
    reveals — at which point that same side panel switches to showing
-   exactly who got it right and who didn't, by name), then Guess the
-   Footballer (host reveals clues one at a time per round; guessing on
-   fewer clues scores more), with a leaderboard at the end of each.
+   exactly who got it right and who didn't, by name), with a leaderboard
+   at the end.
 5. Host clicks through to the shootout intro screen (full explainer: format,
    how a match works, how standings/tiebreaks are decided, and a table of
    exactly how many points each final placement is worth), then **Start
@@ -88,7 +86,10 @@ it updates automatically within a minute or two.
    match is played, host clicks **Show final leaderboard** — final placement
    (ranked by wins, then goal difference, then head-to-head result) adds to the
    same combined leaderboard.
-6. Host clicks through to the Football Golf intro (format + scoring table).
+6. Guess the Footballer plays next (host reveals clues one at a time per
+   round; guessing on fewer clues scores more), with a leaderboard at the
+   end.
+7. Host clicks through to the Football Golf intro (format + scoring table).
    From there the host can optionally send everyone to the **🏌️ Driving
    Range** first — a shared, unscored warm-up screen where everyone's on
    the same room together and can take as many practice swings as they
@@ -129,7 +130,7 @@ it updates automatically within a minute or two.
    top. After all 5 holes, host clicks **Show final
    standings** — final placement (highest total first) adds to the
    combined leaderboard.
-7. Host clicks **Reveal Draft Order!** for the big reveal. Once it finishes
+8. Host clicks **Reveal Draft Order!** for the big reveal. Once it finishes
    counting down, a **📋 Go to Draft Tracker** button appears — see below.
 
 ## Draft Tracker

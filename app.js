@@ -705,6 +705,7 @@ async function onClick(e) {
   if (action === "start-round-robin") return startRoundRobin();
   if (action === "start-rr-match") return startRRMatch(Number(btn.dataset.i));
   if (action === "finish-round-robin") return finishRoundRobin();
+  if (action === "show-guess-intro") return updateRoom({ status: "guess-intro" });
   if (action === "show-golf-intro") return updateRoom({ status: "golf-intro" });
   if (action === "show-golf-practice") return showGolfPractice();
   if (action === "start-golf") return startGolf();
@@ -937,7 +938,13 @@ async function missingClubNext() {
   const gs = room.game_state || {};
   const next = gs.qIndex + 1;
   if (next >= gs.order.length) {
-    await updateRoom({ status: "guess-intro" });
+    // Round order: Missing Club -> Penalty Shootout -> Guess the
+    // Footballer -> Football Golf (see the "leaderboard"/"final-
+    // leaderboard"/"guess-leaderboard" cases in render() for the rest of
+    // the chain). "leaderboard" is Missing Club's own checkpoint now, not
+    // a combined quiz screen with Guess the Footballer — those two rounds
+    // are no longer adjacent.
+    await updateRoom({ status: "leaderboard" });
   } else {
     await updateRoom({ game_state: { ...gs, qIndex: next, revealed: false } });
   }
@@ -988,7 +995,11 @@ async function guessNext() {
   const gs = room.game_state || {};
   const next = gs.pIndex + 1;
   if (next >= gs.order.length) {
-    await updateRoom({ status: "leaderboard" });
+    // "guess-leaderboard", not "leaderboard" — that status is Missing
+    // Club's own checkpoint now (see missingClubNext). Guess the
+    // Footballer gets its own, distinct one, since the two quiz rounds
+    // are no longer back to back in the round order.
+    await updateRoom({ status: "guess-leaderboard" });
   } else {
     await updateRoom({ game_state: { ...gs, pIndex: next, clueIndex: 0 } });
   }
@@ -1997,9 +2008,9 @@ async function devJump(status) {
     await ensureDevBotIfNeeded();
     game_state = { roundRobin: { matches: generateRoundRobinMatches(players.map((p) => p.id)) } };
   }
-  // Dev bots are safe here (unlike the old turn-based design) — they just
-  // never submit a shot, which no longer blocks anyone since the host can
-  // advance holes without waiting on every player.
+  // Golf is turn-based (see golfCurrentTurnPlayerId) — a dev bot takes its
+  // own turn automatically via ensureGolfBotSwing, so jumping straight
+  // here still moves on its own without the host manually swinging for it.
   if (status === "golf-intro") await ensureDevBotIfNeeded();
   if (status === "golf-practice") {
     await ensureDevBotIfNeeded();
@@ -2007,7 +2018,10 @@ async function devJump(status) {
   }
   if (status === "golf") {
     await ensureDevBotIfNeeded();
-    game_state = { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]) } };
+    // turnOrder/turnPos are required — without them golfCurrentTurnPlayerId
+    // has nothing to iterate and nobody (human or bot) is ever "on turn",
+    // which would silently soft-lock a dev-jumped-straight-to-golf room.
+    game_state = { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]), turnOrder: players.map((p) => p.id), turnPos: 0 } };
   }
   await updateRoom({ status, game_state });
 }
@@ -2269,7 +2283,7 @@ function renderInner() {
       html += renderGuess();
       break;
     case "leaderboard":
-      html += renderLeaderboard("the quiz", "show-shootout-intro", "⚽ Continue to Penalty Shootout →");
+      html += renderLeaderboard("the missing club round", "show-shootout-intro", "⚽ Continue to Penalty Shootout →");
       break;
     case "shootout-intro":
       html += renderShootoutIntro();
@@ -2283,7 +2297,10 @@ function renderInner() {
       html += renderShootout();
       break;
     case "final-leaderboard":
-      html += renderLeaderboard("the shootout", "show-golf-intro", "⛳ Continue to Football Golf →");
+      html += renderLeaderboard("the shootout", "show-guess-intro", "🕵️ Continue to Guess the Footballer →");
+      break;
+    case "guess-leaderboard":
+      html += renderLeaderboard("the footballer round", "show-golf-intro", "⛳ Continue to Football Golf →");
       break;
     case "golf-intro":
       html += renderGolfIntro();
@@ -2412,12 +2429,13 @@ function renderDevBar() {
     ["party-intro", "Party Intro"],
     ["missing-club-intro", "MC Intro"],
     ["missing-club", "Missing Club"],
-    ["guess-intro", "Guess Intro"],
-    ["guess", "Guess"],
-    ["leaderboard", "Leaderboard"],
+    ["leaderboard", "MC Leaderboard"],
     ["shootout-intro", "PK Intro"],
     ["round-robin", "Round Robin"],
     ["final-leaderboard", "Final LB"],
+    ["guess-intro", "Guess Intro"],
+    ["guess", "Guess"],
+    ["guess-leaderboard", "Guess Leaderboard"],
     ["golf-intro", "Golf Intro"],
     ["golf-practice", "Golf Practice"],
     ["golf", "Golf"],
@@ -2440,7 +2458,7 @@ function renderHome() {
   return `
     <div class="card hero">
       <h1>🏆 Fantasy League Bugaloo</h1>
-      <p class="sub">Guess the missing club, guess the footballer, and penalty kicks — rounds to decide who drafts first.</p>
+      <p class="sub">Guess the missing club, penalty kicks, and guess the footballer — rounds to decide who drafts first.</p>
       ${local.error ? `<p class="error">${escapeHtml(local.error)}</p>` : ""}
       <label class="field">
         <span>Your name</span>
@@ -2468,8 +2486,8 @@ function renderDevQuickStart() {
       <p class="sub">Jump straight into a game to test it solo. Creates a throwaway room if you don't have one open yet.</p>
       <div class="dev-grid">
         <button class="dev-btn" data-action="dev-quickstart" data-status="missing-club">⚽ Guess the Missing Club</button>
-        <button class="dev-btn" data-action="dev-quickstart" data-status="guess">🕵️ Guess the Footballer</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="round-robin">⚽ PK Round Robin</button>
+        <button class="dev-btn" data-action="dev-quickstart" data-status="guess">🕵️ Guess the Footballer</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="golf">🏌️ Football Golf</button>
         <button class="dev-btn" data-action="dev-quickstart" data-status="reveal">🏆 Reveal</button>
       </div>
@@ -2516,8 +2534,8 @@ function renderPartyIntro() {
       <h3>The rounds</h3>
       <ol class="party-round-list">
         <li><b>⚽ Guess the Missing Club</b> — a real footballer's club career shown as a timeline with one club redacted. Answer in your own time; the host reveals the correct club (and how many got it) to everyone at once.</li>
-        <li><b>🕵️ Guess the Footballer</b> — a mystery player revealed one clue at a time, most obscure clue first. Guess earlier for more points, but guess wrong and you're frozen out for that round.</li>
         <li><b>🥅 Penalty Shootout</b> — a round-robin of 1v1 shootouts, everyone plays everyone once. Blind, simultaneous shot/dive picks; final standing adds placement points to the leaderboard.</li>
+        <li><b>🕵️ Guess the Footballer</b> — a mystery player revealed one clue at a time, most obscure clue first. Guess earlier for more points, but guess wrong and you're frozen out for that round.</li>
         <li><b>⛳ Football Golf</b> — real stroke play over a 5-hole course, each hole themed after a club. Tee off, then keep dragging to shoot, slingshot-style, from wherever you land until it's holed — fewer strokes scores more (eagle down to a bogey). Final total placement adds points too.</li>
       </ol>
       <p>You'll see a running leaderboard after each round, and the big reveal at the very end turns the final combined score into the draft order.</p>
@@ -2640,7 +2658,7 @@ function renderMissingClub() {
       ${
         isHost
           ? revealed
-            ? `<button class="btn primary" data-action="missing-club-next">${qIndex + 1 >= gs.order.length ? "🕵️ Next: Guess the Footballer" : "Next journey"}</button>`
+            ? `<button class="btn primary" data-action="missing-club-next">${qIndex + 1 >= gs.order.length ? "Show leaderboard" : "Next journey"}</button>`
             : `<button class="btn primary" data-action="reveal-missing-club">🔍 Reveal answer</button>`
           : ""
       }
