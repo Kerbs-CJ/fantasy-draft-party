@@ -934,6 +934,7 @@ code {
   color: var(--accent);
   margin: 0 0 4px;
 }
+.halftime-note { font-size: 14px; font-weight: 600; color: var(--sub); } /* the joke-reveal punchline, e.g. "...from above!" */
 
 @media (prefers-reduced-motion: reduce) {
   .pk-impact-goal, .pk-impact-save, .pk-result-pop, .confetti { animation: none !important; }

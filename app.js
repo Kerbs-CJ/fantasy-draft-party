@@ -1286,6 +1286,18 @@ async function submitPick(role, zone) {
 // style.css), which turns every non-transparent pixel solid black while
 // keeping the real outline, and un-filters on reveal.
 const POKEMON_HALFTIME_COUNT = 5;
+// Each entry's image is what BOTH the silhouette (via CSS filter, see
+// .halftime-sprite) and the reveal actually show — same one image, no
+// separate "fake" silhouette needed. Most entries default to standard
+// front-facing artwork (via `id`, resolved by halftimeImageUrl below),
+// which silhouettes as a normal, honest, guessable shape. An entry can
+// instead set `img` directly to override that default with a genuinely
+// misleading-angle picture — e.g. a Pokémon shot from directly overhead so
+// its silhouette reads as a plain circle and looks like something totally
+// different (classic: looks like Voltorb, is actually Jigglypuff from
+// above) — that's the "joke reveal" format; swap in real image URLs for
+// whichever entries should play that trick. `note` is optional flavour
+// text shown alongside the reveal (e.g. "...from above!").
 const POKEMON_HALFTIME_POOL = [
   { id: 25, name: "Pikachu" },
   { id: 6, name: "Charizard" },
@@ -1300,6 +1312,9 @@ const POKEMON_HALFTIME_POOL = [
   { id: 52, name: "Meowth" },
   { id: 68, name: "Machamp" },
 ];
+function halftimeImageUrl(entry) {
+  return entry.img || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${entry.id}.png`;
+}
 
 async function startHalftimeShow() {
   const order = shuffle(POKEMON_HALFTIME_POOL.map((_, i) => i)).slice(0, POKEMON_HALFTIME_COUNT);
@@ -3038,7 +3053,7 @@ function renderHalftimeShow() {
   const isHost = me?.is_host;
   const hs = room.game_state.halftime;
   const dex = POKEMON_HALFTIME_POOL[hs.order[hs.index]];
-  const spriteUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex.id}.png`;
+  const spriteUrl = halftimeImageUrl(dex);
   const isLast = hs.index + 1 >= hs.order.length;
   return `
     <div class="card halftime-card">
@@ -3048,7 +3063,11 @@ function renderHalftimeShow() {
       <div class="halftime-stage">
         <img src="${spriteUrl}" alt="${hs.revealed ? escapeHtml(dex.name) : "Mystery Pokémon silhouette"}" class="halftime-sprite${hs.revealed ? " revealed" : ""}">
       </div>
-      ${hs.revealed ? `<p class="halftime-answer">It's ${escapeHtml(dex.name)}!</p>` : `<p class="sub" style="text-align:center">${hs.index + 1} of ${hs.order.length}</p>`}
+      ${
+        hs.revealed
+          ? `<p class="halftime-answer">It's ${escapeHtml(dex.name)}!${dex.note ? ` <span class="halftime-note">${escapeHtml(dex.note)}</span>` : ""}</p>`
+          : `<p class="sub" style="text-align:center">${hs.index + 1} of ${hs.order.length}</p>`
+      }
       ${
         isHost
           ? hs.revealed
