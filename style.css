@@ -1198,3 +1198,62 @@ body.draft-tracker #app { max-width: 900px; }
   cursor: pointer;
 }
 .dt-draft-btn:active { transform: scale(0.97); }
+
+/* "See full team" — a full-screen formation view for one drafter (see
+   renderSquadView in draft-tracker.js), GKP top through FWD bottom, one
+   row per position with SQUAD_SHAPE[pos] card slots (empty ones shown
+   dashed, so an unfinished squad still reads as its target shape). Pitch-
+   tinted rather than a literal grass-textured formation graphic — keeps
+   player name/team/price legible on a phone instead of cramming text into
+   small formation dots. */
+.dt-squad-back { font-size: 13px; padding: 0; }
+.dt-squad-pitch {
+  margin-top: 14px;
+  padding: 16px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(6,214,160,0.10), rgba(6,214,160,0.03));
+  border: 1px solid rgba(6,214,160,0.25);
+}
+.dt-squad-row { margin-bottom: 18px; }
+.dt-squad-row:last-child { margin-bottom: 0; }
+.dt-squad-row-label {
+  text-align: center;
+  font-size: 12px;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--sub);
+}
+.dt-squad-row-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.dt-squad-card {
+  min-width: 88px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--card-border);
+  text-align: center;
+}
+.dt-squad-card.empty { background: rgba(255,255,255,0.02); border-style: dashed; opacity: 0.5; }
+.dt-squad-card-name {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 104px;
+}
+.dt-squad-card-meta { display: block; font-size: 11px; color: var(--sub); margin-top: 2px; }
+.dt-squad-row-gkp .dt-squad-row-label { color: var(--accent); }
+.dt-squad-row-gkp .dt-squad-card:not(.empty) { border-color: rgba(255,209,102,0.4); }
+.dt-squad-row-def .dt-squad-row-label { color: var(--accent2); }
+.dt-squad-row-def .dt-squad-card:not(.empty) { border-color: rgba(6,214,160,0.4); }
+.dt-squad-row-mid .dt-squad-row-label { color: #7fd4f0; }
+.dt-squad-row-mid .dt-squad-card:not(.empty) { border-color: rgba(17,138,178,0.5); }
+.dt-squad-row-fwd .dt-squad-row-label { color: #ff9bb3; }
+.dt-squad-row-fwd .dt-squad-card:not(.empty) { border-color: rgba(239,71,111,0.4); }
