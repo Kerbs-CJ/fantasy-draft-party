@@ -1100,6 +1100,16 @@ body.draft-tracker #app { max-width: 900px; }
   color: var(--text);
   font-size: 14px;
 }
+/* The closed select's translucent background looks fine sitting on the
+   dark page, but the OS-native open dropdown popup doesn't composite that
+   transparency against anything — it falls back to a plain white system
+   background while still applying our near-white `color` on top, which is
+   why the options were unreadable. Explicit opaque colors on <option>
+   fixes the open-popup state without touching the closed control's look. */
+.dt-filter-row select option {
+  background: var(--card);
+  color: var(--text);
+}
 
 .dt-player-list {
   max-height: 60vh;
