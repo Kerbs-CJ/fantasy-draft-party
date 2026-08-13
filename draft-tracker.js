@@ -443,7 +443,7 @@ function renderPlayerList(info, me) {
     if (q && !p.name.toLowerCase().includes(q) && !p.team.toLowerCase().includes(q)) return false;
     return true;
   });
-  filtered.sort((a, b) => a.name.localeCompare(b.name));
+  filtered.sort((a, b) => b.price - a.price || a.name.localeCompare(b.name)); // most expensive first, alphabetical as the tiebreak for same-priced players
   const total = filtered.length;
   const shown = filtered.slice(0, RENDER_CAP);
   const myTurn = !local.submitting && !info.done && !!me && info.drafter.id === me.id;
