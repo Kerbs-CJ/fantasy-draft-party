@@ -1084,6 +1084,7 @@ body.draft-tracker #app { max-width: 900px; }
 }
 .dt-roster-budget { font-variant-numeric: tabular-nums; }
 .dt-roster-budget.tight { color: var(--danger); font-weight: 700; }
+.dt-roster-toggle { display: block; margin: 6px 0 0; padding: 0; font-size: 12px; }
 
 .dt-filters { padding: 16px 20px; }
 .dt-filter-row {

@@ -72,6 +72,11 @@ const local = {
   // see the "toggle" listener in init() for how this stays in sync.
   dtSectionOpen: { FWD: true, MID: true, DEF: true, GKP: true },
   botScheduledForPick: null, // pick_number a bot pick's already been scheduled for on this device, so a later render doesn't double-schedule it
+  // drafterId -> true once someone's clicked "View full team" for that
+  // roster — collapsed (just the last pick shown) by default, since 5
+  // rosters each growing to 15 players would otherwise push the actual
+  // player list off the top of the screen by the back half of the draft.
+  rosterExpanded: {},
 };
 
 init();
@@ -314,6 +319,11 @@ function onClick(e) {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
   if (btn.dataset.action === "draft") draftPlayer(Number(btn.dataset.id));
+  if (btn.dataset.action === "toggle-roster") {
+    const id = btn.dataset.id;
+    local.rosterExpanded[id] = !local.rosterExpanded[id];
+    render();
+  }
 }
 
 // Live-filters as you type without losing your place in the search box —
@@ -432,16 +442,37 @@ function renderRosters(info) {
                 <div class="dt-roster-counts">
                   ${POSITIONS.map((pos) => `<span class="dt-pos-count${counts[pos] >= SQUAD_SHAPE[pos] ? " full" : ""}">${pos} ${counts[pos]}/${SQUAD_SHAPE[pos]}</span>`).join("")}
                 </div>
-                ${
-                  roster.length
-                    ? `<ul class="player-list compact">${roster.map((pl) => `<li>${escapeHtml(pl.name)} <span class="sub">(${pl.pos} · ${escapeHtml(pl.teamShort)} · ${fmtMoney(pl.price)})</span></li>`).join("")}</ul>`
-                    : `<p class="sub" style="margin:6px 0 0">No picks yet</p>`
-                }
+                ${renderRosterPicks(p.id, roster)}
               </div>`;
           })
           .join("")}
       </div>
     </div>`;
+}
+
+// Collapsed by default (see rosterExpanded) — 5 growing rosters, up to 15
+// picks each, would otherwise push the actual player list off the top of
+// the screen by the back half of the draft. Collapsed state shows just the
+// most recent pick (roster is already oldest-first — see rosterFor) plus a
+// button to see the rest; the position-count badges above this already
+// give a compact read on squad shape either way, so nothing informational
+// is lost by collapsing the names.
+function renderRosterPicks(drafterId, roster) {
+  if (!roster.length) return `<p class="sub" style="margin:6px 0 0">No picks yet</p>`;
+  const pickLine = (pl) => `${escapeHtml(pl.name)} <span class="sub">(${pl.pos} · ${escapeHtml(pl.teamShort)} · ${fmtMoney(pl.price)})</span>`;
+  if (local.rosterExpanded[drafterId]) {
+    return `
+      <ul class="player-list compact">${roster.map((pl) => `<li>${pickLine(pl)}</li>`).join("")}</ul>
+      <button class="link-btn dt-roster-toggle" data-action="toggle-roster" data-id="${drafterId}">Hide full team</button>`;
+  }
+  const last = roster[roster.length - 1];
+  return `
+    <ul class="player-list compact"><li><span class="sub">Last pick:</span> ${pickLine(last)}</li></ul>
+    ${
+      roster.length > 1
+        ? `<button class="link-btn dt-roster-toggle" data-action="toggle-roster" data-id="${drafterId}">View full team (${roster.length})</button>`
+        : ""
+    }`;
 }
 
 function renderFilters() {
