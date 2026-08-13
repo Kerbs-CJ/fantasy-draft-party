@@ -155,14 +155,13 @@ const GOLF_HOLES = [
     crest: "FCB",
     colors: { primary: "#A50044", secondary: "#004D98" },
     name: "Camp Nou",
-    description: "The grand finale — corner to corner, four gates, two water hazards, no easy way through.",
+    description: "The grand finale — corner to corner, four gates, water guarding the green, no easy way through.",
     par: 6,
     // Corner to corner — the longest possible line the course allows —
     // through FOUR gates instead of three, with sand bogging down an
-    // imprecise entry into two of them and water guarding both the big
-    // cross-court swing in the middle and the final approach to the
-    // green. Genuinely the hardest hole on the course, as a grand finale
-    // should be.
+    // imprecise entry into two of them and water guarding the final
+    // approach to the green. Genuinely the hardest hole on the course, as
+    // a grand finale should be.
     tee: { x: 6, y: 94 },
     pin: { x: 94, y: 6 },
     obstacles: [
@@ -177,7 +176,6 @@ const GOLF_HOLES = [
       { x: 25, y: 35, w: 14, h: 10 }, // guarding the entry to gate 3
     ],
     water: [
-      { x: 42, y: 67, w: 12, h: 6 }, // a real risk cutting the corner on the big cross-court swing — but there's clear room to swing wider and miss it entirely (gates 1/2's gap is 11 units tall, this only eats a slice of it)
       { x: 82, y: 14, w: 14, h: 10 }, // guarding the final approach to the green
     ],
   },
@@ -1705,7 +1703,7 @@ function schedulePracticeReset(playerId) {
         },
       },
     });
-  }, 3200); // longer than the roll's own duration cap (2600ms) plus the sink animation (380ms) so both always finish first
+  }, 3300); // longer than the roll's own duration cap (2600ms) plus the sink animation (480ms) so both always finish first
 }
 
 function practicePointerCancel() {
@@ -3135,11 +3133,23 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         renderX = path[0].x;
         renderY = path[0].y;
       }
-      // Once a genuinely-holed ball has finished its roll-and-sink (i.e.
-      // this ISN'T the render that just triggered that animation), it's
-      // gone — don't render it at all, rather than leaving a sunk (but
-      // technically still-present) element sitting there.
-      if (holed && !animating) return "";
+      // Once a genuinely-holed ball has finished its roll AND its sink
+      // animation (see animateGolfBallSink/markGolfBallSunk — `sunk` is
+      // only set true once that animation's own rAF loop actually
+      // completes), it's gone — don't render it at all, rather than
+      // leaving a sunk (but technically still-present) element sitting
+      // there. Crucially this does NOT fire just because `animating` is
+      // false — the realtime echo of our own write reliably fires a
+      // redundant render() a beat later, while the sink is still playing;
+      // omitting the element then would rip it out of the DOM mid-animation
+      // (the rAF loop's next getElementById would find nothing and give
+      // up), which is exactly why the ball used to visibly disappear
+      // instead of sinking. Keeping it rendered (frozen at its final spot,
+      // since `animating` is false so renderX/renderY are unchanged) lets
+      // any redundant render recreate an identical-looking node that the
+      // still-running rAF loop picks straight back up next frame.
+      const sunk = !!trackMap[p.id]?.sunk;
+      if (holed && !animating && sunk) return "";
       return `
         <div id="golf-ball-${p.id}" class="golf-course-ball${holedOut ? " holed" : ""}" style="left:${renderX}%; top:${renderY}%;" title="${escapeHtml(p.name)}">
           <span class="golf-ball-emoji">⚽</span>
@@ -3199,7 +3209,10 @@ function animateGolfBallFlight(ballId, path, durationMs, holed) {
   if (prefersReducedMotion()) {
     ballEl.style.left = last.x + "%";
     ballEl.style.top = last.y + "%";
-    if (holed) ballEl.style.display = "none"; // straight to "in the cup", no animation to skip
+    if (holed) {
+      ballEl.style.display = "none"; // straight to "in the cup", no animation to skip
+      markGolfBallSunk(ballId);
+    }
     return;
   }
   // Cumulative arc length at each waypoint, so "40% of the way through
@@ -3243,32 +3256,65 @@ function animateGolfBallFlight(ballId, path, durationMs, holed) {
   requestAnimationFrame(frame);
 }
 
-// The roll has finished right on the pin — shrink and fade the ball down
-// into the cup instead of just leaving it sitting there. Its own short
-// rAF loop (same fresh-lookup-every-frame pattern as the roll above) so
-// it's independently safe against a redundant render landing mid-sink.
+// Marks a ball's local track entry as genuinely finished sinking — this is
+// what tells renderGolfCourse's `sunk` check it's now safe to stop
+// rendering the element at all (see the comment there). Deliberately a
+// separate flag from `holed`/`holedOut` (which come from shared room
+// state and go true the instant the shot resolves): `sunk` is purely
+// local, per-device animation-completion state, so every device gets to
+// finish playing its own sink animation on its own clock regardless of
+// what the room state already says.
+function markGolfBallSunk(ballId) {
+  const playerId = ballId.replace("golf-ball-", "");
+  if (local.golfBallAnim[playerId]) local.golfBallAnim[playerId].sunk = true;
+  if (local.practiceBallAnim[playerId]) local.practiceBallAnim[playerId].sunk = true;
+}
+
+// The roll has finished right on the pin — drop, shrink and fade the ball
+// (and its name tag) down into the cup, with a quick glow on the cup
+// itself at the moment it goes in, instead of just leaving it sitting
+// there (or, worse, snapping straight to invisible — see the `sunk` note
+// in renderGolfCourse for why this used to look like the ball just
+// disappearing). Its own short rAF loop (same fresh-lookup-every-frame
+// pattern as the roll above) so it's independently safe against a
+// redundant render landing mid-sink.
 function animateGolfBallSink(ballId) {
   if (prefersReducedMotion()) {
     const el = document.getElementById(ballId);
     if (el) el.style.display = "none";
+    markGolfBallSunk(ballId);
     return;
   }
   const t0 = performance.now();
-  const sinkMs = 380;
+  const sinkMs = 480;
   function frame(now) {
     const el = document.getElementById(ballId);
     if (!el) return; // gone from the DOM (redundant render already settled past it) — nothing left to animate
     const emoji = el.querySelector(".golf-ball-emoji");
+    const label = el.querySelector(".golf-course-ball-label");
+    const cup = document.querySelector(".golf-cup");
     const raw = Math.min(1, (now - t0) / sinkMs);
+    const eased = raw * raw; // ease-IN (accelerating) reads as falling in, not just shrinking in place
     if (emoji) {
-      const scale = (1 - raw).toFixed(3);
-      emoji.style.transform = `translate(-50%, -50%) scale(${scale})`;
-      emoji.style.opacity = String(1 - raw);
+      const scale = (1 - eased).toFixed(3);
+      const dropPx = (eased * 8).toFixed(1); // a small sink toward the cup's center as it shrinks
+      emoji.style.transform = `translate(-50%, calc(-50% + ${dropPx}px)) scale(${scale})`;
+      emoji.style.opacity = String(1 - eased);
+    }
+    if (label) label.style.opacity = String(1 - eased);
+    if (cup) {
+      // A brief brightening ring right as the ball drops, fading back out
+      // by the time it's gone — a small "that just went in" cue on the
+      // cup itself, not just the ball vanishing.
+      const pulse = raw < 0.4 ? raw / 0.4 : Math.max(0, 1 - (raw - 0.4) / 0.6);
+      cup.style.boxShadow = `inset 0 2px 4px rgba(0,0,0,0.9), 0 0 0 2px rgba(255,255,255,${(0.25 + pulse * 0.45).toFixed(2)}), 0 0 ${(pulse * 14).toFixed(1)}px ${(pulse * 4).toFixed(1)}px rgba(255,255,255,${(pulse * 0.35).toFixed(2)})`;
     }
     if (raw < 1) {
       requestAnimationFrame(frame);
     } else {
       el.style.display = "none";
+      if (cup) cup.style.boxShadow = ""; // back to the plain CSS cup — see .golf-cup
+      markGolfBallSunk(ballId);
     }
   }
   requestAnimationFrame(frame);
