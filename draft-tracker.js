@@ -171,6 +171,17 @@ function subscribe() {
         render();
       }
     )
+    // Only ever fires from the host's "Undo last pick" (see undoLastPick)
+    // — every device, not just the host's, needs to hear about it since
+    // whose turn it is and everyone's rosters depend on this table.
+    .on(
+      "postgres_changes",
+      { event: "DELETE", schema: "public", table: "draft_picks", filter: `room_code=eq.${room.code}` },
+      (payload) => {
+        picks = picks.filter((p) => p.id !== payload.old.id);
+        render();
+      }
+    )
     .subscribe();
 }
 
@@ -238,15 +249,35 @@ function maxAffordableForPick(drafterId) {
   return budgetRemaining(drafterId) - reserve;
 }
 
+// How many of a drafter's roster are at each position — used both to
+// render the "X/Y" badges and to actually enforce SQUAD_SHAPE (see
+// positionFull), which nothing did before this: a drafter (or a bot) could
+// take a 4th FWD or a 6th MID with nothing stopping them, well past what a
+// real FPL squad allows.
+function positionCounts(roster) {
+  const counts = { GKP: 0, DEF: 0, MID: 0, FWD: 0 };
+  for (const pl of roster) counts[pl.pos]++;
+  return counts;
+}
+function positionFull(drafterId, pos) {
+  return positionCounts(rosterFor(drafterId))[pos] >= SQUAD_SHAPE[pos];
+}
+
 // The one place an actual draft_picks row gets written — used by both a
 // human's own click (draftPlayer) and a bot's auto-pick
 // (ensureBotAutoPick), so there's exactly one insert/error-handling path
-// regardless of who's picking.
+// regardless of who's picking. This is the actual enforcement point for
+// "already taken" / "over budget" / "position already full" — draftPlayer
+// and randomAffordablePlayer both pre-filter for the same things, but this
+// is the real gate, same reasoning as every enforced-not-just-hidden check
+// elsewhere in this app.
 async function submitPick(plPlayerId, drafterId) {
   const info = currentPickInfo();
   if (info.done || local.submitting) return;
   if (!info.drafter || info.drafter.id !== drafterId) return;
   if (pickedPlayerIds().has(plPlayerId)) return;
+  const pl = window.PL_PLAYERS.find((p) => p.id === plPlayerId);
+  if (!pl || pl.price > maxAffordableForPick(drafterId) || positionFull(drafterId, pl.pos)) return;
   local.submitting = true;
   local.error = "";
   render();
@@ -280,7 +311,36 @@ async function draftPlayer(plPlayerId) {
   if (info.done || !info.drafter || info.drafter.id !== me.id) return; // not your turn — the button shouldn't even be visible, but double-check
   const pl = window.PL_PLAYERS.find((p) => p.id === plPlayerId);
   if (pl && pl.price > maxAffordableForPick(me.id)) return; // over budget — the button shouldn't be visible for this either, but double-check
+  if (pl && positionFull(me.id, pl.pos)) return; // that position's already at SQUAD_SHAPE's cap — same double-check
   await submitPick(plPlayerId, me.id);
+}
+
+// Host-only "undo" for a mis-click — deliberately only ever removes the
+// MOST RECENT pick, never an arbitrary one. draft_picks.pick_number is
+// unique per room, and currentPickInfo() derives whose turn is next purely
+// from picks.length, not by inspecting actual pick_number values — voiding
+// anything other than the last pick would leave a gap, and the next
+// insert's computed pick_number would then collide with a later pick that
+// was never deleted (a real unique_violation, not a cosmetic issue).
+// Removing the last one instead just cleanly decrements the count, which
+// is also exactly the case this exists for: undo immediately after a
+// mistake, not rewrite history.
+async function undoLastPick() {
+  if (!myPlayer()?.is_host) return;
+  if (!picks.length) return;
+  const last = picks[picks.length - 1];
+  const { error } = await sb.from("draft_picks").delete().eq("id", last.id);
+  if (error) {
+    local.error = `Couldn't undo that pick: ${error.message || error.code || "unknown error"}.`;
+  }
+  // The bot-scheduling guard is keyed by pick number (see
+  // ensureBotAutoPick) — after undo, the CURRENT pick number goes right
+  // back to the one that was just undone, which local.botScheduledForPick
+  // may already be marked as "handled" for. Clearing it lets a bot's turn
+  // get rescheduled properly instead of silently never re-picking.
+  local.botScheduledForPick = null;
+  await loadPicks();
+  render();
 }
 
 // If it's a bot's turn, have this browser pick for it after a short,
@@ -312,7 +372,9 @@ function ensureBotAutoPick() {
 function randomAffordablePlayer(drafterId) {
   const taken = pickedPlayerIds();
   const maxPrice = maxAffordableForPick(drafterId);
-  const pool = window.PL_PLAYERS.filter((p) => !taken.has(p.id) && p.price <= maxPrice);
+  const counts = positionCounts(rosterFor(drafterId));
+  const openPositions = POSITIONS.filter((pos) => counts[pos] < SQUAD_SHAPE[pos]);
+  const pool = window.PL_PLAYERS.filter((p) => !taken.has(p.id) && p.price <= maxPrice && openPositions.includes(p.pos));
   if (!pool.length) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -329,6 +391,7 @@ function onClick(e) {
     local.viewingSquadFor = null;
     render();
   }
+  if (btn.dataset.action === "undo-last-pick") undoLastPick();
 }
 
 // Live-filters as you type without losing your place in the search box —
@@ -399,6 +462,7 @@ function renderBoard() {
   const me = myPlayer();
   return `
     ${renderTurnBanner(info, me)}
+    ${renderHostUndo(me)}
     ${renderMyTeamButton(me)}
     ${renderRosters(info)}
     ${renderFilters()}
@@ -415,6 +479,21 @@ function renderBoard() {
 function renderMyTeamButton(me) {
   if (!me) return "";
   return `<button class="btn primary" data-action="see-squad" data-id="${me.id}">👕 My Team</button>`;
+}
+
+// Host-only "undo last pick" — see undoLastPick for why this is scoped to
+// only the most recent pick. Shown right under the turn banner so it's
+// hard to miss right after a mis-click.
+function renderHostUndo(me) {
+  if (!me?.is_host || !picks.length) return "";
+  const last = picks[picks.length - 1];
+  const pl = window.PL_PLAYERS.find((p) => p.id === last.pl_player_id);
+  const drafter = players.find((p) => p.id === last.drafter_id);
+  return `
+    <div class="card dt-host-undo">
+      <p class="sub" style="margin:0 0 8px">Last pick: <b>${escapeHtml(pl?.name || "?")}</b> by ${escapeHtml(drafter?.name || "someone")}</p>
+      <button class="btn host-btn-danger" data-action="undo-last-pick">↩️ Undo last pick</button>
+    </div>`;
 }
 
 function renderTurnBanner(info, me) {
@@ -447,8 +526,7 @@ function renderRosters(info) {
         ${info.order
           .map((p) => {
             const roster = rosterFor(p.id);
-            const counts = { GKP: 0, DEF: 0, MID: 0, FWD: 0 };
-            for (const pl of roster) counts[pl.pos]++;
+            const counts = positionCounts(roster);
             const onClock = !info.done && info.drafter.id === p.id;
             const left = budgetRemaining(p.id);
             return `
@@ -561,15 +639,19 @@ function renderPlayerList(info, me) {
   });
   const myTurn = !local.submitting && !info.done && !!me && info.drafter.id === me.id;
   const maxPrice = myTurn ? maxAffordableForPick(me.id) : -1;
+  const myCounts = myTurn ? positionCounts(rosterFor(me.id)) : null;
 
   return `
     <div class="card">
       <h3>Players${filtered.length ? ` (${filtered.length})` : ""}</h3>
-      ${POSITION_SECTIONS.map((section) => renderPositionSection(section, filtered, taken, myTurn, maxPrice)).join("")}
+      ${POSITION_SECTIONS.map((section) => {
+        const posFull = !!myCounts && myCounts[section.pos] >= SQUAD_SHAPE[section.pos];
+        return renderPositionSection(section, filtered, taken, myTurn, maxPrice, posFull);
+      }).join("")}
     </div>`;
 }
 
-function renderPositionSection(section, filtered, taken, myTurn, maxPrice) {
+function renderPositionSection(section, filtered, taken, myTurn, maxPrice, posFull) {
   const positionPlayers = filtered
     .filter((p) => p.pos === section.pos)
     .sort((a, b) => b.price - a.price || a.name.localeCompare(b.name)); // most expensive first, alphabetical as the tiebreak for same-priced players
@@ -583,22 +665,22 @@ function renderPositionSection(section, filtered, taken, myTurn, maxPrice) {
     <details class="dt-pos-section dt-pos-section-${section.pos.toLowerCase()}" data-pos="${section.pos}"${local.dtSectionOpen[section.pos] ? " open" : ""}>
       <summary>
         <span class="dt-pos-section-label">${section.icon} ${section.label.toUpperCase()}</span>
-        <span class="dt-pos-section-count">${remaining} left</span>
+        <span class="dt-pos-section-count">${myTurn && posFull ? "Full" : `${remaining} left`}</span>
       </summary>
       <div class="dt-player-list">
-        ${shown.length ? shown.map((p) => renderPlayerRow(p, taken, myTurn, maxPrice)).join("") : `<p class="sub" style="padding:10px 12px">No players match.</p>`}
+        ${shown.length ? shown.map((p) => renderPlayerRow(p, taken, myTurn, maxPrice, posFull)).join("") : `<p class="sub" style="padding:10px 12px">No players match.</p>`}
       </div>
       ${total > RENDER_CAP_PER_SECTION ? `<p class="sub" style="padding:8px 12px 0">+${total - RENDER_CAP_PER_SECTION} more — narrow your search to see them.</p>` : ""}
     </details>`;
 }
 
-function renderPlayerRow(p, taken, myTurn, maxPrice) {
+function renderPlayerRow(p, taken, myTurn, maxPrice, posFull) {
   const takenPick = taken.has(p.id) ? picks.find((pk) => pk.pl_player_id === p.id) : null;
   const takenBy = takenPick ? players.find((pl) => pl.id === takenPick.drafter_id) : null;
   const affordable = p.price <= maxPrice;
-  const canDraft = myTurn && affordable;
+  const canDraft = myTurn && !posFull && affordable;
   return `
-    <div class="dt-player-row${takenPick ? " taken" : ""}${!takenPick && myTurn && !affordable ? " unaffordable" : ""}">
+    <div class="dt-player-row${takenPick ? " taken" : ""}${!takenPick && myTurn && !canDraft ? " unaffordable" : ""}">
       <span class="dt-player-name">${escapeHtml(p.name)}</span>
       <span class="dt-player-team sub">${escapeHtml(p.teamShort)}</span>
       <span class="dt-player-price">${fmtMoney(p.price)}</span>
@@ -607,9 +689,11 @@ function renderPlayerRow(p, taken, myTurn, maxPrice) {
           ? `<span class="dt-taken-by">${escapeHtml(takenBy?.name || "someone")}</span>`
           : canDraft
             ? `<button class="dt-draft-btn" data-action="draft" data-id="${p.id}">Draft</button>`
-            : myTurn && !affordable
-              ? `<span class="dt-taken-by sub">Over budget</span>`
-              : `<span class="dt-taken-by sub">—</span>`
+            : myTurn && posFull
+              ? `<span class="dt-taken-by sub">Position full</span>`
+              : myTurn && !affordable
+                ? `<span class="dt-taken-by sub">Over budget</span>`
+                : `<span class="dt-taken-by sub">—</span>`
       }
     </div>`;
 }

@@ -105,8 +105,14 @@ create table if not exists draft_picks (
 alter table draft_picks enable row level security;
 drop policy if exists "public read draft_picks" on draft_picks;
 drop policy if exists "public write draft_picks" on draft_picks;
+drop policy if exists "public delete draft_picks" on draft_picks;
 create policy "public read draft_picks" on draft_picks for select using (true);
 create policy "public write draft_picks" on draft_picks for insert with check (true);
+-- backs the host's "Undo last pick" control (draft-tracker.js
+-- undoLastPick) -- only ever deletes the single most recent pick (the only
+-- one safe to remove without breaking pick_number sequencing), for
+-- correcting a mis-click.
+create policy "public delete draft_picks" on draft_picks for delete using (true);
 
 do $$ begin
   alter publication supabase_realtime add table draft_picks;
