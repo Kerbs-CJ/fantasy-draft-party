@@ -105,10 +105,13 @@ it updates automatically within a minute or two.
    on it), sand that bogs it right down, and water that ends the shot on
    contact and sends the ball back to the tee — where every player's ball
    is visible moving live across it as shots land, not just a final
-   result. Everyone plays the *same hole at once*, each in their own time
-   on their own device, like Guess the Missing Club. Swinging is a single
-   drag, like a real slingshot: press down on your ball and pull back — a
-   line follows your hand, stretching the way you pull, up to full power
+   result. Players take **turns, one stroke at a time**, cycling round the
+   group — everyone watches every shot land instead of racing through
+   their own hole in isolation. A player who holes out early is quietly
+   skipped in the rotation from then on (turn just keeps moving to
+   whoever's still playing) rather than being waited on again. Swinging is
+   a single drag, like a real slingshot: press down on your ball and pull
+   back — a line follows your hand, stretching the way you pull, up to full power
    (past that, more pull doesn't add anything) — then let go and the ball
    fires the *opposite* way (pull south, it flies north). How far you
    pull sets the power, the angle sets the direction, no timer and
@@ -118,10 +121,12 @@ it updates automatically within a minute or two.
    splash back to the tee in the water, and land on the shared map, then
    keep swinging from there until it's holed (up to 12 strokes — after
    that it's forced to wrap up so nobody's stuck forever). Fewer strokes
-   scores more, same as real golf (🦅 Eagle down to a bogey). Host moves
-   the group to the next hole whenever ready — no need to
-   wait on stragglers (a hole that's dragging on also force-finishes a few
-   strokes over par). After all 5 holes, host clicks **Show final
+   scores more, same as real golf (🦅 Eagle down to a bogey). Host can
+   move the group to the next hole whenever ready, even if not everyone's
+   finished — and if a turn ever genuinely gets stuck (someone's phone
+   dies mid-hole), the host's "Reset this hole" control (see Host
+   Controls below) restarts the whole hole, turn order included, from the
+   top. After all 5 holes, host clicks **Show final
    standings** — final placement (highest total first) adds to the
    combined leaderboard.
 7. Host clicks **Reveal Draft Order!** for the big reveal. Once it finishes

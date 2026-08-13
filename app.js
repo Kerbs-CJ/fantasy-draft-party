@@ -430,6 +430,7 @@ let local = {
   missingClubBotScheduled: {}, // `${botId}-${qIndex}` -> true, so a bot isn't scheduled twice
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
+  golfBotScheduled: {}, // `${holeIndex}:${botId}:${strokes}` -> true, so a bot's turn isn't scheduled twice
   shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
@@ -1282,10 +1283,13 @@ async function finishRoundRobin() {
 // just judging distance and angle by eye. Every player has an (x, y)
 // position on the hole, starting at the tee, that lives in shared room
 // state and updates after every shot (not just the final one), so the
-// whole group watches every ball move across the course live. Everyone
-// plays the SAME hole at once, each on their own device and own time
-// (like Guess the Missing Club) — no bracket, no turn order, so nobody's
-// ever stuck waiting on one slow (or unresponsive, e.g. a dev bot) player.
+// whole group watches every ball move across the course live. Turn-based,
+// one stroke at a time (see golfCurrentTurnPlayerId/turnOrder/turnPos) —
+// deliberately so everyone watches everyone else's shots rather than
+// racing through their own hole in isolation; a player who finishes early
+// just gets skipped in the rotation rather than holding it up. A dev bot
+// takes its own turn automatically in DEV_MODE (see ensureGolfBotSwing) so
+// solo testing doesn't stall on one.
 //
 // The drag itself is purely local while it's in progress — see the note
 // above golfPointerDown for why it deliberately bypasses render(). Only
@@ -1391,7 +1395,10 @@ function golfBallsAtTee(hole) {
 }
 
 async function startGolf() {
-  await updateRoom({ status: "golf", game_state: { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]) } } });
+  await updateRoom({
+    status: "golf",
+    game_state: { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]), turnOrder: players.map((p) => p.id), turnPos: 0 } },
+  });
 }
 
 function ensureGolfReady() {
@@ -1421,9 +1428,32 @@ function golfAlreadyAnswered(gs) {
   return (gs.results[me.id] || []).length > gs.holeIndex;
 }
 
+function golfBallFor(gs, hole, playerId) {
+  return (playerId && gs.balls[playerId]) || { x: hole.tee.x, y: hole.tee.y, strokes: 0, holedOut: false };
+}
 function golfMyBall(gs, hole) {
-  const me = myPlayer();
-  return (me && gs.balls[me.id]) || { x: hole.tee.x, y: hole.tee.y, strokes: 0, holedOut: false };
+  return golfBallFor(gs, hole, myPlayer()?.id);
+}
+
+// Whose turn it is right now — one stroke at a time, cycling through
+// turnOrder (see golfSubmitShot for how turnPos advances after each
+// shot), but SKIPPING anyone who's already holed out on this hole. That's
+// the whole trick to "a player who finishes early doesn't get waited on
+// again": turnPos itself just always moves to the next raw slot after
+// whoever shot, and THIS function is what filters that down to someone
+// still actually playing — so once P1 holes out, the rotation quietly
+// becomes P2-P3-P2-P3-... without P1 ever coming back up, right up until
+// the whole hole's done. Returns null once EVERYONE's holed out (nobody
+// left to skip to) — the host's "Next hole" button doesn't depend on this
+// and is always available regardless, so that's not a dead end.
+function golfCurrentTurnPlayerId(gs) {
+  const order = gs.turnOrder || [];
+  for (let i = 0; i < order.length; i++) {
+    const pid = order[(gs.turnPos + i) % order.length];
+    const ball = gs.balls[pid];
+    if (ball && !ball.holedOut) return pid;
+  }
+  return null;
 }
 
 // Fires on pointerdown anywhere on the shared course, while it's my turn
@@ -1439,6 +1469,8 @@ function golfMyBall(gs, hole) {
 function golfPointerDown(courseEl, e) {
   const gs = room.game_state?.golf;
   if (!gs || golfAlreadyAnswered(gs)) return;
+  const me = myPlayer();
+  if (!me || golfCurrentTurnPlayerId(gs) !== me.id) return; // not your turn
   if (local.golf.subPhase !== "ready" && local.golf.subPhase !== "recap") return;
   const hole = GOLF_HOLES[gs.holeIndex];
   if (!hole) return;
@@ -1491,14 +1523,22 @@ function golfPointerCancel() {
 
 // `shot` is { power, path, endX, endY, holed } — path/endX/endY/holed
 // come straight from golfSimulateShot, already resolved against the
-// hole's real obstacles, so this function just has to record the result.
-async function golfSubmitShot(shot) {
-  const me = myPlayer();
+// hole's real obstacles, so this function just has to record the result
+// and pass the turn along. `botPlayerId` is only set when a dev bot's
+// shot is being driven from the host's own device (see
+// ensureGolfBotSwing) — omit it for a real player's own shot, which
+// defaults to myPlayer().
+async function golfSubmitShot(shot, botPlayerId) {
+  const me = botPlayerId ? players.find((p) => p.id === botPlayerId) : myPlayer();
   const gs = room.game_state?.golf;
   if (!me || !gs) return;
+  // Re-check turn ownership here too, not just at drag-start — the actual
+  // enforcement (same reasoning as every other per-player action in this
+  // app), so this can't be fired for someone else's turn via devtools.
+  if (golfCurrentTurnPlayerId(gs) !== me.id) return;
   const hole = GOLF_HOLES[gs.holeIndex];
   if (!hole) return;
-  const currentBall = golfMyBall(gs, hole);
+  const currentBall = golfBallFor(gs, hole, me.id);
   const holed = shot.holed;
   const strokes = currentBall.strokes + 1;
   const holedOut = holed || strokes >= GOLF_MAX_STROKES;
@@ -1511,17 +1551,29 @@ async function golfSubmitShot(shot) {
     results = { ...gs.results, [me.id]: [...(gs.results[me.id] || []), result] };
   }
 
-  local.golf = {
-    ...local.golf,
-    subPhase: "recap",
-    lastShot: { power: shot.power, holed, splashed: shot.splashed },
-    dragPointerId: null,
-    ballPos: null,
-    courseRect: null,
-    startClient: null,
-    currentClient: null,
-  };
-  await updateRoom({ game_state: { golf: { ...gs, balls, results } } });
+  // Advance the raw rotation cursor to the next slot after whoever just
+  // shot — golfCurrentTurnPlayerId is what skips over anyone already
+  // holed out from here, so this doesn't need to know or care who's
+  // actually still playing.
+  const order = gs.turnOrder || [];
+  const myIdx = order.indexOf(me.id);
+  const turnPos = myIdx === -1 ? gs.turnPos : (myIdx + 1) % order.length;
+
+  if (!botPlayerId) {
+    // Only touch local drag/recap UI state for our OWN shot — a bot's
+    // shot is driven from the host's device but isn't the host's ball.
+    local.golf = {
+      ...local.golf,
+      subPhase: "recap",
+      lastShot: { power: shot.power, holed, splashed: shot.splashed },
+      dragPointerId: null,
+      ballPos: null,
+      courseRect: null,
+      startClient: null,
+      currentClient: null,
+    };
+  }
+  await updateRoom({ game_state: { golf: { ...gs, balls, results, turnPos } } });
 }
 
 // Host-triggered, same as Missing Club's reveal/next — doesn't require
@@ -1534,7 +1586,9 @@ async function golfNextHole() {
   if (next >= GOLF_HOLES.length) {
     await finishGolf(gs);
   } else {
-    await updateRoom({ game_state: { golf: { ...gs, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]) } } });
+    await updateRoom({
+      game_state: { golf: { ...gs, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]), turnOrder: players.map((p) => p.id), turnPos: 0 } },
+    });
   }
 }
 
@@ -1571,6 +1625,42 @@ function ensureGolfAnim() {
       }
     }, 60);
   }
+}
+
+// While solo-testing in dev mode, have whichever dev bot's turn it
+// currently is take its shot a beat after the turn actually reaches them —
+// same idea as ensureBotAutoPick for the shootout. Turn-based play means a
+// bot's turn genuinely blocks the whole group now (unlike the old
+// everyone-at-once golf, where an idle bot was harmless), so this exists
+// to keep solo dev testing moving without the host having to manually
+// swing on a bot's behalf. Aims roughly at the pin with some jitter and a
+// randomized power — a plausible shot, not a solved one, same spirit as
+// the shootout bots picking a random zone.
+function ensureGolfBotSwing() {
+  if (!DEV_MODE) return;
+  const gs = room.game_state?.golf;
+  if (!gs) return;
+  const turnId = golfCurrentTurnPlayerId(gs);
+  const bot = players.find((p) => p.id === turnId && isDevBot(p));
+  if (!bot) return;
+  const hole = GOLF_HOLES[gs.holeIndex];
+  if (!hole) return;
+  const strokes = golfBallFor(gs, hole, bot.id).strokes;
+  const key = `${gs.holeIndex}:${bot.id}:${strokes}`;
+  if (local.golfBotScheduled[key]) return;
+  local.golfBotScheduled[key] = true;
+  setTimeout(async () => {
+    const freshGs = room.game_state?.golf;
+    if (!freshGs || freshGs.holeIndex !== gs.holeIndex) return; // host already moved on
+    if (golfCurrentTurnPlayerId(freshGs) !== bot.id) return; // no longer their turn (reset, etc.)
+    const ballPos = golfBallFor(freshGs, hole, bot.id);
+    const dx = hole.pin.x - ballPos.x;
+    const dy = hole.pin.y - ballPos.y;
+    const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.6; // aimed at the pin, +/- ~17deg jitter
+    const power = 0.55 + Math.random() * 0.4;
+    const sim = golfSimulateShot(hole, ballPos, angle, power);
+    await golfSubmitShot({ power, ...sim }, bot.id);
+  }, 900 + Math.random() * 1400);
 }
 
 // ── football golf: driving range ────────────────────────────
@@ -1799,8 +1889,11 @@ async function forceFinishShootoutMatch(winnerId) {
 // Sends every player's ball on the CURRENT hole back to the tee and drops
 // any results already banked for it (a player who'd already holed out gets
 // to replay it too, along with everyone else) — previous holes are
-// untouched. redoNonce forces every client's local drag/recap state to
-// reset even though holeIndex itself hasn't changed (see ensureGolfReady).
+// untouched. Also resets the turn order back to the top (see
+// golfCurrentTurnPlayerId) — this is the escape valve if turn-based play
+// ever genuinely gets stuck on one player. redoNonce forces every client's
+// local drag/recap state to reset even though holeIndex itself hasn't
+// changed (see ensureGolfReady).
 async function resetCurrentGolfHole() {
   const gs = room.game_state?.golf;
   if (!gs) return;
@@ -1811,7 +1904,16 @@ async function resetCurrentGolfHole() {
     results[playerId] = list.length > gs.holeIndex ? list.slice(0, gs.holeIndex) : list;
   }
   await updateRoom({
-    game_state: { golf: { ...gs, results, balls: golfBallsAtTee(hole), redoNonce: (gs.redoNonce || 0) + 1 } },
+    game_state: {
+      golf: {
+        ...gs,
+        results,
+        balls: golfBallsAtTee(hole),
+        turnOrder: players.map((p) => p.id),
+        turnPos: 0,
+        redoNonce: (gs.redoNonce || 0) + 1,
+      },
+    },
   });
 }
 
@@ -1842,6 +1944,7 @@ function resetLocalGameState() {
   local.missingClubBotScheduled = {};
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
+  local.golfBotScheduled = {};
   local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
     holeIndex: null,
@@ -2192,6 +2295,7 @@ function renderInner() {
     case "golf":
       ensureGolfReady();
       ensureGolfAnim();
+      ensureGolfBotSwing();
       html += renderGolf();
       break;
     case "golf-leaderboard":
@@ -2884,7 +2988,7 @@ function renderGolfIntro() {
       <h2>⛳ Football Golf</h2>
 
       <h3>The format</h3>
-      <p>${GOLF_HOLES.length} club-themed holes, real stroke play on a shared top-down course — everyone plays the <b>same hole at once</b>, own device, own pace. Fewer strokes is better, same as real golf.</p>
+      <p>${GOLF_HOLES.length} club-themed holes, real stroke play on a shared top-down course. Players take <b>turns, one stroke at a time</b> — everyone watches every shot land. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
       <p>Press and drag your ball like a slingshot — it fires the <b>opposite</b> way you pull. Pull distance sets power, angle sets direction, no timer. Watch for slopes, sand and water as you read the course.</p>
@@ -2984,6 +3088,12 @@ function renderGolf() {
   const answered = golfAlreadyAnswered(gs);
   const finished = golfFinishedPlayers(gs);
   const myStrokes = golfMyBall(gs, hole).strokes;
+  // Turn-based: one stroke each, cycling round — see golfCurrentTurnPlayerId
+  // for how it skips anyone already holed out. turnId is null once
+  // everyone's finished the hole.
+  const turnId = golfCurrentTurnPlayerId(gs);
+  const isMyTurn = !!me && turnId === me.id;
+  const turnPlayerName = turnId ? players.find((p) => p.id === turnId)?.name || "?" : null;
 
   const scoreboardRows = players
     .map((p) => ({
@@ -3007,10 +3117,25 @@ function renderGolf() {
       ? "🎯 In the hole!"
       : local.golf.lastShot.splashed
         ? `💦 In the water! Stroke ${myStrokes} down — back to the tee.`
-        : `Stroke ${myStrokes} down — drag your ball again for your next shot.`;
+        : `Stroke ${myStrokes} down.`;
+  } else if (isMyTurn) {
+    instructions = escapeHtml(hole.description);
   } else {
-    instructions = `${escapeHtml(hole.description)} Drag your ball to aim, release to shoot.`;
+    instructions = ""; // the turn banner below already says whose go it is
   }
+
+  // Shown to everyone, finished or not, whenever someone still has a turn
+  // coming — so spectators always know whose shot to watch (the whole
+  // point of turns: everyone can see and learn from every shot, not just
+  // their own), not just the player whose turn it actually is.
+  const turnBanner = isMyTurn
+    ? `<div class="role-banner role-shoot">
+        <span class="role-icon">⛳</span>
+        <span class="role-text">YOUR SHOT<br><small>Drag your ball to aim, release to shoot</small></span>
+      </div>`
+    : turnPlayerName
+      ? `<p class="waiting">⏳ ${escapeHtml(turnPlayerName)}'s turn — watching…</p>`
+      : "";
 
   const badge = hole.colors
     ? `<div class="golf-club-badge" style="--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};">
@@ -3024,7 +3149,8 @@ function renderGolf() {
       <h2>⛳ Football Golf</h2>
       ${badge}
       ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
-      ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered)}
+      ${turnBanner}
+      ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered && isMyTurn)}
       <h3>Totals</h3>
       <ul class="player-list compact">
         ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total}</li>`).join("")}
