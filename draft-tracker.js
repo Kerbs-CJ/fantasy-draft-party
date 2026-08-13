@@ -399,10 +399,22 @@ function renderBoard() {
   const me = myPlayer();
   return `
     ${renderTurnBanner(info, me)}
+    ${renderMyTeamButton(me)}
     ${renderRosters(info)}
     ${renderFilters()}
     ${renderPlayerList(info, me)}
   `;
+}
+
+// A shortcut straight into renderSquadView for THIS device's own drafter —
+// same "see-squad" action every roster card's "See full team" button
+// already uses, just pre-aimed at `me` instead of needing to find your own
+// card in the Rosters list first. Each device sees only its own player
+// here (myPlayer() is derived from this browser's stored session), so
+// Player 2's device shows Player 2's team, Player 3's shows Player 3's.
+function renderMyTeamButton(me) {
+  if (!me) return "";
+  return `<button class="btn primary" data-action="see-squad" data-id="${me.id}">👕 My Team</button>`;
 }
 
 function renderTurnBanner(info, me) {
