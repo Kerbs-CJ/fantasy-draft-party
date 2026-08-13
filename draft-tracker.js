@@ -462,11 +462,11 @@ function renderBoard() {
   const me = myPlayer();
   return `
     ${renderTurnBanner(info, me)}
-    ${renderHostUndo(me)}
     ${renderMyTeamButton(me)}
     ${renderRosters(info)}
     ${renderFilters()}
     ${renderPlayerList(info, me)}
+    ${renderHostUndo(me)}
   `;
 }
 
@@ -482,8 +482,9 @@ function renderMyTeamButton(me) {
 }
 
 // Host-only "undo last pick" — see undoLastPick for why this is scoped to
-// only the most recent pick. Shown right under the turn banner so it's
-// hard to miss right after a mis-click.
+// only the most recent pick. Kept at the very bottom of the board,
+// deliberately out of the way of the normal picking flow (it was up by
+// the turn banner originally — too jarring to see on every render).
 function renderHostUndo(me) {
   if (!me?.is_host || !picks.length) return "";
   const last = picks[picks.length - 1];
