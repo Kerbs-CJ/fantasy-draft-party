@@ -2886,10 +2886,10 @@ function renderGolfIntro() {
       <h2>⛳ Football Golf</h2>
 
       <h3>The format</h3>
-      <p>A fixed ${GOLF_HOLES.length}-hole course, each hole themed after a club (${GOLF_HOLES.map((h) => escapeHtml(h.club)).join(", ")}), played as real stroke play on an actual top-down course — everyone's ball is visible on a shared map, moving as each shot lands. Everyone plays the <b>same hole at the same time</b>, each on their own device, own pace — like Guess the Missing Club. Tee off, watch where it lands, then keep swinging from there until the ball's holed. Fewer strokes is better, same as real golf.</p>
+      <p>${GOLF_HOLES.length} club-themed holes, real stroke play on a shared top-down course — everyone plays the <b>same hole at once</b>, own device, own pace. Fewer strokes is better, same as real golf.</p>
 
       <h3>How a shot works</h3>
-      <p>One drag per swing, right on the ball — like a real slingshot. Press down and pull back — a line follows your hand, stretching the way you pull, same as a slingshot band, all the way up to full power (past that, more pull doesn't add anything). Let go and the ball fires the <b>opposite</b> way (pull south, it flies north). How far you pull sets the power; the angle sets the direction. There's no timer and nothing computed for you — you're judging the pull-back by feel, same as the real thing. Every hole is a real obstacle course — the ball actually bounces off walls, pillars and the boundary as it rolls; patches of sloped ground (darker grass with ▼ pulls you faster downhill, lighter grass with ▲ drags on you going uphill) speed it up or slow it down; sand bogs it right down; and water ends the shot on contact and sends the ball back to the tee — so reading the course matters as much as the swing itself.</p>
+      <p>Press and drag your ball like a slingshot — it fires the <b>opposite</b> way you pull. Pull distance sets power, angle sets direction, no timer. Watch for slopes, sand and water as you read the course.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <div class="standings-wrap">
@@ -2905,7 +2905,7 @@ function renderGolfIntro() {
           </tbody>
         </table>
       </div>
-      <p>Each hole has a par (${GOLF_HOLES.map((h) => `${escapeHtml(h.club)} — ${escapeHtml(h.name)}: Par ${h.par}`).join(", ")}) — a hole that's dragging on forcibly wraps up after ${GOLF_MAX_STROKES} strokes, so nobody's stuck forever, but that's plenty of room to actually work a tough hole out. Host moves the group to the next hole whenever ready — no need to wait for stragglers. Once all ${GOLF_HOLES.length} holes are done, total points decide final standing, which adds placement points to the combined leaderboard — same system as the penalty shootout.</p>
+      <p>A hole force-finishes after ${GOLF_MAX_STROKES} strokes so nobody's stuck. Total points across all ${GOLF_HOLES.length} holes decide final placement — same points system as the shootout.</p>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
