@@ -478,7 +478,6 @@ function renderPlayerList(info, me) {
   return `
     <div class="card">
       <h3>Players${filtered.length ? ` (${filtered.length})` : ""}</h3>
-      ${myTurn ? `<p class="sub" style="margin-top:-8px">You can spend up to ${fmtMoney(maxPrice)} on this pick (keeping enough for the rest of your squad).</p>` : ""}
       ${POSITION_SECTIONS.map((section) => renderPositionSection(section, filtered, taken, myTurn, maxPrice)).join("")}
     </div>`;
 }

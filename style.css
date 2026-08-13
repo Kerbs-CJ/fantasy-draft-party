@@ -1150,6 +1150,7 @@ body.draft-tracker #app { max-width: 900px; }
 .dt-pos-section-gkp summary { background: rgba(255,209,102,0.14); color: var(--accent); border-left: 3px solid var(--accent); }
 .dt-pos-section .dt-player-list {
   max-height: 34vh; /* shorter than the old single-list's 60vh, since there are now 4 of these stacked */
+  overflow-y: auto; /* dropped by accident when this rule was split off the old flat-list version -- without it the list has no height limit enforcement at all, so it overflows past max-height into whatever's next (the "+N more" note) instead of scrolling internally */
   margin-top: 0;
   border: none;
   border-top: 1px solid var(--card-border);
