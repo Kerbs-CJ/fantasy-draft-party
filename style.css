@@ -1111,13 +1111,51 @@ body.draft-tracker #app { max-width: 900px; }
   color: var(--text);
 }
 
-.dt-player-list {
-  max-height: 60vh;
-  overflow-y: auto;
-  margin-top: 10px;
+/* One collapsible <details> per position (FWD/MID/DEF/GKP order — see
+   POSITION_SECTIONS in draft-tracker.js) instead of a single flat list
+   with a position dropdown. Each section owns its own border/radius, so
+   the .dt-player-list nested inside loses its (matching renderPlayerRow,
+   which no longer repeats a per-row position badge now that the section
+   itself already says what position this is). */
+.dt-pos-section {
   border: 1px solid var(--card-border);
   border-radius: 12px;
+  overflow: hidden; /* clips the summary's background to the rounded corners whether open or closed */
+  margin-top: 10px;
 }
+.dt-pos-section summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  font-size: 13px;
+}
+.dt-pos-section summary::-webkit-details-marker { display: none; } /* Safari/Chrome's own triangle — replaced by the ::after chevron below */
+.dt-pos-section summary::after {
+  content: "▾";
+  flex: none;
+  font-size: 12px;
+  color: var(--sub);
+  transition: transform 0.15s ease;
+}
+.dt-pos-section[open] summary::after { transform: rotate(180deg); }
+.dt-pos-section-count { font-size: 12px; font-weight: 600; color: var(--sub); font-variant-numeric: tabular-nums; }
+.dt-pos-section-fwd summary { background: rgba(239,71,111,0.14); color: #ff9bb3; border-left: 3px solid #ff9bb3; }
+.dt-pos-section-mid summary { background: rgba(17,138,178,0.18); color: #7fd4f0; border-left: 3px solid #7fd4f0; }
+.dt-pos-section-def summary { background: rgba(6,214,160,0.14); color: var(--accent2); border-left: 3px solid var(--accent2); }
+.dt-pos-section-gkp summary { background: rgba(255,209,102,0.14); color: var(--accent); border-left: 3px solid var(--accent); }
+.dt-pos-section .dt-player-list {
+  max-height: 34vh; /* shorter than the old single-list's 60vh, since there are now 4 of these stacked */
+  margin-top: 0;
+  border: none;
+  border-top: 1px solid var(--card-border);
+  border-radius: 0;
+}
+
 .dt-player-row {
   display: flex;
   align-items: center;
@@ -1128,19 +1166,6 @@ body.draft-tracker #app { max-width: 900px; }
 .dt-player-row:last-child { border-bottom: none; }
 .dt-player-row.taken { opacity: 0.5; }
 .dt-player-row.unaffordable { opacity: 0.55; }
-.dt-player-pos {
-  flex: none;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 6px;
-  border-radius: 6px;
-  min-width: 34px;
-  text-align: center;
-}
-.dt-pos-gkp { background: rgba(255,209,102,0.2); color: var(--accent); }
-.dt-pos-def { background: rgba(6,214,160,0.2); color: var(--accent2); }
-.dt-pos-mid { background: rgba(17,138,178,0.25); color: #7fd4f0; }
-.dt-pos-fwd { background: rgba(239,71,111,0.2); color: #ff9bb3; }
 .dt-player-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dt-player-team { flex: none; font-size: 12px; width: 38px; }
 .dt-player-price {

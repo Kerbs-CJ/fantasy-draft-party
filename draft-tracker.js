@@ -19,7 +19,18 @@ const APP_EL = document.getElementById("app");
 const ROUNDS = 15; // standard FPL squad size
 const POSITIONS = ["GKP", "DEF", "MID", "FWD"];
 const SQUAD_SHAPE = { GKP: 2, DEF: 5, MID: 5, FWD: 3 }; // informational only — not enforced pick by pick
-const RENDER_CAP = 150; // keep the DOM bounded on an unfiltered browse of 580+ players; search/filter to see more
+// The player list is grouped into one collapsible section per position
+// (see renderPlayerList) instead of a single flat list with a position
+// filter — FWD first, GKP last, per Craig: forwards/midfielders get
+// checked far more often during a live draft than goalkeepers, so that's
+// the order worth seeing without scrolling.
+const POSITION_SECTIONS = [
+  { pos: "FWD", label: "Forwards", icon: "⚡" },
+  { pos: "MID", label: "Midfielders", icon: "🎯" },
+  { pos: "DEF", label: "Defenders", icon: "🛡️" },
+  { pos: "GKP", label: "Goalkeepers", icon: "🥅" },
+];
+const RENDER_CAP_PER_SECTION = 40; // keep each position section's DOM bounded on an unfiltered browse; search/club-filter to see more
 
 // A real budget, not just a squad-size limit — £100m, same convention FPL
 // itself uses, spent down by each player's price (see players.js) as a
@@ -50,10 +61,16 @@ let channel = null;
 
 const local = {
   search: "",
-  posFilter: "All",
   teamFilter: "All",
   error: "",
   submitting: false,
+  // Per-position section open/closed state — defaults to all open so
+  // nothing's hidden without the player doing it themselves. Kept in
+  // `local` (not just the <details> element's own state) because every
+  // render() replaces the whole #app subtree, which would otherwise reset
+  // every section back to its default open/closed state on every pick —
+  // see the "toggle" listener in init() for how this stays in sync.
+  dtSectionOpen: { FWD: true, MID: true, DEF: true, GKP: true },
   botScheduledForPick: null, // pick_number a bot pick's already been scheduled for on this device, so a later render doesn't double-schedule it
 };
 
@@ -96,6 +113,22 @@ async function init() {
   APP_EL.addEventListener("click", onClick);
   APP_EL.addEventListener("input", onInput);
   APP_EL.addEventListener("change", onChange);
+  // "toggle" fires on a <details> when it's opened/closed (click or
+  // keyboard) but — unlike click/input/change — doesn't bubble, so a
+  // normal delegated listener on APP_EL would never see it; the capture
+  // phase (true, below) does fire top-down regardless of bubbling, which
+  // is what makes delegation work here. Keeps local.dtSectionOpen in sync
+  // with whichever position sections the player's actually opened/closed
+  // — see the comment on dtSectionOpen for why that has to be tracked at
+  // all instead of just trusting each <details>'s own state.
+  APP_EL.addEventListener(
+    "toggle",
+    (e) => {
+      const pos = e.target?.dataset?.pos;
+      if (pos) local.dtSectionOpen[pos] = e.target.open;
+    },
+    true
+  );
 }
 
 function loadSession() {
@@ -301,10 +334,6 @@ function onInput(e) {
 }
 
 function onChange(e) {
-  if (e.target.id === "dt-pos-filter") {
-    local.posFilter = e.target.value;
-    render();
-  }
   if (e.target.id === "dt-team-filter") {
     local.teamFilter = e.target.value;
     render();
@@ -421,10 +450,6 @@ function renderFilters() {
     <div class="card dt-filters">
       <input type="text" id="dt-search" placeholder="Search players or clubs…" value="${escapeHtml(local.search)}" autocomplete="off" />
       <div class="dt-filter-row">
-        <select id="dt-pos-filter">
-          <option value="All"${local.posFilter === "All" ? " selected" : ""}>All positions</option>
-          ${POSITIONS.map((p) => `<option value="${p}"${local.posFilter === p ? " selected" : ""}>${p}</option>`).join("")}
-        </select>
         <select id="dt-team-filter">
           <option value="All"${local.teamFilter === "All" ? " selected" : ""}>All clubs</option>
           ${teams.map((t) => `<option value="${escapeHtml(t)}"${local.teamFilter === t ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}
@@ -434,30 +459,51 @@ function renderFilters() {
     </div>`;
 }
 
+// One collapsible section per position (FWD/MID/DEF/GKP — see
+// POSITION_SECTIONS for the order and why), each independently sorted and
+// capped, instead of one flat list with a position dropdown. `filtered` is
+// already narrowed by search/club — this just splits it further by
+// position and hands each slice to its own section.
 function renderPlayerList(info, me) {
   const taken = pickedPlayerIds();
   const q = local.search.trim().toLowerCase();
   const filtered = window.PL_PLAYERS.filter((p) => {
-    if (local.posFilter !== "All" && p.pos !== local.posFilter) return false;
     if (local.teamFilter !== "All" && p.team !== local.teamFilter) return false;
     if (q && !p.name.toLowerCase().includes(q) && !p.team.toLowerCase().includes(q)) return false;
     return true;
   });
-  filtered.sort((a, b) => b.price - a.price || a.name.localeCompare(b.name)); // most expensive first, alphabetical as the tiebreak for same-priced players
-  const total = filtered.length;
-  const shown = filtered.slice(0, RENDER_CAP);
   const myTurn = !local.submitting && !info.done && !!me && info.drafter.id === me.id;
   const maxPrice = myTurn ? maxAffordableForPick(me.id) : -1;
 
   return `
     <div class="card">
-      <h3>Players${total ? ` (${total})` : ""}</h3>
+      <h3>Players${filtered.length ? ` (${filtered.length})` : ""}</h3>
       ${myTurn ? `<p class="sub" style="margin-top:-8px">You can spend up to ${fmtMoney(maxPrice)} on this pick (keeping enough for the rest of your squad).</p>` : ""}
-      <div class="dt-player-list">
-        ${shown.length ? shown.map((p) => renderPlayerRow(p, taken, myTurn, maxPrice)).join("") : `<p class="sub">No players match.</p>`}
-      </div>
-      ${total > RENDER_CAP ? `<p class="sub" style="margin-top:10px">+${total - RENDER_CAP} more — narrow your search to see them.</p>` : ""}
+      ${POSITION_SECTIONS.map((section) => renderPositionSection(section, filtered, taken, myTurn, maxPrice)).join("")}
     </div>`;
+}
+
+function renderPositionSection(section, filtered, taken, myTurn, maxPrice) {
+  const positionPlayers = filtered
+    .filter((p) => p.pos === section.pos)
+    .sort((a, b) => b.price - a.price || a.name.localeCompare(b.name)); // most expensive first, alphabetical as the tiebreak for same-priced players
+  const total = positionPlayers.length;
+  const remaining = positionPlayers.filter((p) => !taken.has(p.id)).length;
+  const shown = positionPlayers.slice(0, RENDER_CAP_PER_SECTION);
+  // `open` reflects local.dtSectionOpen, kept in sync by the "toggle"
+  // listener in init() — see the comment on dtSectionOpen for why that's
+  // necessary rather than just letting <details> track its own state.
+  return `
+    <details class="dt-pos-section dt-pos-section-${section.pos.toLowerCase()}" data-pos="${section.pos}"${local.dtSectionOpen[section.pos] ? " open" : ""}>
+      <summary>
+        <span class="dt-pos-section-label">${section.icon} ${section.label.toUpperCase()}</span>
+        <span class="dt-pos-section-count">${remaining} left</span>
+      </summary>
+      <div class="dt-player-list">
+        ${shown.length ? shown.map((p) => renderPlayerRow(p, taken, myTurn, maxPrice)).join("") : `<p class="sub" style="padding:10px 12px">No players match.</p>`}
+      </div>
+      ${total > RENDER_CAP_PER_SECTION ? `<p class="sub" style="padding:8px 12px 0">+${total - RENDER_CAP_PER_SECTION} more — narrow your search to see them.</p>` : ""}
+    </details>`;
 }
 
 function renderPlayerRow(p, taken, myTurn, maxPrice) {
@@ -467,7 +513,6 @@ function renderPlayerRow(p, taken, myTurn, maxPrice) {
   const canDraft = myTurn && affordable;
   return `
     <div class="dt-player-row${takenPick ? " taken" : ""}${!takenPick && myTurn && !affordable ? " unaffordable" : ""}">
-      <span class="dt-player-pos dt-pos-${p.pos.toLowerCase()}">${p.pos}</span>
       <span class="dt-player-name">${escapeHtml(p.name)}</span>
       <span class="dt-player-team sub">${escapeHtml(p.teamShort)}</span>
       <span class="dt-player-price">${fmtMoney(p.price)}</span>
