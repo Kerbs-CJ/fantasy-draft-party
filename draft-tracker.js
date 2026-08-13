@@ -365,10 +365,11 @@ function render() {
 }
 
 function renderTopBar() {
+  const isHost = !!myPlayer()?.is_host;
   return `
     <div class="topbar">
       <span class="room-pill">Room <b>${escapeHtml(room.code)}</b></span>
-      <a class="link-btn" href="index.html">Back to party</a>
+      ${isHost ? `<a class="link-btn" href="index.html">Back to party</a>` : ""}
     </div>`;
 }
 
