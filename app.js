@@ -1329,12 +1329,28 @@ const POKEMON_HALFTIME_POOL = [
   { id: 52, name: "Meowth" },
   { id: 68, name: "Machamp" },
 ];
+// Curated joke entries that always play, in this exact order, at the START
+// of the show (Craig's picks) — e.g. the classic "looks like a plain ball,
+// is actually Jigglypuff" gag, played with the caption alone rather than a
+// hotlinked screenshot of the real TV bumper (see buildHalftimeOrder).
+const POKEMON_HALFTIME_OPENERS = [{ id: 39, name: "Jigglypuff", note: "(seen from above)" }];
 function halftimeImageUrl(entry) {
   return entry.img || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${entry.id}.png`;
 }
+// POKEMON_HALFTIME_OPENERS play first, in order; the rest of the show (up
+// to POKEMON_HALFTIME_COUNT) is filled with a random selection from
+// POKEMON_HALFTIME_POOL, excluding anything already used as an opener so
+// the same Pokémon can't turn up twice in one show.
+function buildHalftimeOrder() {
+  const openers = POKEMON_HALFTIME_OPENERS;
+  const usedIds = new Set(openers.map((e) => e.id));
+  const fillPool = POKEMON_HALFTIME_POOL.filter((e) => !usedIds.has(e.id));
+  const fillCount = Math.max(0, POKEMON_HALFTIME_COUNT - openers.length);
+  return [...openers, ...shuffle(fillPool).slice(0, fillCount)];
+}
 
 async function startHalftimeShow() {
-  const order = shuffle(POKEMON_HALFTIME_POOL.map((_, i) => i)).slice(0, POKEMON_HALFTIME_COUNT);
+  const order = buildHalftimeOrder();
   await updateRoom({ status: "halftime-show", game_state: { halftime: { order, index: 0, revealed: false } } });
 }
 
@@ -2132,8 +2148,7 @@ async function devJump(status) {
   }
   if (status === "halftime-show") {
     await ensureDevBotIfNeeded();
-    const order = shuffle(POKEMON_HALFTIME_POOL.map((_, i) => i)).slice(0, POKEMON_HALFTIME_COUNT);
-    game_state = { halftime: { order, index: 0, revealed: false } };
+    game_state = { halftime: { order: buildHalftimeOrder(), index: 0, revealed: false } };
   }
   // Golf is turn-based (see golfCurrentTurnPlayerId) — a dev bot takes its
   // own turn automatically via ensureGolfBotSwing, so jumping straight
@@ -3069,7 +3084,7 @@ function renderHalftimeShow() {
   const me = myPlayer();
   const isHost = me?.is_host;
   const hs = room.game_state.halftime;
-  const dex = POKEMON_HALFTIME_POOL[hs.order[hs.index]];
+  const dex = hs.order[hs.index];
   const spriteUrl = halftimeImageUrl(dex);
   const isLast = hs.index + 1 >= hs.order.length;
   return `
