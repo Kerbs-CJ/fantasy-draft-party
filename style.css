@@ -8,6 +8,7 @@
   --accent: #ffd166;
   --accent2: #06d6a0;
   --danger: #ef476f;
+  --host: #6ea8fe; /* host-only recovery controls — kept distinct from the amber ?dev=1 styling and the party's green/gold theme */
   --radius: 16px;
 }
 
@@ -962,6 +963,67 @@ code {
   background: #e8a33d;
   color: #2a1a00;
   font-weight: 700;
+}
+
+/* ── host recovery controls ("break glass" panel, live at the real party,
+   not gated by ?dev=1 — see renderHostPanel in app.js) ──────── */
+.host-panel-wrap { margin-bottom: 8px; }
+.host-panel-toggle {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--host);
+  background: rgba(110,168,254,0.1);
+  color: var(--host);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.host-panel {
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid var(--host);
+  border-radius: 12px;
+  background: rgba(110,168,254,0.06);
+}
+.host-panel-section { margin-bottom: 14px; }
+.host-panel-section:last-child { margin-bottom: 0; }
+.host-panel-section h4 {
+  font-size: 12px;
+  color: var(--host);
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.host-panel-note { font-size: 13px; color: var(--sub); margin: 0 0 8px; }
+.host-btn-danger { border-color: var(--danger); color: #ffc2d1; }
+.btn.small { display: inline-block; width: auto; padding: 8px 10px; margin: 0 0 0 6px; }
+.host-score-list {
+  margin-top: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.host-score-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+}
+.host-score-who { flex: 1; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.host-score-input {
+  width: 56px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-size: 13px;
 }
 
 /* ── Draft Tracker (draft-tracker.html/js) ──────────────────── */

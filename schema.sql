@@ -50,8 +50,15 @@ create policy "public write players" on players for insert with check (true);
 
 drop policy if exists "public read scores" on scores;
 drop policy if exists "public write scores" on scores;
+drop policy if exists "public update scores" on scores;
+drop policy if exists "public delete scores" on scores;
 create policy "public read scores" on scores for select using (true);
 create policy "public write scores" on scores for insert with check (true);
+-- update/delete back the host's Edit/Void score panel (app.js hostEditScore/
+-- hostVoidScore) -- fixing a mis-scored answer or voiding a duplicate bot
+-- entry live during the party.
+create policy "public update scores" on scores for update using (true) with check (true);
+create policy "public delete scores" on scores for delete using (true);
 
 -- Turn on realtime change streaming for these tables. Wrapped so it's
 -- actually safe to re-run: "alter publication add table" has no

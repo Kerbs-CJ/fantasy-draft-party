@@ -422,15 +422,20 @@ let local = {
   joinCodeInput: "",
   nameInput: "",
   error: "",
-  missingClub: { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null },
-  guess: { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
+  missingClub: { qIndex: null, redoNonce: null, answeredQIndex: null, myChoice: null, pending: null, choices: null },
+  guess: { pIndex: null, redoNonce: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
+  // Host-only "break glass" panel — see renderHostPanel/hostRedoCurrentItem.
+  // Kept collapsed by default so it's out of the way on every screen but
+  // one tap away for the entire party, not just while ?dev=1 testing.
+  hostPanel: { open: false, showScores: false },
   missingClubBotScheduled: {}, // `${botId}-${qIndex}` -> true, so a bot isn't scheduled twice
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
+    redoNonce: null,
     subPhase: "ready", // "ready" | "dragging" | "recap"
     lastShot: null,
     // Live-drag fields — mutated directly during pointermove WITHOUT going
@@ -593,6 +598,27 @@ function subscribeToRoom(code) {
         render();
       }
     )
+    // UPDATE/DELETE only ever happen via the host's Edit/Void score panel
+    // (see hostEditScore/hostVoidScore) — but every client, not just the
+    // host, needs to hear about it: the combined leaderboard and draft
+    // order everyone sees depend on these rows.
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "scores", filter: `room_code=eq.${code}` },
+      (payload) => {
+        const row = scores.find((s) => s.id === payload.new.id);
+        if (row) Object.assign(row, payload.new);
+        render();
+      }
+    )
+    .on(
+      "postgres_changes",
+      { event: "DELETE", schema: "public", table: "scores", filter: `room_code=eq.${code}` },
+      (payload) => {
+        scores = scores.filter((s) => s.id !== payload.old.id);
+        render();
+      }
+    )
     .subscribe();
 }
 
@@ -657,6 +683,10 @@ async function onClick(e) {
   if (action === "pick-keeper") return submitPick("keeper", btn.dataset.zone);
   if (action === "leave") return leaveRoom();
   if (action === "dev-quickstart") return devQuickStart(btn.dataset.status);
+  if (action === "toggle-host-panel") {
+    local.hostPanel.open = !local.hostPanel.open;
+    return render();
+  }
 
   // Everything below drives the shared room state for the whole group —
   // only the host may trigger it. The corresponding buttons are already
@@ -682,6 +712,21 @@ async function onClick(e) {
   if (action === "golf-next-hole") return golfNextHole();
   if (action === "reveal") return updateRoom({ status: "reveal" });
   if (action === "dev-jump") return devJump(btn.dataset.status);
+
+  // Host recovery controls — see the "host recovery controls" section
+  // (above the dev-mode section) for what each of these actually does.
+  if (action === "host-redo-item") return hostRedoCurrentItem();
+  if (action === "host-force-finish") return forceFinishShootoutMatch(btn.dataset.winner);
+  if (action === "host-edit-score") {
+    const input = document.getElementById(`score-input-${btn.dataset.id}`);
+    const points = Number(input?.value);
+    return hostEditScore(btn.dataset.id, points);
+  }
+  if (action === "host-void-score") return hostVoidScore(btn.dataset.id);
+  if (action === "toggle-host-scores") {
+    local.hostPanel.showScores = !local.hostPanel.showScores;
+    return render();
+  }
 }
 
 // ── home / lobby ────────────────────────────────────────────
@@ -788,8 +833,13 @@ async function startMissingClub() {
 function ensureMissingClubReady() {
   const gs = room.game_state || {};
   if (gs.qIndex === undefined) return;
-  if (local.missingClub.qIndex !== gs.qIndex) {
+  // redoNonce changes when the host uses "Redo this question" on the SAME
+  // qIndex — bumping it forces every client to drop its local "already
+  // answered" flag and re-render fresh choices, same as a real qIndex change
+  // would. See hostRedoCurrentItem.
+  if (local.missingClub.qIndex !== gs.qIndex || local.missingClub.redoNonce !== (gs.redoNonce || 0)) {
     local.missingClub.qIndex = gs.qIndex;
+    local.missingClub.redoNonce = gs.redoNonce || 0;
     local.missingClub.answeredQIndex = null;
     local.missingClub.myChoice = null;
     local.missingClub.pending = null;
@@ -801,8 +851,11 @@ function ensureMissingClubReady() {
 function ensureGuessReady() {
   const gs = room.game_state || {};
   if (gs.pIndex === undefined) return;
-  if (local.guess.pIndex !== gs.pIndex) {
+  // See the matching comment in ensureMissingClubReady — redoNonce forces a
+  // fresh local state even when the host redoes the same pIndex.
+  if (local.guess.pIndex !== gs.pIndex || local.guess.redoNonce !== (gs.redoNonce || 0)) {
     local.guess.pIndex = gs.pIndex;
+    local.guess.redoNonce = gs.redoNonce || 0;
     local.guess.answeredPIndex = null;
     local.guess.answeredClueIndex = null;
     local.guess.myChoice = null;
@@ -1346,9 +1399,12 @@ async function startGolf() {
 function ensureGolfReady() {
   const gs = room.game_state?.golf;
   if (!gs) return;
-  if (local.golf.holeIndex !== gs.holeIndex) {
+  // redoNonce lets "Reset this hole" force every client back to a fresh tee
+  // shot on the CURRENT holeIndex, not just on an actual hole change.
+  if (local.golf.holeIndex !== gs.holeIndex || local.golf.redoNonce !== (gs.redoNonce || 0)) {
     local.golf = {
       holeIndex: gs.holeIndex,
+      redoNonce: gs.redoNonce || 0,
       subPhase: "ready",
       lastShot: null,
       dragPointerId: null,
@@ -1658,6 +1714,128 @@ function practicePointerCancel() {
   render();
 }
 
+// ── host recovery controls ──────────────────────────────────
+// A small "break glass" panel any host can open on any screen (see
+// renderHostPanel) — unlike the ?dev=1 dev bar, this is live at the real
+// party, for the failure modes a live event actually produces: someone's
+// phone dies mid-match, a mis-tap banks the wrong points, a round-robin
+// pairing gets stuck with nobody able to finish it. Three levers:
+//   1. Redo the current question/player/match/hole in place.
+//   2. Force-finish a stuck round-robin match.
+//   3. Edit or void any individual score entry.
+// All of it requires isMeHost() (enforced in onClick, same as every other
+// room-driving action) and, for scores specifically, an update/delete
+// policy on the `scores` table — see schema.sql.
+
+// Dispatches "Redo current item" based on room.status, since what "the
+// current item" even means is different per round. Rounds with no live
+// per-item state (lobby, intros, leaderboards, reveal) just have nothing to
+// redo — renderHostPanel hides the button rather than calling this.
+async function hostRedoCurrentItem() {
+  if (room.status === "missing-club") return resetMissingClubQuestion();
+  if (room.status === "guess") return resetGuessPlayer();
+  if (room.status === "shootout") return resetCurrentShootoutMatch();
+  if (room.status === "golf") return resetCurrentGolfHole();
+}
+
+// Wipes any answers already banked for the CURRENT question and re-hides
+// the reveal, without moving qIndex — so it's the same journey, replayed.
+// redoNonce (see ensureMissingClubReady) is what makes every client notice,
+// even players whose local "I already answered" flag would otherwise still
+// be pointed at this exact qIndex.
+async function resetMissingClubQuestion() {
+  const gs = room.game_state || {};
+  if (gs.qIndex === undefined) return;
+  await sb.from("scores").delete().eq("room_code", room.code).eq("game_index", 1).eq("round_index", gs.qIndex);
+  await updateRoom({ game_state: { ...gs, revealed: false, redoNonce: (gs.redoNonce || 0) + 1 } });
+}
+
+// Same idea for Guess the Footballer: wipes this player's banked guesses
+// and rewinds the clue reveal back to the first clue.
+async function resetGuessPlayer() {
+  const gs = room.game_state || {};
+  if (gs.pIndex === undefined) return;
+  await sb.from("scores").delete().eq("room_code", room.code).eq("game_index", 2).eq("round_index", gs.pIndex);
+  await updateRoom({ game_state: { ...gs, clueIndex: 0, redoNonce: (gs.redoNonce || 0) + 1 } });
+}
+
+// Restarts the CURRENT shootout match at 0-0 with the same two players —
+// for when a pick gets stuck or a phone dies mid-match. Placement points
+// aren't touched (finishRoundRobin only writes them once every match is
+// decided), so this is safe at any point in a match.
+async function resetCurrentShootoutMatch() {
+  const gs = room.game_state || {};
+  const match = gs.match;
+  if (!match) return;
+  const fresh = {
+    p1: match.p1,
+    p2: match.p2,
+    rrIndex: match.rrIndex,
+    roundIndex: 0,
+    turn: "p1",
+    shooterPick: null,
+    keeperPick: null,
+    score: { [match.p1]: 0, [match.p2]: 0 },
+    kicksTaken: { [match.p1]: 0, [match.p2]: 0 },
+    log: [],
+    resetNonce: Date.now(),
+  };
+  await updateRoom({ game_state: { ...gs, match: fresh } });
+}
+
+// Ends the CURRENT match right now with a host-declared winner, using
+// whatever score the two players had actually reached — a deliberate
+// escape hatch for a match that can't continue (a player had to leave, a
+// pick keeps clobbering). Bypasses the normal kick-by-kick animation/finalize
+// path entirely and writes the round-robin result directly.
+async function forceFinishShootoutMatch(winnerId) {
+  const { data: freshRoom } = await sb.from("rooms").select("*").eq("code", room.code).single();
+  const gs = freshRoom.game_state;
+  const match = gs?.match;
+  if (!match) return;
+  const roundRobin = gs.roundRobin;
+  roundRobin.matches[match.rrIndex] = { ...roundRobin.matches[match.rrIndex], winner: winnerId, score: { ...match.score } };
+  await updateRoom({ status: "round-robin", game_state: { roundRobin, match: null } });
+}
+
+// Sends every player's ball on the CURRENT hole back to the tee and drops
+// any results already banked for it (a player who'd already holed out gets
+// to replay it too, along with everyone else) — previous holes are
+// untouched. redoNonce forces every client's local drag/recap state to
+// reset even though holeIndex itself hasn't changed (see ensureGolfReady).
+async function resetCurrentGolfHole() {
+  const gs = room.game_state?.golf;
+  if (!gs) return;
+  const hole = GOLF_HOLES[gs.holeIndex];
+  if (!hole) return;
+  const results = {};
+  for (const [playerId, list] of Object.entries(gs.results || {})) {
+    results[playerId] = list.length > gs.holeIndex ? list.slice(0, gs.holeIndex) : list;
+  }
+  await updateRoom({
+    game_state: { golf: { ...gs, results, balls: golfBallsAtTee(hole), redoNonce: (gs.redoNonce || 0) + 1 } },
+  });
+}
+
+// Overwrites one scores row's points in place — for a mis-scored answer or
+// shot. `points` comes from the host panel's own number input, already
+// parsed by the caller in onClick.
+async function hostEditScore(id, points) {
+  if (!Number.isFinite(points)) return;
+  await sb.from("scores").update({ points }).eq("id", id);
+  const row = scores.find((s) => s.id === id);
+  if (row) row.points = points; // optimistic on this device — every OTHER client picks up the change via the UPDATE listener in subscribeToRoom
+  render();
+}
+
+// Deletes one scores row outright — e.g. a duplicate bot answer, or a round
+// that should never have counted.
+async function hostVoidScore(id) {
+  await sb.from("scores").delete().eq("id", id);
+  scores = scores.filter((s) => s.id !== id);
+  render();
+}
+
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
   local.missingClub = { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null };
@@ -1744,7 +1922,11 @@ const SHOOTOUT_RESULT_MS = 1700;
 function ensureShootoutAnim() {
   const match = room.game_state?.match;
   if (!match) return;
-  const matchKey = `${match.p1}-${match.p2}-${match.rrIndex}`;
+  // resetNonce changes when the host uses "Reset this match" — folding it
+  // into the key forces every client's animation/log-tracking state to
+  // reinitialize instead of staying stuck on the pre-reset log length (which
+  // would otherwise silently stop future kicks from ever animating again).
+  const matchKey = `${match.p1}-${match.p2}-${match.rrIndex}-${match.resetNonce || 0}`;
   if (local.shootoutAnim.matchKey !== matchKey) {
     local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   }
@@ -2043,7 +2225,83 @@ function renderTopBar() {
       <span class="room-pill">Room <b>${code}</b></span>
       <button class="link-btn" data-action="leave">Leave</button>
     </div>
+    ${isMeHost() ? renderHostPanel() : ""}
     ${DEV_MODE && isMeHost() ? renderDevBar() : ""}`;
+}
+
+// Host-only "break glass" controls, visible (collapsed) on every screen for
+// the whole party, not just while ?dev=1 testing — see the "host recovery
+// controls" section (hostRedoCurrentItem / forceFinishShootoutMatch /
+// hostEditScore / hostVoidScore) for what each button actually does.
+const GAME_LABELS = { 1: "Missing Club", 2: "Guess the Footballer", 3: "Shootout", 4: "Golf" };
+function playerName(id) {
+  return players.find((p) => p.id === id)?.name || "?";
+}
+function hostRedoLabel() {
+  const gs = room.game_state || {};
+  if (room.status === "missing-club" && gs.qIndex !== undefined) return "🔁 Redo this question";
+  if (room.status === "guess" && gs.pIndex !== undefined) return "🔁 Redo this player";
+  if (room.status === "shootout" && gs.match) return "🔁 Reset this match to 0–0";
+  if (room.status === "golf" && gs.golf) return "🔁 Reset this hole";
+  return null;
+}
+function renderHostPanel() {
+  const open = local.hostPanel.open;
+  return `
+    <div class="host-panel-wrap">
+      <button class="host-panel-toggle" data-action="toggle-host-panel">🛠️ Host Controls ${open ? "▲" : "▼"}</button>
+      ${open ? renderHostPanelBody() : ""}
+    </div>`;
+}
+function renderHostPanelBody() {
+  const redoLabel = hostRedoLabel();
+  const match = room.status === "shootout" ? room.game_state?.match : null;
+  return `
+    <div class="host-panel">
+      <div class="host-panel-section">
+        <h4>Fix the current round</h4>
+        ${
+          redoLabel
+            ? `<button class="btn" data-action="host-redo-item">${redoLabel}</button>`
+            : `<p class="host-panel-note">Nothing live to redo on this screen.</p>`
+        }
+      </div>
+      ${
+        match
+          ? `<div class="host-panel-section">
+              <h4>Force-finish this match</h4>
+              <p class="host-panel-note">Ends it right now with the score as it stands (${match.score[match.p1] || 0}–${match.score[match.p2] || 0}) — only for a match that genuinely can't continue.</p>
+              <button class="btn host-btn-danger" data-action="host-force-finish" data-winner="${match.p1}">${escapeHtml(playerName(match.p1))} wins now</button>
+              <button class="btn host-btn-danger" data-action="host-force-finish" data-winner="${match.p2}">${escapeHtml(playerName(match.p2))} wins now</button>
+            </div>`
+          : ""
+      }
+      <div class="host-panel-section">
+        <h4>Edit or void scores</h4>
+        <button class="btn" data-action="toggle-host-scores">${local.hostPanel.showScores ? "Hide" : "Show"} all score entries (${scores.length})</button>
+        ${local.hostPanel.showScores ? renderHostScoreList() : ""}
+      </div>
+    </div>`;
+}
+function renderHostScoreList() {
+  if (!scores.length) return `<p class="host-panel-note">No scores banked yet.</p>`;
+  const rows = scores.slice().sort((a, b) => {
+    return a.game_index - b.game_index || (a.round_index ?? 0) - (b.round_index ?? 0) || playerName(a.player_id).localeCompare(playerName(b.player_id));
+  });
+  return `
+    <div class="host-score-list">
+      ${rows
+        .map(
+          (s) => `
+        <div class="host-score-row">
+          <span class="host-score-who">${escapeHtml(playerName(s.player_id))} <span class="host-panel-note">· ${GAME_LABELS[s.game_index] || `game ${s.game_index}`} R${(s.round_index ?? 0) + 1}</span></span>
+          <input type="number" class="host-score-input" id="score-input-${s.id}" value="${s.points}">
+          <button class="btn small" data-action="host-edit-score" data-id="${s.id}" title="Save">💾</button>
+          <button class="btn small host-btn-danger" data-action="host-void-score" data-id="${s.id}" title="Void">🗑️</button>
+        </div>`
+        )
+        .join("")}
+    </div>`;
 }
 
 function renderDevBar() {

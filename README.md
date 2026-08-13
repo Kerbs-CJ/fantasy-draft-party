@@ -182,6 +182,27 @@ current shooter and keeper) can submit a pick — everyone else is a pure
 spectator for that match. Football Golf works the same way: only the
 player whose turn it is can swing; everyone else just watches.
 
+**Host Controls — recovery levers for game night:** a collapsible
+"🛠️ Host Controls" panel sits under the room code on every screen, visible
+only to the host (not gated by `?dev=1` — this is meant for the real
+party). Three levers for when something actually goes wrong live:
+- **Fix the current round** — redoes the current Missing Club question,
+  Guess the Footballer player, penalty shootout match, or golf hole in
+  place (same item, fresh state) — for a stuck answer, a clobbered pick,
+  or a hole nobody could finish cleanly.
+- **Force-finish this match** (shootout only) — ends the current penalty
+  shootout match immediately with a host-declared winner, using the score
+  as it stood — for a match that genuinely can't continue (someone's
+  phone dies mid-match).
+- **Edit or void scores** — every individual score entry is listed,
+  editable or deletable in place — for a mis-scored answer or an entry
+  that shouldn't count.
+
+Editing/voiding scores needs the update/delete policies added to `scores`
+in `schema.sql` — if your Supabase project was set up before 2026-08-12,
+re-run the whole `schema.sql` once (safe to re-run, see setup step 2
+above) before relying on it.
+
 Notes:
 - Works best with a decent wifi/data connection for everyone.
 - Guess the Missing Club and Guess-the-Footballer answers are graded
