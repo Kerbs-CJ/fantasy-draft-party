@@ -466,7 +466,7 @@ let local = {
   // Host-only "break glass" panel — see renderHostPanel/hostRedoCurrentItem.
   // Kept collapsed by default so it's out of the way on every screen but
   // one tap away for the entire party, not just while ?dev=1 testing.
-  hostPanel: { open: false, showScores: false },
+  hostPanel: { open: false, showScores: false, showStandings: false },
   missingClubBotScheduled: {}, // `${botId}-${qIndex}` -> true, so a bot isn't scheduled twice
   guessBotScheduled: {}, // `${botId}-${pIndex}` -> true, same idea for Guess the Footballer
   botShooterScheduledFor: null,
@@ -802,6 +802,10 @@ async function onClick(e) {
   if (action === "host-void-score") return hostVoidScore(btn.dataset.id);
   if (action === "toggle-host-scores") {
     local.hostPanel.showScores = !local.hostPanel.showScores;
+    return render();
+  }
+  if (action === "toggle-host-standings") {
+    local.hostPanel.showStandings = !local.hostPanel.showStandings;
     return render();
   }
   if (action === "host-add-score") {
@@ -2805,10 +2809,54 @@ function renderHostPanelBody() {
         ${renderHostAddScoreForm()}
       </div>
       <div class="host-panel-section">
+        <h4>Current standings</h4>
+        <button class="btn" data-action="toggle-host-standings">${local.hostPanel.showStandings ? "Hide" : "Show"} live overall score</button>
+        ${local.hostPanel.showStandings ? renderHostStandings() : ""}
+      </div>
+      <div class="host-panel-section">
         <h4>Edit or void scores</h4>
         <button class="btn" data-action="toggle-host-scores">${local.hostPanel.showScores ? "Hide" : "Show"} all score entries (${scores.length})</button>
         ${local.hostPanel.showScores ? renderHostScoreList() : ""}
       </div>
+    </div>`;
+}
+// A live, host-only peek at the same per-game + total breakdown
+// renderScoreBreakdown shows at the very end — available at ANY point
+// during the party (not just after the reveal) so the host can catch a
+// scoring mistake early and fix it with the edit/void tools right below,
+// instead of only finding out once the whole thing's already decided.
+// Reuses gameOrder/totalsByPlayer/totalsForGame exactly as-is — this is
+// a read-only view, no separate scoring logic of its own.
+function renderHostStandings() {
+  const totals = totalsByPlayer();
+  const gameOrder = [1, 3, 2, 4];
+  const perGame = {};
+  for (const gi of gameOrder) {
+    perGame[gi] = {};
+    for (const t of totalsForGame(gi)) perGame[gi][t.player.id] = t.total;
+  }
+  return `
+    <div class="standings-wrap">
+      <table class="standings-table">
+        <thead>
+          <tr>
+            <th>Player</th>
+            ${gameOrder.map((gi) => `<th>${GAME_LABELS[gi]}</th>`).join("")}
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${totals
+            .map(
+              (t) => `<tr>
+                <td>${escapeHtml(t.player.name)}</td>
+                ${gameOrder.map((gi) => `<td>${perGame[gi][t.player.id] ?? 0}</td>`).join("")}
+                <td><b>${t.total}</b></td>
+              </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
     </div>`;
 }
 function renderHostAddScoreForm() {
