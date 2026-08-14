@@ -733,6 +733,8 @@ async function onClick(e) {
   if (action === "golf-next-hole") return golfNextHole();
   if (action === "reveal") return updateRoom({ status: "reveal" });
   if (action === "dev-jump") return devJump(btn.dataset.status);
+  if (action === "dev-add-bot") return addDevBot();
+  if (action === "dev-remove-bot") return removeLastDevBot();
 
   // Host recovery controls — see the "host recovery controls" section
   // (above the dev-mode section) for what each of these actually does.
@@ -2152,6 +2154,27 @@ async function ensureDevBotIfNeeded() {
   await loadPlayers();
 }
 
+// Manual one-at-a-time bot add/remove for the Party Intro's dev-only "Add
+// bots" panel (see renderPartyIntro) — unlike ensureDevBotIfNeeded (which
+// silently tops the room up to DEV_TARGET_PLAYER_COUNT as a side effect of
+// jumping to a stage), this is an explicit host action so Craig can test
+// with whatever exact player count he wants. Bots are just normal rows in
+// the `players` table for this room_code, same as real players, so once
+// added they persist across every screen/status jump for the rest of the
+// room's life — nothing screen-specific to wire up for that part.
+async function addDevBot() {
+  const existingBotCount = players.filter((p) => isDevBot(p)).length;
+  await sb.from("players").insert({ id: crypto.randomUUID(), room_code: room.code, name: `${DEV_BOT_PREFIX}Bot ${existingBotCount + 1}`, is_host: false });
+  await loadPlayers();
+}
+async function removeLastDevBot() {
+  const bots = players.filter((p) => isDevBot(p));
+  const last = bots[bots.length - 1];
+  if (!last) return;
+  await sb.from("players").delete().eq("id", last.id);
+  await loadPlayers();
+}
+
 async function devJump(status) {
   resetLocalGameState();
   let game_state = {};
@@ -2771,11 +2794,31 @@ function renderPartyIntro() {
       <ul class="player-list">
         ${players.map((p) => `<li>${escapeHtml(p.name)}</li>`).join("")}
       </ul>
+      ${DEV_MODE && isHost ? renderDevAddBots() : ""}
       ${
         isHost
           ? `<button class="btn primary" data-action="show-missing-club-intro">▶️ Continue</button>`
           : `<p class="waiting">Waiting for host to continue…</p>`
       }
+    </div>`;
+}
+
+// Dev-only, host-only "Add bots" panel on the Party Intro screen — lets
+// Craig test with an exact player count without jumping stages (which
+// would auto-fill up to DEV_TARGET_PLAYER_COUNT as a side effect — see
+// ensureDevBotIfNeeded). Added bots are real `players` rows, so they show
+// up on every screen's player list/count from here on, no matter where the
+// host clicks next.
+function renderDevAddBots() {
+  const botCount = players.filter((p) => isDevBot(p)).length;
+  return `
+    <div class="dev-panel">
+      <p class="dev-label">🔧 Add bots (dev only)</p>
+      <p class="sub">${botCount} bot${botCount === 1 ? "" : "s"} in the room right now.</p>
+      <div class="dev-grid">
+        <button class="dev-btn" data-action="dev-add-bot">🤖 Add a bot</button>
+        ${botCount > 0 ? `<button class="dev-btn" data-action="dev-remove-bot">🗑️ Remove last bot</button>` : ""}
+      </div>
     </div>`;
 }
 
