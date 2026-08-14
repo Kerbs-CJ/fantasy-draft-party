@@ -4180,7 +4180,7 @@ function renderGolf() {
         ? `💦 In the water! Stroke ${myStrokes} down — back to the tee.`
         : `Stroke ${myStrokes} down.`;
   } else if (isMyTurn) {
-    instructions = escapeHtml(hole.description);
+    instructions = ""; // no per-hole flavor text — the turn banner already covers whose go it is
   } else {
     instructions = ""; // the turn banner below already says whose go it is
   }

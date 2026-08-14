@@ -417,24 +417,46 @@ input::placeholder { color: #6c9b83; }
 body:has(.golf-hazard-legend) #app {
   max-width: 1100px;
 }
+/* NOTE: deliberately no align-items:center here (tried once, reverted —
+   see below) — align-items on a flex container makes its CHILDREN
+   shrink to their content size along the cross axis instead of
+   stretching, which broke .golf-course-wrap's width:100% sizing chain
+   down to .golf-course and collapsed the whole course to nothing.
+   Giving .golf-course-wrap an explicit width itself (below) is what
+   actually keeps it full-size, regardless of align-items. */
 .golf-practice-layout {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 16px;
+}
+.golf-practice-layout .golf-course-wrap.practice {
+  width: 100%;
+}
+.golf-practice-layout .golf-hazard-legend {
+  margin: 0 auto;
 }
 @media (min-width: 980px) {
   .golf-practice-layout {
     flex-direction: row;
     align-items: flex-start;
-    justify-content: center;
+    /* Pushes the legend all the way to the far right edge of the
+       (widened, see body:has() below) screen, not just snug against the
+       course — the course gets the rest of the row and centers itself
+       within it. */
+    justify-content: space-between;
   }
   .golf-practice-layout .golf-course-wrap.practice {
-    flex: 0 1 auto;
+    width: auto;
+    flex: 1 1 auto;
+    display: flex;
+    justify-content: center;
+  }
+  .golf-practice-layout .golf-hazard-legend {
+    flex: 0 0 260px;
+    margin: 0;
   }
 }
 .golf-hazard-legend {
-  flex: 1 1 240px;
   max-width: 280px;
   width: 100%;
   background: rgba(255,255,255,0.04);
