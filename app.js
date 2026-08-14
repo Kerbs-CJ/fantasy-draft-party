@@ -422,7 +422,11 @@ let local = {
   error: "",
   missingClub: { qIndex: null, redoNonce: null, sessionId: null, answeredQIndex: null, myChoice: null, pending: null, choices: null },
   guess: { pIndex: null, redoNonce: null, sessionId: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
-  revealStarted: false,
+  // Guards the one-shot confetti spawn on the final pick's reveal (see
+  // ensureRevealConfetti) — holds the reveal.index confetti was already
+  // spawned for, so a redundant render() at the same index doesn't spawn a
+  // second burst.
+  revealConfettiIndex: null,
   // Host-only "break glass" panel — see renderHostPanel/hostRedoCurrentItem.
   // Kept collapsed by default so it's out of the way on every screen but
   // one tap away for the entire party, not just while ?dev=1 testing.
@@ -743,7 +747,9 @@ async function onClick(e) {
   if (action === "show-golf-practice") return showGolfPractice();
   if (action === "start-golf") return startGolf();
   if (action === "golf-next-hole") return golfNextHole();
-  if (action === "reveal") return updateRoom({ status: "reveal" });
+  if (action === "reveal") return startReveal();
+  if (action === "reveal-pick") return revealPick();
+  if (action === "reveal-next-pick") return revealNextPick();
   if (action === "dev-jump") return devJump(btn.dataset.status);
   if (action === "dev-add-bot") return addDevBot();
   if (action === "dev-remove-bot") return removeLastDevBot();
@@ -2186,7 +2192,7 @@ async function hostAddScore(playerId, gameIndex, roundIndex, points) {
 function resetLocalGameState() {
   local.missingClub = { qIndex: null, redoNonce: null, sessionId: null, answeredQIndex: null, myChoice: null, pending: null, choices: null };
   local.guess = { pIndex: null, redoNonce: null, sessionId: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
-  local.revealStarted = false;
+  local.revealConfettiIndex = null;
   local.missingClubBotScheduled = {};
   local.guessBotScheduled = {};
   local.botShooterScheduledFor = null;
@@ -2617,6 +2623,7 @@ function renderInner() {
       html += renderLeaderboard("Football Golf", 4, "reveal", "🏆 Reveal Draft Order!");
       break;
     case "reveal":
+      ensureRevealConfetti();
       html += renderReveal();
       break;
     default:
@@ -3894,50 +3901,93 @@ function renderLeaderboard(gameName, gameIndex, nextAction, nextLabel) {
     </div>`;
 }
 
-function renderReveal() {
+// Host-controlled, one pick at a time — worst place first, building up to
+// pick #1. game_state.reveal.order is a snapshot (taken once, in
+// startReveal) of {playerId, total} from worst to best, so it can't shift
+// under everyone's feet mid-reveal even though totalsByPlayer() is always
+// live. `index` is which position is currently up, `revealed` is whether
+// THAT position's name is showing yet — same shape as the Half-Time Show's
+// {order, index, revealed} (see startHalftimeShow).
+async function startReveal() {
   const totals = totalsByPlayer();
-  const order = totals.slice().reverse(); // reveal last pick first, building to #1
-  setTimeout(startRevealAnimation, 50);
-  // The "Go to draft tracker" link is in the DOM from the start rather
-  // than added later, but hidden (opacity:0, see .reveal-tracker-btn) —
-  // startRevealAnimation reveals it via a plain class toggle once the
-  // countdown actually finishes, not a render() call. A render() here
-  // would replace the whole card, including #reveal-list, which only
-  // ever gets its content from direct DOM appends during the animation
-  // (see showNext below) — re-rendering mid- or post-animation would
-  // wipe it back to empty.
+  const order = totals
+    .slice()
+    .reverse() // worst first, building to #1
+    .map((e) => ({ playerId: e.player.id, total: e.total }));
+  await updateRoom({ status: "reveal", game_state: { reveal: { order, index: 0, revealed: false } } });
+}
+
+async function revealPick() {
+  const gs = room.game_state;
+  await updateRoom({ game_state: { ...gs, reveal: { ...gs.reveal, revealed: true } } });
+}
+
+async function revealNextPick() {
+  const gs = room.game_state;
+  const next = gs.reveal.index + 1;
+  if (next >= gs.reveal.order.length) return; // already at pick #1, nothing further to reveal
+  await updateRoom({ game_state: { ...gs, reveal: { order: gs.reveal.order, index: next, revealed: false } } });
+}
+
+// One-shot confetti burst the moment pick #1 actually gets revealed —
+// guarded by local.revealConfettiIndex so a redundant render() at the same
+// index (e.g. the realtime echo of this device's own write) doesn't spawn
+// a second burst. Same guard-flag pattern used for the PK shootout/golf
+// animations elsewhere in this file.
+function ensureRevealConfetti() {
+  const rv = room.game_state?.reveal;
+  if (!rv) return;
+  const isFinalRevealed = rv.revealed && rv.index === rv.order.length - 1;
+  if (isFinalRevealed && local.revealConfettiIndex !== rv.index) {
+    local.revealConfettiIndex = rv.index;
+    spawnConfetti();
+  }
+}
+
+function renderReveal() {
+  const rv = room.game_state?.reveal;
+  if (!rv) return `<div class="card"><h2>🏆 Draft Order</h2><p class="waiting">Waiting for host to start the reveal…</p></div>`;
+  const { order, index, revealed } = rv;
+  const total = order.length;
+  const isFinal = index >= total - 1;
+  const isDone = revealed && isFinal;
+  const currentPickNumber = total - index;
+
+  // Every position shown so far — the already-confirmed ones, plus a "???"
+  // placeholder for the current one while host hasn't revealed it yet —
+  // sorted by pick number ascending. .reveal-list is flex column-reverse
+  // (see style.css), which flips that into worst-at-top/#1-at-bottom, so
+  // each new reveal lands right below the pack, building down to the
+  // pick #1 finale at the bottom.
+  const shownCount = revealed ? index + 1 : index;
+  const entries = order.slice(0, shownCount).map((e, i) => ({ ...e, pickNumber: total - i, shown: true }));
+  if (!revealed) entries.push({ pickNumber: currentPickNumber, shown: false });
+  entries.sort((a, b) => a.pickNumber - b.pickNumber);
+
   return `
     <div class="card">
       <h2>🏆 Draft Order</h2>
-      <div id="reveal-list" class="reveal-list"></div>
-      <a id="draft-tracker-link" class="btn primary reveal-tracker-btn" href="draft-tracker.html?room=${encodeURIComponent(room.code)}">📋 Go to Draft Tracker</a>
+      <div class="reveal-list">
+        ${entries
+          .map((e) => {
+            if (!e.shown) {
+              return `<div class="reveal-item reveal-pending"><span class="pick-num">Pick #${e.pickNumber}</span><span class="pick-name">???</span></div>`;
+            }
+            const name = players.find((p) => p.id === e.playerId)?.name || "?";
+            return `<div class="reveal-item${e.pickNumber === 1 ? " first-pick" : ""}"><span class="pick-num">Pick #${e.pickNumber}</span><span class="pick-name">${escapeHtml(name)}</span><span class="pick-pts">${e.total} pts</span></div>`;
+          })
+          .join("")}
+      </div>
+      ${
+        isDone
+          ? `<a class="btn primary reveal-tracker-btn" href="draft-tracker.html?room=${encodeURIComponent(room.code)}">📋 Go to Draft Tracker</a>`
+          : isMeHost()
+            ? revealed
+              ? `<button class="btn primary" data-action="reveal-next-pick">Reveal Pick #${currentPickNumber - 1} →</button>`
+              : `<button class="btn primary" data-action="reveal-pick">🔍 Reveal Pick #${currentPickNumber}</button>`
+            : `<p class="waiting">Waiting for host to reveal ${revealed ? "the next pick" : `Pick #${currentPickNumber}`}…</p>`
+      }
     </div>`;
-}
-
-function startRevealAnimation() {
-  if (local.revealStarted) return;
-  local.revealStarted = true;
-  const totals = totalsByPlayer();
-  const order = totals.slice().reverse();
-  const list = document.getElementById("reveal-list");
-  if (!list) return;
-  let i = 0;
-  const showNext = () => {
-    if (i >= order.length) {
-      spawnConfetti();
-      document.getElementById("draft-tracker-link")?.classList.add("visible");
-      return;
-    }
-    const pickNumber = order.length - i;
-    const entry = order[i];
-    const div = document.createElement("div");
-    div.className = "reveal-item" + (pickNumber === 1 ? " first-pick" : "");
-    div.innerHTML = `<span class="pick-num">Pick #${pickNumber}</span><span class="pick-name">${escapeHtml(entry.player.name)}</span><span class="pick-pts">${entry.total} pts</span>`;
-    list.prepend(div);
-    i++;
-    setTimeout(showNext, pickNumber === 1 ? 200 : 900);
-  };
-  showNext();
 }
 
 function spawnConfetti() {

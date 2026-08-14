@@ -608,24 +608,20 @@ input::placeholder { color: #6c9b83; }
 }
 .pick-num { color: var(--sub); font-size: 13px; }
 .reveal-item.first-pick .pick-num { color: #5c3d00; }
+/* The not-yet-revealed "next up" slot — see renderReveal — sits dashed and
+   faded at the bottom of the growing list until the host reveals it. */
+.reveal-item.reveal-pending {
+  background: transparent;
+  border: 1px dashed var(--card-border);
+  opacity: 0.6;
+}
 
 @keyframes pop {
   from { transform: scale(0.9); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
 
-/* Present in the DOM from the moment the reveal card renders (not
-   inserted later), just invisible — startRevealAnimation toggles
-   .visible via a plain class change once the countdown finishes, which
-   transition can animate correctly (there's a real prior painted state
-   to animate FROM here, unlike inserting an already-revealed element —
-   see the note above renderReveal). */
-.reveal-tracker-btn {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.6s ease;
-}
-.reveal-tracker-btn.visible { opacity: 1; pointer-events: auto; }
+.reveal-tracker-btn { animation: pop .3s ease; }
 
 .confetti {
   position: fixed;
