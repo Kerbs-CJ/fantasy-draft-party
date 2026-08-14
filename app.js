@@ -410,24 +410,24 @@ function golfSimulateShot(hole, start, angle, power) {
   }
   return { path, endX: x, endY: y, holed, splashed };
 }
-// Golf scoring, third iteration in one day (2026-08-14) — history, in
-// case any of this gets touched again:
+// Golf scoring, fourth pass in one day (2026-08-14) — history, in case
+// this gets touched again:
 //  1. Originally: placementPoints(i, n) off final ranking, same mechanism
-//     as the Shootout — GOLF_TERM_POINTS (eagle/birdie/par/etc.) only ever
-//     decided who ranked where, never the awarded points directly.
-//  2. Craig wanted per-hole results to count directly — tried making
-//     GOLF_TERM_POINTS itself the score (summed across holes), rescaled
-//     down from the original 50/35/25/15/8/3 so a sweep capped at 80
-//     instead of 250. This still meant your score was a fixed, ABSOLUTE
-//     reward for your own play, independent of how anyone else did.
-//  3. Current: Craig's next idea — a fixed 60-point POOL per hole, split
-//     among the field by finishing order ON THAT HOLE (fewest strokes
-//     wins the hole). See GOLF_HOLE_POOL/golfHolePoints/
-//     finalizeHoleResults below. GOLF_TERM_POINTS's numeric values are
-//     gone — eagle/birdie/par/bogey are now purely descriptive labels
-//     (GOLF_TERM_LABEL, via golfScoreTerm), not point values. Don't
-//     re-add a numeric GOLF_TERM_POINTS map without checking this isn't
-//     needed again — the term itself no longer drives scoring.
+//     as the Shootout.
+//  2. Switched to GOLF_TERM_POINTS (eagle/birdie/par/etc.) itself being
+//     the score, summed per hole — rescaled from the original 50/35/25/
+//     15/8/3 down to today's 16/11/8/5/3/1 so a sweep capped at 80.
+//  3. Tried a 60-point POOL per hole split by finishing order ON THAT
+//     HOLE instead — but Craig pointed out the course is tight enough
+//     (nobody's getting a hole-in-one, or realistically an eagle at all)
+//     that a lot of players land on the same stroke count most holes,
+//     making a finishing-ORDER split feel arbitrary among a pile of ties.
+//  4. Reverted to (2) — GOLF_TERM_POINTS is the score again, an absolute
+//     reward for YOUR strokes vs. par, independent of anyone else's. Ties
+//     just naturally get the same term and the same points, no ranking
+//     logic needed. Don't reintroduce finishing-order/pool-split scoring
+//     without re-checking this reasoning first.
+const GOLF_TERM_POINTS = { eagle: 16, birdie: 11, par: 8, bogey: 5, "double-bogey": 3, "triple-plus": 1 };
 const GOLF_TERM_LABEL = {
   eagle: "🦅 Eagle!",
   birdie: "🐦 Birdie!",
@@ -436,24 +436,6 @@ const GOLF_TERM_LABEL = {
   "double-bogey": "😵 Double Bogey",
   "triple-plus": "🐌 Picked up",
 };
-// 60 points split among however many players have actually finished the
-// CURRENT hole, by finishing order (fewest strokes = best). A symmetric
-// arithmetic step around the pool's mean (60/n) always sums to exactly
-// the pool when nobody ties — for the real 5-player game that's a clean
-// step of 4 around a mean of 12: 20/16/12/8/4. Ties share the same rank's
-// points (see finalizeHoleResults's standard-competition-ranking), so an
-// exact 60 total isn't guaranteed once ties happen — fine, fairness
-// matters more than hitting the pool exactly. Winning every hole outright
-// is 20 x 5 holes = 100 for the round, a bit above the Shootout's 80 max;
-// that's a known, accepted side effect of this being pool-based rather
-// than capped, not an oversight.
-const GOLF_HOLE_POOL = 60;
-function golfHolePoints(rank, n) {
-  if (n <= 1) return GOLF_HOLE_POOL;
-  const mean = GOLF_HOLE_POOL / n;
-  const step = mean / 3;
-  return Math.max(0, Math.round(mean + ((n - 1) / 2 - rank) * step));
-}
 const DEV_BOT_PREFIX = "🤖 ";
 const DEV_TARGET_PLAYER_COUNT = 5; // matches the real draft-night group size
 function isDevBot(player) {
@@ -1323,9 +1305,8 @@ function resolveHeadToHead(group, matches) {
 // Shootout's final placement (max 80, min 16 — a 64-point swing top to
 // bottom; min is still 20% of max). Golf USED to use this too, then went
 // through its own scoring history (see the comment above GOLF_TERM_LABEL)
-// and no longer calls this function at all — it scores off golfHolePoints
-// instead, a separate per-hole-pool formula with a similar shape but its
-// own max (100, not 80 — see that comment for why).
+// and settled on scoring off GOLF_TERM_POINTS directly instead — it
+// doesn't call this function at all anymore.
 // Re-rebalanced 2026-08-14: Craig wants the Shootout capped BELOW the quiz
 // games now (max 80, was 100), while Missing Club (max 120,
 // MISSING_CLUB_POINTS) and Guess the Footballer (max 120, GUESS_CLUE_POINTS
@@ -1833,12 +1814,7 @@ async function golfSubmitShot(shot, botPlayerId) {
   let results = gs.results;
   if (holedOut) {
     const term = golfScoreTerm(strokes, hole.par);
-    // points stays null until the whole hole closes — nobody's finishing
-    // order (and so nobody's points, see golfHolePoints) is knowable until
-    // everyone still to play this hole has actually finished it. Filled in
-    // by finalizeHoleResults when the host moves on. `sum + null` is a
-    // safe 0 in the meantime, so running totals during play don't error.
-    const result = { strokes, term, points: null };
+    const result = { strokes, term, points: GOLF_TERM_POINTS[term] };
     results = { ...gs.results, [me.id]: [...(gs.results[me.id] || []), result] };
   }
 
@@ -1867,51 +1843,28 @@ async function golfSubmitShot(shot, botPlayerId) {
   await updateRoom({ game_state: { golf: { ...gs, balls, results, turnPos } } });
 }
 
-// Splits this hole's 60-point pool (golfHolePoints) among whoever actually
-// has a result for it — someone the host moved past before they finished
-// (see golfNextHole's comment) just doesn't get ranked for this hole at
-// all, same as never answering a Missing Club question. Ties share the
-// same rank's points via standard competition ranking (1st, 1st, 3rd —
-// not 1st, 1st, 2nd), so the next distinct stroke count doesn't quietly
-// jump ahead of players it actually tied.
-function finalizeHoleResults(results, holeIndex) {
-  const finishers = players
-    .filter((p) => results[p.id]?.[holeIndex])
-    .map((p) => ({ id: p.id, strokes: results[p.id][holeIndex].strokes }))
-    .sort((a, b) => a.strokes - b.strokes);
-  const n = finishers.length;
-  const updated = { ...results };
-  let rank = 0;
-  finishers.forEach((f, i) => {
-    if (i > 0 && f.strokes > finishers[i - 1].strokes) rank = i;
-    updated[f.id] = [...updated[f.id]];
-    updated[f.id][holeIndex] = { ...updated[f.id][holeIndex], points: golfHolePoints(rank, n) };
-  });
-  return updated;
-}
-
-// Host-triggered, same as Missing Club's reveal/next — doesn't require
-// every player to have finished, so a stuck or bot player never blocks
-// the group from moving on. Finalizes this hole's points (see
-// finalizeHoleResults) right before leaving it, whether that's moving to
-// the next hole or wrapping up the round entirely.
+// Host-triggered — the button is only offered once everyone's actually
+// finished the hole (see renderGolf's allDone/"Continue" vs "Force next
+// hole" split), so this doesn't normally need to handle stragglers itself;
+// the "force" path exists purely as a recovery lever for a stuck/dead
+// device, same spirit as Missing Club's reveal/next.
 async function golfNextHole() {
   const gs = room.game_state?.golf;
   if (!gs) return;
-  const results = finalizeHoleResults(gs.results, gs.holeIndex);
   const next = gs.holeIndex + 1;
   if (next >= GOLF_HOLES.length) {
-    await finishGolf({ ...gs, results });
+    await finishGolf(gs);
   } else {
     await updateRoom({
-      game_state: { golf: { ...gs, results, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]), turnOrder: players.map((p) => p.id), turnPos: 0 } },
+      game_state: { golf: { ...gs, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]), turnOrder: players.map((p) => p.id), turnPos: 0 } },
     });
   }
 }
 
-// finishGolf just sums whatever points finalizeHoleResults already wrote
-// per hole — it doesn't compute or convert anything itself anymore. The
-// sort is only for the leaderboard's display order, not the scoring.
+// Sums each player's per-hole GOLF_TERM_POINTS across every hole they've
+// played — a plain reward for your own strokes vs. par, nothing relative
+// to how anyone else did. The sort is only for the leaderboard's display
+// order, not the scoring.
 async function finishGolf(gs) {
   const totals = players.map((p) => ({
     player: p,
@@ -3521,18 +3474,22 @@ function renderGolfIntro() {
       <h3>How a shot works</h3>
       <p>Press and drag your ball like a slingshot — it fires the <b>opposite</b> way you pull. Pull distance sets power, angle sets direction, no timer. Watch for slopes, sand and water as you read the course.</p>
 
-      <h3>Scoring — ${GOLF_HOLE_POOL} points up for grabs on every hole</h3>
-      <p>Each hole has its own pot of ${GOLF_HOLE_POOL} points, split by how you finish that hole relative to everyone else — fewest strokes wins the most, not a fixed reward just for making par. Tie with someone and you both get the same spot's points.</p>
+      <h3>Scoring — strokes vs. par</h3>
+      <p>Every hole scores on its own — what you shoot relative to par, not who finished where. A tie just means you both earn the same result's points.</p>
       <div class="standings-wrap">
         <table class="standings-table">
-          <thead><tr><th>Finish on the hole</th><th>Points</th></tr></thead>
+          <thead><tr><th>Result</th><th>Points</th></tr></thead>
           <tbody>
-            ${Array.from({ length: players.length || 1 }, (_, i) => `<tr><td>${ordinal(i + 1)}</td><td>${golfHolePoints(i, players.length || 1)}</td></tr>`).join("")}
+            <tr><td>${GOLF_TERM_LABEL.eagle}</td><td>${GOLF_TERM_POINTS.eagle}</td></tr>
+            <tr><td>${GOLF_TERM_LABEL.birdie}</td><td>${GOLF_TERM_POINTS.birdie}</td></tr>
+            <tr><td>${GOLF_TERM_LABEL.par}</td><td>${GOLF_TERM_POINTS.par}</td></tr>
+            <tr><td>${GOLF_TERM_LABEL.bogey}</td><td>${GOLF_TERM_POINTS.bogey}</td></tr>
+            <tr><td>${GOLF_TERM_LABEL["double-bogey"]}</td><td>${GOLF_TERM_POINTS["double-bogey"]}</td></tr>
+            <tr><td>${GOLF_TERM_LABEL["triple-plus"]}</td><td>${GOLF_TERM_POINTS["triple-plus"]}</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="sub">Eagle, birdie, par, bogey (etc.) still pop up live as you play — they describe your strokes vs. par, they just don't set your points directly anymore.</p>
-      <p>A hole force-finishes after ${GOLF_MAX_STROKES} strokes so nobody's stuck. Win every hole outright across all ${GOLF_HOLES.length} and that's ${golfHolePoints(0, players.length || 1) * GOLF_HOLES.length} points for the round.</p>
+      <p>A hole force-finishes after ${GOLF_MAX_STROKES} strokes so nobody's stuck. Your points added up across all ${GOLF_HOLES.length} holes are your score for the round — an eagle-every-hole sweep caps at ${GOLF_TERM_POINTS.eagle * GOLF_HOLES.length} points, though on this course that's more a theoretical ceiling than a realistic one.</p>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
@@ -3612,6 +3569,7 @@ function renderGolf() {
   const hole = GOLF_HOLES[holeIndex];
   const answered = golfAlreadyAnswered(gs);
   const finished = golfFinishedPlayers(gs);
+  const allDone = finished.length === players.length;
   const myStrokes = golfMyBall(gs, hole).strokes;
   // Turn-based: one stroke each, cycling round — see golfCurrentTurnPlayerId
   // for how it skips anyone already holed out. turnId is null once
@@ -3680,10 +3638,12 @@ function renderGolf() {
       <ul class="player-list compact">
         ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total}</li>`).join("")}
       </ul>
-      ${renderGolfFinishers(gs, holeIndex, finished)}
+      ${renderGolfFinishers(gs, holeIndex, finished, allDone)}
       ${
         isHost
-          ? `<button class="btn primary" data-action="golf-next-hole">${holeIndex + 1 >= GOLF_HOLES.length ? "🏆 Show final standings" : "Next hole"}</button>`
+          ? allDone
+            ? `<button class="btn primary" data-action="golf-next-hole">${holeIndex + 1 >= GOLF_HOLES.length ? "🏆 Show final standings" : `Continue to Hole ${holeIndex + 2} →`}</button>`
+            : `<button class="btn" data-action="golf-next-hole">⏭️ Force next hole (skips anyone still playing)</button>`
           : ""
       }
     </div>`;
@@ -4006,21 +3966,22 @@ function animateGolfBallSink(ballId) {
 // this is the actual source of truth for scoring; there's no spatial
 // "landing spot" to show since a shot's outcome is a stroke count, not a
 // single throw.
-function renderGolfFinishers(gs, holeIndex, finished) {
+// `allDone` (finished.length === players.length) switches this from a
+// live "who's finished so far" trickle into the deliberate hole-complete
+// summary — see renderGolf's button logic, which only offers "Continue"
+// once this is true, so the summary is always on screen before the host
+// can move to the next hole (not skippable by accident).
+function renderGolfFinishers(gs, holeIndex, finished, allDone) {
   const revealedClass = local.golfAnim.revealed ? " revealed" : "";
-  // No points shown here on purpose — this hole's points aren't decided
-  // until everyone still to play it has finished (see finalizeHoleResults,
-  // called once the host actually moves on), so mid-hole this can only
-  // ever show strokes/term, never a final number.
   const rows = finished
     .map((p) => {
       const r = gs.results[p.id][holeIndex];
-      return `<li>${GOLF_TERM_LABEL[r.term]} — ${escapeHtml(p.name)} (${r.strokes} strokes)</li>`;
+      return `<li>${GOLF_TERM_LABEL[r.term]} — ${escapeHtml(p.name)} (${r.strokes} strokes, +${r.points})</li>`;
     })
     .join("");
   return `
     <div class="golf-finishers${revealedClass}">
-      <h3>This hole so far</h3>
+      <h3>${allDone ? "🏁 Hole complete — here's how everyone did" : "This hole so far"}</h3>
       ${finished.length ? `<ul class="golf-shot-list">${rows}</ul>` : `<p class="waiting">Nobody's holed out yet…</p>`}
     </div>`;
 }
