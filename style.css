@@ -964,7 +964,12 @@ code {
   line-height: 1;
   will-change: left, top, transform;
 }
-.pk-keeper { font-size: 34px; z-index: 2; }
+.pk-keeper { z-index: 2; }
+/* Original glove icon, not the 🧤 emoji — see PK_KEEPER_GLOVE_SVG. An
+   inline <svg> with no explicit size defaults to the browser's own
+   fallback box (300x150px), so this has to size it explicitly to match
+   the old emoji's 34px footprint. */
+.pk-keeper-glove { display: block; width: 34px; height: 34px; }
 .pk-ball { font-size: 24px; z-index: 3; }
 
 /* ── half-time show ("Who's That Pokémon?", renderHalftimeShow) ─── */

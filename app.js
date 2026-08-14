@@ -472,7 +472,7 @@ let local = {
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   golfBotScheduled: {}, // `${holeIndex}:${botId}:${strokes}` -> true, so a bot's turn isn't scheduled twice
-  shootoutAnim: { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
+  shootoutAnim: { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
     redoNonce: null,
@@ -2250,7 +2250,7 @@ function resetLocalGameState() {
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
   local.golfBotScheduled = {};
-  local.shootoutAnim = { matchKey: null, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
+  local.shootoutAnim = { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
     holeIndex: null,
     subPhase: "ready",
@@ -2368,6 +2368,19 @@ const SHOOTOUT_RESULT_MS = 1900;
 // like it was happening on top of itself rather than as distinct beats.
 const PK_PRE_FLIGHT_PAUSE_MS = 350;
 
+// Animates kicks strictly IN ORDER, one at a time, off animatedCount (how
+// many entries this device has actually taken through the full
+// kicking->result cycle) — NOT off match.log.length directly. Fixed a real
+// bug (found 2026-08-14 spectating a fast bot-vs-bot match): the old
+// version always grabbed match.log[log.length - 1], the newest entry, so
+// if kicks landed faster than one device's ~3.25s animation cycle (very
+// possible once both shooter and keeper are bots), it would SKIP straight
+// to the latest kick and never animate the ones in between — those just
+// popped into the scoreboard mid-animation instead of playing out, which
+// is what looked like circles "randomly" appearing out of nowhere. Now
+// every kick gets its own cycle queued in order, even if that means
+// running behind the real DB state for a few seconds on a fast match —
+// visually lagging but correct beats skipping and looking broken.
 function ensureShootoutAnim() {
   const match = room.game_state?.match;
   if (!match) return;
@@ -2377,11 +2390,12 @@ function ensureShootoutAnim() {
   // would otherwise silently stop future kicks from ever animating again).
   const matchKey = `${match.p1}-${match.p2}-${match.rrIndex}-${match.resetNonce || 0}`;
   if (local.shootoutAnim.matchKey !== matchKey) {
-    local.shootoutAnim = { matchKey, lastLogLength: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
+    local.shootoutAnim = { matchKey, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   }
-  if (match.log.length > local.shootoutAnim.lastLogLength && !local.shootoutAnim.phase) {
-    local.shootoutAnim.lastLogLength = match.log.length;
-    local.shootoutAnim.entry = match.log[match.log.length - 1];
+  if (match.log.length > local.shootoutAnim.animatedCount && !local.shootoutAnim.phase) {
+    const nextIndex = local.shootoutAnim.animatedCount;
+    local.shootoutAnim.animatedCount = nextIndex + 1;
+    local.shootoutAnim.entry = match.log[nextIndex];
     local.shootoutAnim.phase = "kicking";
     local.shootoutAnim.kickAnimTriggered = false;
     local.shootoutAnim.impactShown = false;
@@ -2391,7 +2405,10 @@ function ensureShootoutAnim() {
       setTimeout(() => {
         local.shootoutAnim.phase = null;
         render();
-        if (match.winnerId) finalizeMatchIfDecided();
+        // Only finalize once this device has actually caught up to every
+        // logged kick — match.winnerId can already be true while there
+        // are still older, un-animated kicks queued behind this one.
+        if (match.winnerId && local.shootoutAnim.animatedCount >= match.log.length) finalizeMatchIfDecided();
       }, SHOOTOUT_RESULT_MS);
     }, SHOOTOUT_KICK_MS);
   }
@@ -2524,6 +2541,18 @@ const PK_CROWD_HTML = generateCrowdDots();
 // the ball/glove "snapping into place" — the animation was still
 // technically playing, just on an element no longer on screen, right up
 // until it also got discarded.
+// An original glove icon, not the 🧤 emoji — Craig wanted it a solid red
+// to match the crowd's red end (see generateCrowdDots' #ef476f) since the
+// ball reads blue-ish on a lot of emoji sets, and an emoji glove's colour
+// isn't something CSS can just override (multi-colour glyph, not a
+// silhouette). Fixed markup, not per-render data, so it's a plain
+// constant rather than a function.
+const PK_KEEPER_GLOVE_SVG = `
+  <svg viewBox="0 0 100 100" class="pk-keeper-glove" aria-hidden="true">
+    <path d="M32 96 L32 52 Q32 18 50 14 Q68 18 68 52 L68 96 Z" fill="#ef476f" stroke="#c92e50" stroke-width="5" stroke-linejoin="round" />
+    <ellipse cx="26" cy="42" rx="13" ry="17" fill="#ef476f" stroke="#c92e50" stroke-width="5" />
+  </svg>`;
+
 function renderPkGoal(entry, kicking, doAnimate) {
   const ballPos = kicking ? PK_BALL_START : ZONE_POS[entry.shooterPick];
   const keeperPos = kicking ? PK_KEEPER_START : ZONE_POS[entry.keeperPick];
@@ -2533,7 +2562,7 @@ function renderPkGoal(entry, kicking, doAnimate) {
       <div class="pk-crowd">${PK_CROWD_HTML}</div>
       <div class="pk-adboard">${Array(3).fill(`<span>${escapeHtml(PK_AD_TEXT)}</span>`).join("")}</div>
       <div class="pk-goal-frame"></div>
-      <div id="pk-keeper" class="pk-keeper" style="left:${keeperPos.x}%; top:${keeperPos.y}%;">🧤</div>
+      <div id="pk-keeper" class="pk-keeper" style="left:${keeperPos.x}%; top:${keeperPos.y}%;">${PK_KEEPER_GLOVE_SVG}</div>
       <div id="pk-ball" class="pk-ball" style="left:${ballPos.x}%; top:${ballPos.y}%;">⚽</div>
     </div>`;
 }
@@ -3438,7 +3467,7 @@ function renderShootout() {
       <div class="card${impactClass}">
         <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
         <p class="sub">${roundLabel}</p>
-        ${renderPkScoreboard(match, anim.phase === "kicking" ? match.log.length - 1 : match.log.length)}
+        ${renderPkScoreboard(match, anim.phase === "kicking" ? anim.animatedCount - 1 : anim.animatedCount)}
         ${renderPkGoal(entry, anim.phase === "kicking", doAnimate)}
         ${
           anim.phase === "result"
