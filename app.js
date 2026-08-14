@@ -12,13 +12,13 @@ const GUESS_PLAYER_COUNT = 7;
 // The 5th clue (always the most obvious/giveaway one) was cut from every
 // entry in content.js's GUESS_PLAYERS 2026-08-14, so every mystery player
 // is now 4 clues, not 5 — this array's length has to match that exactly
-// (indexed by clueIndex). Reallocated for 4 tiers, keeping the same
-// "clue 1-2 noticeably more profitable, then a real drop-off" skew as the
-// 5-tier version it replaced: clue 1 and clue 2 sit close together at the
-// top (20, 17), then a steep cliff to clue 3 and clue 4 (6, 3). Top tier x
-// GUESS_PLAYER_COUNT = 140 (20 x 7), same clean divisible-by-5 max as
-// before the clue cut.
-const GUESS_CLUE_POINTS = [20, 17, 6, 3]; // indexed by clueIndex (0 = only 1st clue shown)
+// (indexed by clueIndex). First reallocation ([20,17,6,3]) had a steep
+// mid-table cliff (-11 from clue 2 to clue 3) that Craig felt was too
+// skewed — replaced same day with a steady widening step instead
+// (-5, -6, -5), still clearly rewarding early guesses without an
+// artificial cliff. Top tier x GUESS_PLAYER_COUNT = 140 (20 x 7), same
+// clean divisible-by-5 max as every version before it.
+const GUESS_CLUE_POINTS = [20, 15, 9, 4]; // indexed by clueIndex (0 = only 1st clue shown)
 // Football Golf — a real top-down course, drag-to-shoot. Every player has
 // an actual (x, y) position on the hole (percent coordinates, tee near
 // the bottom, pin near the top) that's part of shared room state, so a
