@@ -272,7 +272,15 @@ const GOLF_SLOPE_ACCEL = 0.05; // percent/tick² added to vy per tick while insi
 // friction on top of the normal per-tick friction); water ends the shot
 // on contact and sends the ball back to the tee — a real stroke-and-a-
 // splash penalty, not just decoration.
-const GOLF_SAND_FRICTION = 0.94; // extra multiplicative speed decay per substep while in sand — compounds with GOLF_FRICTION, noticeably stronger than normal rolling resistance
+// Applied once per SUBSTEP (4 per tick, see GOLF_SIM_SUBSTEPS), not once
+// per tick like GOLF_FRICTION — so this compounds fast: 0.94 per substep
+// was ~0.78 per tick before GOLF_FRICTION even applied on top, close to
+// 0.75 total, meaning a ball lost a full quarter of its speed every tick
+// in sand and ground to a near-instant halt. Raised to 0.975 (2026-08-14,
+// Craig felt it slowed the ball too much) — 0.975^4 ~= 0.90 per tick,
+// roughly 0.87 combined with GOLF_FRICTION, a clearly draggy surface
+// without stopping the ball dead.
+const GOLF_SAND_FRICTION = 0.975;
 
 // Circle-vs-obstacle collision (the ball is always treated as a circle).
 // Returns null for no collision, or the surface normal plus how far to
@@ -1853,11 +1861,31 @@ async function golfSubmitShot(shot, botPlayerId) {
   await updateRoom({ game_state: { golf: { ...gs, balls, results, turnPos } } });
 }
 
+// Sums each player's per-hole GOLF_TERM_POINTS across every hole they've
+// finished SO FAR (works mid-round, not just at the very end) — a plain
+// reward for your own strokes vs. par, nothing relative to how anyone
+// else did. Shared by finishGolf (final scoring) and golfNextHole (next
+// hole's honours order), so both agree on "current standing" the same
+// way.
+function golfTotalsSoFar(gs) {
+  return players
+    .map((p) => ({
+      player: p,
+      total: (gs.results[p.id] || []).reduce((sum, r) => sum + r.points, 0),
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
 // Host-triggered — the button is only offered once everyone's actually
 // finished the hole (see renderGolf's allDone/"Continue" vs "Force next
 // hole" split), so this doesn't normally need to handle stragglers itself;
 // the "force" path exists purely as a recovery lever for a stuck/dead
-// device, same spirit as Missing Club's reveal/next.
+// device, same spirit as Missing Club's reveal/next. Honours system, same
+// as real golf: whoever's currently leading the GOLF standings (not the
+// overall party score — just this game) tees off first on the next hole.
+// Before any hole's been finished, everyone's tied at 0 and the sort is
+// stable, so hole 1 just uses the room's normal player order — nothing
+// special to handle there.
 async function golfNextHole() {
   const gs = room.game_state?.golf;
   if (!gs) return;
@@ -1865,22 +1893,15 @@ async function golfNextHole() {
   if (next >= GOLF_HOLES.length) {
     await finishGolf(gs);
   } else {
+    const turnOrder = golfTotalsSoFar(gs).map((t) => t.player.id);
     await updateRoom({
-      game_state: { golf: { ...gs, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]), turnOrder: players.map((p) => p.id), turnPos: 0 } },
+      game_state: { golf: { ...gs, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]), turnOrder, turnPos: 0 } },
     });
   }
 }
 
-// Sums each player's per-hole GOLF_TERM_POINTS across every hole they've
-// played — a plain reward for your own strokes vs. par, nothing relative
-// to how anyone else did. The sort is only for the leaderboard's display
-// order, not the scoring.
 async function finishGolf(gs) {
-  const totals = players.map((p) => ({
-    player: p,
-    total: (gs.results[p.id] || []).reduce((sum, r) => sum + r.points, 0),
-  }));
-  totals.sort((a, b) => b.total - a.total);
+  const totals = golfTotalsSoFar(gs);
   const inserts = totals.map((t) => ({
     room_code: room.code,
     player_id: t.player.id,
@@ -2185,13 +2206,15 @@ async function resetCurrentGolfHole() {
   for (const [playerId, list] of Object.entries(gs.results || {})) {
     results[playerId] = list.length > gs.holeIndex ? list.slice(0, gs.holeIndex) : list;
   }
+  // turnOrder is deliberately NOT reset here — it stays whatever honours
+  // order golfNextHole already set for this hole (see its comment); a
+  // reset re-plays the SAME hole, it shouldn't reshuffle who tees off.
   await updateRoom({
     game_state: {
       golf: {
         ...gs,
         results,
         balls: golfBallsAtTee(hole),
-        turnOrder: players.map((p) => p.id),
         turnPos: 0,
         redoNonce: (gs.redoNonce || 0) + 1,
       },
