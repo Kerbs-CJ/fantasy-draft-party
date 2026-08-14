@@ -2,12 +2,12 @@
 
 const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
-const MISSING_CLUB_COUNT = 12;
-// Re-rebalanced 2026-08-14, second pass (was 8, briefly; 20 originally —
-// see the comment above placementPoints): Craig wants the two quiz games
-// deliberately ABOVE the Shootout/Golf cap now, not equal to it. 12 rounds
-// x 10pts = 120 max exactly.
-const MISSING_CLUB_POINTS = 10; // flat — no timer, so no speed bonus
+// Cut from 12 to 10 rounds 2026-08-14 (Craig's call, pacing/length, not a
+// scoring change) — MISSING_CLUB_POINTS was bumped 10->12 in the same edit
+// so the 120 max Craig had just set stays exactly 120 (10 x 12) rather
+// than silently dropping to 100 just because there are fewer rounds now.
+const MISSING_CLUB_COUNT = 10;
+const MISSING_CLUB_POINTS = 12; // flat — no timer, so no speed bonus
 const GUESS_PLAYER_COUNT = 7;
 // Re-rebalanced 2026-08-14, second pass (was [15,12,9,6,3], briefly;
 // [30,24,18,12,6] originally — see the comment above placementPoints).
