@@ -1332,10 +1332,10 @@ const POKEMON_HALFTIME_POOL = [
 // Curated joke entries that always play, in this exact order, at the START
 // of the show (Craig's picks). Two different joke shapes so far:
 //  - "wrong angle" (Jigglypuff): the reveal IS the same Pokémon, just shot
-//    from a deliberately misleading angle. `custom: "jigglypuff-above"`
-//    renders an ORIGINAL hand-drawn circle (see renderJigglypuffFromAbove)
-//    rather than a hotlinked screenshot of the real TV bumper — same joke,
-//    nothing reproduced.
+//    from a deliberately misleading angle. `img` points at Craig's own
+//    top-down drawing (assets/jigglypuff-top-down.png, his artwork, not a
+//    hotlinked screenshot) — silhouettes as a plain circle via the normal
+//    .halftime-sprite filter, same as every other entry.
 //  - "wrong Pokémon" (Ditto): the silhouette is genuinely a DIFFERENT
 //    Pokémon's shape (`silhouetteId`) than what's actually revealed —
 //    Ditto's whole gimmick is disguising itself as something else, so the
@@ -1343,7 +1343,7 @@ const POKEMON_HALFTIME_POOL = [
 //    Ditto's. Both are the same established PokeAPI sprite-mirror source
 //    used everywhere else in this feature — see halftimeSilhouetteUrl.
 const POKEMON_HALFTIME_OPENERS = [
-  { id: 39, name: "Jigglypuff", note: "(seen from above)", custom: "jigglypuff-above" },
+  { id: 39, name: "Jigglypuff", note: "(seen from above)", img: "assets/jigglypuff-top-down.png" },
   { id: 132, name: "Ditto", silhouetteId: 4, note: "It transformed into a Charmander!" },
 ];
 function halftimeImageUrl(entry) {
@@ -1360,21 +1360,6 @@ function halftimeSilhouetteUrl(entry) {
 function renderHalftimeSprite(dex, revealed) {
   const shownUrl = revealed ? halftimeImageUrl(dex) : halftimeSilhouetteUrl(dex);
   return `<img src="${shownUrl}" alt="${revealed ? escapeHtml(dex.name) : "Mystery Pokémon silhouette"}" class="halftime-sprite${revealed ? " revealed" : ""}">`;
-}
-// An original hand-drawn "seen from above" graphic — plain circle,
-// nothing else, so the silhouette phase genuinely reads as a ball rather
-// than an obviously-Jigglypuff-shaped outline. On reveal, a faint hair
-// curl and closed sleepy eyes fade in (same filter mechanics as
-// .halftime-sprite/.revealed) — simple original shapes, not a copy of any
-// existing artwork or photo.
-function renderJigglypuffFromAbove(revealed) {
-  return `
-    <svg viewBox="0 0 100 100" class="halftime-sprite halftime-jigglypuff${revealed ? " revealed" : ""}" role="img" aria-label="${revealed ? "Jigglypuff, seen from above" : "Mystery Pokémon silhouette"}">
-      <circle cx="50" cy="50" r="46" fill="#f6d7d6" />
-      <path d="M 44 8 Q 38 2 46 3 Q 53 5 48 11" fill="none" stroke="#eab8bc" stroke-width="3" stroke-linecap="round" />
-      <path d="M 33 49 Q 38 44 43 49" fill="none" stroke="#3a2a2a" stroke-width="2.4" stroke-linecap="round" />
-      <path d="M 57 49 Q 62 44 67 49" fill="none" stroke="#3a2a2a" stroke-width="2.4" stroke-linecap="round" />
-    </svg>`;
 }
 // POKEMON_HALFTIME_OPENERS play first, in order; the rest of the show (up
 // to POKEMON_HALFTIME_COUNT) is filled with a random selection from
@@ -3131,7 +3116,7 @@ function renderHalftimeShow() {
       <p class="sub">Just for fun — no points on this one.</p>
       <h3 class="halftime-title">Who's That Pokémon?</h3>
       <div class="halftime-stage">
-        ${dex.custom === "jigglypuff-above" ? renderJigglypuffFromAbove(hs.revealed) : renderHalftimeSprite(dex, hs.revealed)}
+        ${renderHalftimeSprite(dex, hs.revealed)}
       </div>
       ${
         hs.revealed
