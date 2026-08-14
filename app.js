@@ -220,6 +220,11 @@ const GOLF_MAX_STROKES = 10; // holes forcibly finish here, however far short �
 // downhill slope, an uphill slope — spread out and kept clear of the tee
 // itself, so a practice swing always has a straight run at the pin
 // available as well as something to deliberately try bouncing off.
+// Every hazard type the real holes use, all in one place, so a practice
+// swing actually prepares you for everything you'll face — obstacles and
+// slopes originally, sand and water added 2026-08-14 alongside wind
+// (game_state.golfPractice.wind, see showGolfPractice/hostRerollWind) so
+// there's nothing in the real round that hasn't shown up here first.
 const GOLF_PRACTICE_HOLE = {
   tee: { x: 50, y: 88 },
   pin: { x: 50, y: 15 },
@@ -231,6 +236,8 @@ const GOLF_PRACTICE_HOLE = {
     { x: 30, y: 72, w: 18, h: 14, dir: "down" },
     { x: 65, y: 25, w: 18, h: 14, dir: "up" },
   ],
+  sand: [{ x: 20, y: 55, w: 14, h: 10 }],
+  water: [{ x: 68, y: 15, w: 12, h: 8 }],
 };
 // ── golf shot physics ───────────────────────────────────────
 // A real simulated roll, not a straight line — the ball moves tick by
@@ -255,6 +262,25 @@ const GOLF_BOUNDARY_RESTITUTION = 0.8; // energy kept bouncing off the course ed
 const GOLF_STOP_SPEED = 0.05; // below this speed (percent/tick) the ball is considered stopped
 const GOLF_MAX_SIM_TICKS = 240; // hard safety cap — a shot pinballing in a corner can't simulate forever
 const GOLF_SIM_SUBSTEPS = 4; // each tick's movement is split into smaller steps so a fast ball can't tunnel straight through a thin obstacle before a collision check sees it
+// Wind — added 2026-08-14, one new random condition per hole (not per
+// shot: everyone who plays a given hole faces the exact same wind, same
+// fairness principle as the hole's fixed obstacles/slopes). Unlike a
+// slope, it's not zone-gated — it pushes the ball for the ENTIRE flight,
+// every tick, everywhere on the course, so it has to be weaker per-tick
+// than GOLF_SLOPE_ACCEL (0.05) or it'd dominate a 50+ tick flight. Applied
+// once per tick (not per substep) to keep it directly comparable to
+// GOLF_FRICTION/GOLF_SHOT_V0_MAX's own per-tick calibration. `strength`
+// (see randomWind) scales it between barely-there and a genuine aim
+// adjustment.
+const GOLF_WIND_MAX_ACCEL = 0.035;
+// Regenerated once per hole (see startGolf/golfNextHole), NOT on a
+// same-hole retry (resetCurrentGolfHole deliberately leaves gs.wind
+// alone, same reasoning as it leaving turnOrder alone) — a retry replays
+// the SAME hole under the SAME conditions. minStrength stops wind from
+// ever generating at a strength so low it's not worth showing.
+function randomWind() {
+  return { angle: Math.random() * Math.PI * 2, strength: 0.3 + Math.random() * 0.7 };
+}
 // A hole's `slopes` are rectangular ground zones (same axis-aligned shape
 // as a wall, but the ball rolls freely through — no collision, just a
 // constant vertical pull the whole time it's inside, like gravity on a
@@ -334,7 +360,7 @@ function golfCollideBallObstacle(bx, by, r, obstacle) {
 // driving range. Returns the full path (course-percent waypoints, one
 // per tick) so the caller can animate the actual roll — bounces and all
 // — rather than a straight line from A to B.
-function golfSimulateShot(hole, start, angle, power) {
+function golfSimulateShot(hole, start, angle, power, wind) {
   let vx = Math.cos(angle) * power * GOLF_SHOT_V0_MAX;
   let vy = Math.sin(angle) * power * GOLF_SHOT_V0_MAX;
   let x = start.x;
@@ -343,10 +369,17 @@ function golfSimulateShot(hole, start, angle, power) {
   const slopes = hole.slopes || [];
   const sand = hole.sand || [];
   const water = hole.water || [];
+  const windAx = wind ? Math.cos(wind.angle) * wind.strength * GOLF_WIND_MAX_ACCEL : 0;
+  const windAy = wind ? Math.sin(wind.angle) * wind.strength * GOLF_WIND_MAX_ACCEL : 0;
   const path = [{ x, y }];
   let holed = false;
   let splashed = false;
   for (let tick = 0; tick < GOLF_MAX_SIM_TICKS && !holed && !splashed; tick++) {
+    // Once per TICK, not per substep — see the comment on
+    // GOLF_WIND_MAX_ACCEL for why this needs a different cadence than the
+    // zone-gated forces below.
+    vx += windAx;
+    vy += windAy;
     for (let sub = 0; sub < GOLF_SIM_SUBSTEPS; sub++) {
       x += vx / GOLF_SIM_SUBSTEPS;
       y += vy / GOLF_SIM_SUBSTEPS;
@@ -804,6 +837,8 @@ async function onClick(e) {
   if (action === "host-force-finish") return forceFinishShootoutMatch(btn.dataset.winner);
   if (action === "host-skip-shootout-turn") return hostSkipShootoutTurn();
   if (action === "host-skip-golf-turn") return hostSkipGolfTurn();
+  if (action === "host-reroll-practice-wind") return hostRerollPracticeWind();
+  if (action === "host-reroll-wind") return hostRerollWind();
   if (action === "host-edit-score") {
     const input = document.getElementById(`score-input-${btn.dataset.id}`);
     const points = Number(input?.value);
@@ -1688,7 +1723,7 @@ function golfBallsAtTee(hole) {
 async function startGolf() {
   await updateRoom({
     status: "golf",
-    game_state: { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]), turnOrder: players.map((p) => p.id), turnPos: 0 } },
+    game_state: { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]), turnOrder: players.map((p) => p.id), turnPos: 0, wind: randomWind() } },
   });
 }
 
@@ -1802,7 +1837,7 @@ async function golfPointerUp() {
   const gs = room.game_state?.golf;
   const hole = gs && GOLF_HOLES[gs.holeIndex];
   if (!hole) return;
-  const sim = golfSimulateShot(hole, ballPos, vec.angle, vec.power);
+  const sim = golfSimulateShot(hole, ballPos, vec.angle, vec.power, gs.wind);
   await golfSubmitShot({ power: vec.power, ...sim });
 }
 
@@ -1901,7 +1936,7 @@ async function golfNextHole() {
   } else {
     const turnOrder = golfTotalsSoFar(gs).map((t) => t.player.id);
     await updateRoom({
-      game_state: { golf: { ...gs, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]), turnOrder, turnPos: 0 } },
+      game_state: { golf: { ...gs, holeIndex: next, balls: golfBallsAtTee(GOLF_HOLES[next]), turnOrder, turnPos: 0, wind: randomWind() } },
     });
   }
 }
@@ -1967,7 +2002,7 @@ function ensureGolfBotSwing() {
     const dy = hole.pin.y - ballPos.y;
     const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.6; // aimed at the pin, +/- ~17deg jitter
     const power = 0.55 + Math.random() * 0.4;
-    const sim = golfSimulateShot(hole, ballPos, angle, power);
+    const sim = golfSimulateShot(hole, ballPos, angle, power, freshGs.wind);
     await golfSubmitShot({ power, ...sim }, bot.id);
   }, 900 + Math.random() * 1400);
 }
@@ -1987,7 +2022,31 @@ async function showGolfPractice() {
   // (shared `swings` resets to {} here, but the animation trackMap is
   // local-only and wouldn't otherwise know to reset alongside it) and
   // could spuriously animate a ball sliding back to the tee on arrival.
-  await updateRoom({ status: "golf-practice", game_state: { golfPractice: { swings: {}, session: Date.now() } } });
+  await updateRoom({ status: "golf-practice", game_state: { golfPractice: { swings: {}, session: Date.now(), wind: randomWind() } } });
+}
+
+// Host-only, re-rolls the practice range's wind to a fresh random
+// condition without touching anything else (swings/session stay put) —
+// so the whole group can feel a few different winds before the real
+// round, not just whatever it happened to start on.
+async function hostRerollPracticeWind() {
+  const gs = room.game_state?.golfPractice;
+  if (!gs) return;
+  await updateRoom({ game_state: { golfPractice: { ...gs, wind: randomWind() } } });
+}
+
+// Same idea, for the REAL round's current hole — a recovery/tuning lever
+// for the host, not something to lean on mid-hole: rerolling once players
+// have already taken shots under the old wind means they weren't all
+// playing the same conditions, same fairness concern as anything else
+// that changes a hole's terms partway through. Deliberately no hard
+// restriction against that (this app trusts the host with its recovery
+// tools rather than gatekeeping them, same as force-finish/reset-hole) —
+// just flagged clearly in the panel's own note.
+async function hostRerollWind() {
+  const gs = room.game_state?.golf;
+  if (!gs) return;
+  await updateRoom({ game_state: { golf: { ...gs, wind: randomWind() } } });
 }
 
 function ensurePracticeReady() {
@@ -2047,7 +2106,8 @@ async function practicePointerUp() {
     render();
     return;
   }
-  const sim = golfSimulateShot(GOLF_PRACTICE_HOLE, ballPos, vec.angle, vec.power);
+  const gs = room.game_state?.golfPractice;
+  const sim = golfSimulateShot(GOLF_PRACTICE_HOLE, ballPos, vec.angle, vec.power, gs?.wind);
   local.practice = {
     ...local.practice,
     subPhase: "recap",
@@ -2265,7 +2325,7 @@ async function hostSkipGolfTurn() {
   const dy = hole.pin.y - ballPos.y;
   const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.6;
   const power = 0.55 + Math.random() * 0.4;
-  const sim = golfSimulateShot(hole, ballPos, angle, power);
+  const sim = golfSimulateShot(hole, ballPos, angle, power, gs.wind);
   await golfSubmitShot({ power, ...sim }, turnId);
 }
 
@@ -2426,7 +2486,7 @@ async function devJump(status) {
     // turnOrder/turnPos are required — without them golfCurrentTurnPlayerId
     // has nothing to iterate and nobody (human or bot) is ever "on turn",
     // which would silently soft-lock a dev-jumped-straight-to-golf room.
-    game_state = { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]), turnOrder: players.map((p) => p.id), turnPos: 0 } };
+    game_state = { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]), turnOrder: players.map((p) => p.id), turnPos: 0, wind: randomWind() } };
   }
   if (status === "reveal") {
     // Same snapshot startReveal() builds — without this, jumping straight
@@ -2927,6 +2987,15 @@ function renderHostPanelBody() {
               <p class="host-panel-note">Ends it right now with the score as it stands (${match.score[match.p1] || 0}–${match.score[match.p2] || 0}) — only for a match that genuinely can't continue.</p>
               <button class="btn host-btn-danger" data-action="host-force-finish" data-winner="${match.p1}">${escapeHtml(playerName(match.p1))} wins now</button>
               <button class="btn host-btn-danger" data-action="host-force-finish" data-winner="${match.p2}">${escapeHtml(playerName(match.p2))} wins now</button>
+            </div>`
+          : ""
+      }
+      ${
+        room.status === "golf" && room.game_state?.golf
+          ? `<div class="host-panel-section">
+              <h4>Change wind</h4>
+              <p class="host-panel-note">Re-rolls this hole's wind. Only use before anyone's taken a shot on it — changing it mid-hole means players faced different conditions.</p>
+              <button class="btn" data-action="host-reroll-wind">🎲 Change wind</button>
             </div>`
           : ""
       }
@@ -3717,6 +3786,7 @@ function renderGolfIntro() {
 
       <h3>How a shot works</h3>
       <p>Press and drag your ball like a slingshot — it fires the <b>opposite</b> way you pull. Pull distance sets power, angle sets direction, no timer. Watch for slopes, sand and water as you read the course.</p>
+      <p>Every hole also has its own wind, shown above the course before you shoot — the same wind for everyone who plays that hole, pushing the ball for the whole flight, so it's worth aiming to compensate rather than straight at the target.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <p>Every hole scores on its own — what you shoot relative to par, not who finished where. A tie just means you both earn the same result's points.</p>
@@ -3785,7 +3855,8 @@ function renderGolfPractice() {
   return `
     <div class="card">
       <h2>🏌️ Driving Range</h2>
-      <p class="sub">Practice swings only — nothing here counts. Get a feel for the drag before the real round.</p>
+      <p class="sub">Practice swings only — nothing here counts. Every hazard the real holes use is here too, wind included, so there's nothing you'll see for the first time in the real round.</p>
+      ${renderGolfWindBadge(gs.wind)}
       <p class="sub" style="text-align:center">${instructions}</p>
       <div class="golf-course-wrap practice">
         ${renderGolfCourse(GOLF_PRACTICE_HOLE, gs.swings, local.practiceBallAnim, local.practice, true)}
@@ -3797,11 +3868,30 @@ function renderGolfPractice() {
       ${
         isHost
           ? `<div class="guess-host-controls">
+              <button class="btn" data-action="host-reroll-practice-wind">🎲 Change wind</button>
               <button class="btn" data-action="show-golf-intro">⬅️ Back</button>
               <button class="btn primary" data-action="start-golf" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>⛳ Start Football Golf</button>
             </div>`
           : ""
       }
+    </div>`;
+}
+
+// The arrow points the direction the wind is blowing TOWARD (same
+// convention as a real weather vane's push, not the direction it's
+// coming FROM). deg = wind.angle in degrees works directly as a CSS
+// rotate() with no conversion — screen y already increases downward, so
+// "clockwise from pointing right" (CSS rotate's own convention) already
+// matches "angle measured the way atan2/cos/sin use it" for this
+// coordinate system, unlike standard math-with-y-up.
+function renderGolfWindBadge(wind) {
+  if (!wind) return "";
+  const deg = Math.round((wind.angle * 180) / Math.PI);
+  const label = wind.strength < 0.5 ? "Light breeze" : wind.strength < 0.8 ? "Moderate wind" : "Strong wind";
+  return `
+    <div class="golf-wind-badge" title="Wind pushes every shot this way for the whole hole">
+      <span class="golf-wind-arrow" style="transform: rotate(${deg}deg);">➤</span>
+      <span>${label}</span>
     </div>`;
 }
 
@@ -3875,6 +3965,7 @@ function renderGolf() {
     <div class="card">
       <h2>⛳ Football Golf</h2>
       ${badge}
+      ${renderGolfWindBadge(gs.wind)}
       ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
       ${turnBanner}
       ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered && isMyTurn)}

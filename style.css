@@ -371,6 +371,24 @@ input::placeholder { color: #6c9b83; }
   font-size: 13px;
   color: var(--sub);
 }
+/* One new random condition per hole (see randomWind) — the arrow's
+   rotation is set inline per-render (style="transform: rotate(...)"),
+   this just handles the static look. */
+.golf-wind-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 2px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sub);
+}
+.golf-wind-arrow {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 15px;
+}
 /* The actual hole — a real dark cup a ball can visibly sink into
    (animateGolfBallSink), not just a spot on the green a ball happens to
    stop near. Fixed-aspect-ratio trick (width set, height derived from
