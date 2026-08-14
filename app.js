@@ -13,12 +13,14 @@ const GUESS_PLAYER_COUNT = 7;
 // entry in content.js's GUESS_PLAYERS 2026-08-14, so every mystery player
 // is now 4 clues, not 5 — this array's length has to match that exactly
 // (indexed by clueIndex). First reallocation ([20,17,6,3]) had a steep
-// mid-table cliff (-11 from clue 2 to clue 3) that Craig felt was too
-// skewed — replaced same day with a steady widening step instead
-// (-5, -6, -5), still clearly rewarding early guesses without an
-// artificial cliff. Top tier x GUESS_PLAYER_COUNT = 140 (20 x 7), same
-// clean divisible-by-5 max as every version before it.
-const GUESS_CLUE_POINTS = [20, 15, 9, 4]; // indexed by clueIndex (0 = only 1st clue shown)
+// mid-table cliff Craig felt was too skewed — replaced with a steady
+// widening step ([20,15,9,4], -5/-6/-5, 140 max). Then Craig asked to
+// lower the cap to 120 to match Missing Club exactly. 120 isn't evenly
+// divisible by 7 rounds (same issue GUESS_CLUE_POINTS hit before the clue
+// cut) — this scales the same widening-step shape down to the closest
+// clean whole-number top tier, landing at 119 (7 x 17), not chasing the
+// exact 120 by making the tiers uneven.
+const GUESS_CLUE_POINTS = [17, 13, 8, 3]; // indexed by clueIndex (0 = only 1st clue shown)
 // Football Golf — a real top-down course, drag-to-shoot. Every player has
 // an actual (x, y) position on the hole (percent coordinates, tee near
 // the bottom, pin near the top) that's part of shared room state, so a
@@ -1284,7 +1286,7 @@ function resolveHeadToHead(group, matches) {
 // before). Re-rebalanced 2026-08-14, second pass: Craig wants the Shootout
 // and Golf capped BELOW the quiz games now (max 80, was 100), while
 // Missing Club (max 120, MISSING_CLUB_POINTS) and Guess the Footballer
-// (max 140, GUESS_CLUE_POINTS — skewed toward early clues, see its own
+// (max 119, GUESS_CLUE_POINTS — skewed toward early clues, see its own
 // comment) sit above — the opposite of the first pass,
 // which tried to equalize all 4 around ~100. Don't "fix" this back toward
 // equal without checking with Craig first, he's changed his mind once
