@@ -2319,9 +2319,21 @@ async function devJump(status) {
   if (status === "missing-club-intro") await ensureDevBotIfNeeded();
   if (status === "missing-club") {
     await ensureDevBotIfNeeded();
-    game_state = { order: randomMissingClubOrder(), qIndex: 0, revealed: false };
+    // Same wipe startMissingClub() does — without it, jumping straight
+    // here (skipping the real "Start" button) left old scores from an
+    // earlier test at the same qIndex sitting in the DB, so a genuinely
+    // fresh attempt could show players as already answered/locked before
+    // anyone had touched anything this time.
+    await sb.from("scores").delete().eq("room_code", room.code).eq("game_index", 1);
+    game_state = { order: randomMissingClubOrder(), qIndex: 0, revealed: false, sessionId: crypto.randomUUID() };
   }
-  if (status === "guess") game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 };
+  if (status === "guess") {
+    await ensureDevBotIfNeeded();
+    // Same wipe startGuessRound() does — see the comment on the
+    // missing-club branch above, identical reasoning.
+    await sb.from("scores").delete().eq("room_code", room.code).eq("game_index", 2);
+    game_state = { order: randomGuessOrder(), pIndex: 0, clueIndex: 0, revealed: false, sessionId: crypto.randomUUID() };
+  }
   if (status === "shootout-intro") await ensureDevBotIfNeeded();
   if (status === "round-robin") {
     await ensureDevBotIfNeeded();
