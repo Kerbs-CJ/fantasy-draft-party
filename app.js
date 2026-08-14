@@ -265,30 +265,41 @@ const GOLF_SIM_SUBSTEPS = 4; // each tick's movement is split into smaller steps
 // Wind — added 2026-08-14, one new random condition per hole (not per
 // shot: everyone who plays a given hole faces the exact same wind, same
 // fairness principle as the hole's fixed obstacles/slopes). Unlike a
-// slope, it's not zone-gated — it pushes the ball for the ENTIRE flight,
-// every tick, everywhere on the course. Applied once per tick (not per
-// substep) to keep it directly comparable to GOLF_FRICTION/
-// GOLF_SHOT_V0_MAX's own per-tick calibration.
+// slope, it's not zone-gated — it acts on the ball for the ENTIRE
+// flight, every tick, everywhere on the course.
 //
-// CRITICAL CONSTRAINT, found after wind still felt way too strong even
-// on "light breeze": a shot's own speed decays every tick via
-// GOLF_FRICTION, but wind adds the SAME push every tick regardless of
-// how slow the ball already is — so vx/vy converge toward a wind-only
-// steady-state speed of accel/(1-GOLF_FRICTION). The ball only ever
-// stops when its speed drops below GOLF_STOP_SPEED (0.05) — if that
-// steady-state speed is ABOVE GOLF_STOP_SPEED, the ball can NEVER stop
-// from friction alone once wind is blowing; it just keeps sliding in
-// the wind's direction for the full sim, which is exactly what "flying
-// off the map on light breeze" was. GOLF_WIND_MAX_ACCEL must stay well
-// under GOLF_STOP_SPEED * (1 - GOLF_FRICTION) = 0.05 * 0.035 = 0.00175
-// even at strength 1.0 (randomWind's max), or this breaks again no
-// matter how "small" the number looks in isolation. 0.0015 keeps every
-// strength's steady-state comfortably below that ceiling (max ~0.043 at
-// strength 1.0, ~0.013 at the weakest "light breeze") — wind curves the
-// shot while it still has real momentum, but never overrides the ball's
-// own stopping condition. Don't raise this without re-deriving the
-// steady-state math above first.
-const GOLF_WIND_MAX_ACCEL = 0.0015;
+// Went through TWO earlier designs the same day before landing here,
+// both broken the same way: wind added a CONSTANT push to velocity
+// every tick, independent of the ball's own (decaying) speed. Since the
+// ball only stops once its total speed drops under GOLF_STOP_SPEED, a
+// constant push converges toward its own steady-state speed
+// (accel/(1-GOLF_FRICTION)) — if that steady-state is anywhere near
+// GOLF_STOP_SPEED, the ball can never actually stop from friction alone
+// once wind is blowing; it just slides in the wind's direction for the
+// whole simulation. First attempt (accel 0.035, then 0.02) had this
+// happen even labeled "Strong". Second attempt (accel 0.0015) fixed the
+// runaway but made every strength tier collapse to a barely-perceptible
+// nudge, because the only "safe" constant-push ceiling is so tiny in
+// absolute terms that light/moderate/strong all rounded down to
+// "basically nothing."
+//
+// Current design: wind diverts a PERCENTAGE OF THE BALL'S CURRENT SPEED
+// toward the wind direction every tick, not a constant amount — see the
+// `windFactor` block inside golfSimulateShot's tick loop.  This is
+// self-limiting by construction: as the ball's own speed decays toward
+// zero, wind's contribution shrinks right along with it (multiplying by
+// a shrinking `speed` term), so it can never sustain motion the ball's
+// own momentum has already given up — no separate "steady-state ceiling"
+// to derive or violate, the ball always eventually stops. It also lets
+// wind be MUCH more assertive while the ball still has real momentum
+// (where it should matter most, same as a real crosswind curving a
+// drive far more than a dying putt) and gives the three strength tiers
+// a real, clearly escalating difference: over a typical full-power
+// shot's roll, strength 0.3 ("light breeze") blends roughly ~15% of the
+// flight toward the wind direction, ~0.65 ("moderate") roughly ~30%,
+// and strength 1.0 ("strong") upwards of ~50%+ — genuinely felt, not
+// three labels on the same invisible effect.
+const GOLF_WIND_FACTOR = 0.015; // fraction of current speed diverted toward wind direction, per tick, at strength 1.0 — scales down linearly with wind.strength below that
 // Regenerated once per hole (see startGolf/golfNextHole), NOT on a
 // same-hole retry (resetCurrentGolfHole deliberately leaves gs.wind
 // alone, same reasoning as it leaving turnOrder alone) — a retry replays
@@ -385,17 +396,22 @@ function golfSimulateShot(hole, start, angle, power, wind) {
   const slopes = hole.slopes || [];
   const sand = hole.sand || [];
   const water = hole.water || [];
-  const windAx = wind ? Math.cos(wind.angle) * wind.strength * GOLF_WIND_MAX_ACCEL : 0;
-  const windAy = wind ? Math.sin(wind.angle) * wind.strength * GOLF_WIND_MAX_ACCEL : 0;
+  const windDx = wind ? Math.cos(wind.angle) : 0;
+  const windDy = wind ? Math.sin(wind.angle) : 0;
   const path = [{ x, y }];
   let holed = false;
   let splashed = false;
   for (let tick = 0; tick < GOLF_MAX_SIM_TICKS && !holed && !splashed; tick++) {
-    // Once per TICK, not per substep — see the comment on
-    // GOLF_WIND_MAX_ACCEL for why this needs a different cadence than the
-    // zone-gated forces below.
-    vx += windAx;
-    vy += windAy;
+    // Once per TICK, not per substep — same cadence as GOLF_FRICTION
+    // below, which is what keeps this self-limiting (see the comment on
+    // GOLF_WIND_FACTOR): a percentage of the ball's CURRENT speed, not a
+    // constant, so it fades out on its own as the shot naturally slows.
+    if (wind) {
+      const speed = Math.hypot(vx, vy);
+      const push = wind.strength * GOLF_WIND_FACTOR * speed;
+      vx += windDx * push;
+      vy += windDy * push;
+    }
     for (let sub = 0; sub < GOLF_SIM_SUBSTEPS; sub++) {
       x += vx / GOLF_SIM_SUBSTEPS;
       y += vy / GOLF_SIM_SUBSTEPS;
