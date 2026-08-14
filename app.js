@@ -2762,10 +2762,9 @@ function renderPartyIntro() {
 
       <h3>🎤 A couple of things worth saying out loud</h3>
       <ul>
-        <li><b>Fairness:</b> the host didn't write tonight's Missing Club and Guess the Footballer content from memory — it was freshly generated for tonight, with nothing carried over from anything the host had already seen. The host is guessing blind right along with everyone else.</li>
-        <li><b>It's a new build:</b> this whole app came together in just a few days, so there'll probably be a bug or two — bear with it, and just flag anything weird.</li>
-        <li><b>Host has no special powers:</b> starting rounds, revealing answers, and moving things along is all the host does — the actual questions, clue order, and shootout/golf outcomes aren't something the host controls or has advance knowledge of.</li>
-        <li>At the end of the day it's just deciding draft order — have fun with it.</li>
+        <li><b>Fairness:</b> The host didn't write tonight's Missing Club and Guess the Footballer content from memory. It was freshly generated for tonight, with nothing carried over from anything the host had already seen. The host is guessing blind right along with everyone else.</li>
+        <li><b>It's a new build:</b> This whole app came together in just a few days, so there'll probably be a bug or two. Bear with it, and just flag anything weird.</li>
+        <li><b>Host has no special powers:</b> Starting rounds, revealing answers, and moving things along is all the host does. The actual questions, clue order, and shootout/golf outcomes aren't something the host controls or has advance knowledge of.</li>
       </ul>
 
       <h3>Players (${players.length})</h3>
