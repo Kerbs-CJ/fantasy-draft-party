@@ -266,15 +266,29 @@ const GOLF_SIM_SUBSTEPS = 4; // each tick's movement is split into smaller steps
 // shot: everyone who plays a given hole faces the exact same wind, same
 // fairness principle as the hole's fixed obstacles/slopes). Unlike a
 // slope, it's not zone-gated — it pushes the ball for the ENTIRE flight,
-// every tick, everywhere on the course, so it has to be weaker per-tick
-// than GOLF_SLOPE_ACCEL (0.05) or it'd dominate a 50+ tick flight. Applied
-// once per tick (not per substep) to keep it directly comparable to
-// GOLF_FRICTION/GOLF_SHOT_V0_MAX's own per-tick calibration. `strength`
-// (see randomWind) scales it between barely-there and a genuine aim
-// adjustment. Lowered 0.035 -> 0.02 same day after live testing: "Strong
-// wind" (strength near 1.0) was overpowering the shot entirely rather
-// than just nudging it off target.
-const GOLF_WIND_MAX_ACCEL = 0.02;
+// every tick, everywhere on the course. Applied once per tick (not per
+// substep) to keep it directly comparable to GOLF_FRICTION/
+// GOLF_SHOT_V0_MAX's own per-tick calibration.
+//
+// CRITICAL CONSTRAINT, found after wind still felt way too strong even
+// on "light breeze": a shot's own speed decays every tick via
+// GOLF_FRICTION, but wind adds the SAME push every tick regardless of
+// how slow the ball already is — so vx/vy converge toward a wind-only
+// steady-state speed of accel/(1-GOLF_FRICTION). The ball only ever
+// stops when its speed drops below GOLF_STOP_SPEED (0.05) — if that
+// steady-state speed is ABOVE GOLF_STOP_SPEED, the ball can NEVER stop
+// from friction alone once wind is blowing; it just keeps sliding in
+// the wind's direction for the full sim, which is exactly what "flying
+// off the map on light breeze" was. GOLF_WIND_MAX_ACCEL must stay well
+// under GOLF_STOP_SPEED * (1 - GOLF_FRICTION) = 0.05 * 0.035 = 0.00175
+// even at strength 1.0 (randomWind's max), or this breaks again no
+// matter how "small" the number looks in isolation. 0.0015 keeps every
+// strength's steady-state comfortably below that ceiling (max ~0.043 at
+// strength 1.0, ~0.013 at the weakest "light breeze") — wind curves the
+// shot while it still has real momentum, but never overrides the ball's
+// own stopping condition. Don't raise this without re-deriving the
+// steady-state math above first.
+const GOLF_WIND_MAX_ACCEL = 0.0015;
 // Regenerated once per hole (see startGolf/golfNextHole), NOT on a
 // same-hole retry (resetCurrentGolfHole deliberately leaves gs.wind
 // alone, same reasoning as it leaving turnOrder alone) — a retry replays
