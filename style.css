@@ -204,6 +204,27 @@ input::placeholder { color: #6c9b83; }
 }
 .side-roster .player-list.compact { flex-direction: column; }
 
+/* Just round names now (see renderPartyIntro) — each round has its own
+   explainer screen right before it starts, so this list doesn't need to
+   repeat that here too. Same rounded-row look as .player-list, plus an
+   accent left-border since these are headings, not plain list items. */
+.party-round-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.party-round-list li {
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  border-left: 3px solid var(--accent);
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .golf-course {
   position: relative;
   width: 100%;

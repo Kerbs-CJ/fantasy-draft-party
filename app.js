@@ -2939,16 +2939,16 @@ function renderPartyIntro() {
 
       <h3>The rounds</h3>
       <ol class="party-round-list">
-        <li><b>⚽ Guess the Missing Club</b>: A real footballer's club career shown as a timeline with one club redacted. Answer in your own time; the host reveals the correct club (and how many got it) to everyone at once.</li>
-        <li><b>🥅 Penalty Shootout</b>: A round-robin of 1v1 shootouts, everyone plays everyone once. Blind, simultaneous shot/dive picks; final standing adds placement points to the leaderboard.</li>
-        <li><b>🕵️ Guess the Footballer</b>: A mystery player revealed one clue at a time, most obscure clue first. Guess earlier for more points, but guess wrong and you're frozen out for that round.</li>
-        <li><b>⛳ Football Golf</b>: Real stroke play over a 5-hole course, each hole themed after a club. Tee off, then keep dragging to shoot, slingshot-style, from wherever you land until it's holed. Fewer strokes scores more (eagle down to a bogey). Final total placement adds points too.</li>
+        <li>⚽ Guess the Missing Club</li>
+        <li>🥅 Penalty Shootout</li>
+        <li>🕵️ Guess the Footballer</li>
+        <li>⛳ Football Golf</li>
       </ol>
       <p>You'll see a running leaderboard after each round, and the big reveal at the very end turns the final combined score into the draft order.</p>
 
       <h3>🎤 A couple of things worth saying out loud</h3>
       <ul>
-        <li><b>Fairness:</b> The host didn't write tonight's Missing Club and Guess the Footballer content from memory. It was freshly generated for tonight, with nothing carried over from anything the host had already seen. The host is guessing blind right along with everyone else.</li>
+        <li><b>Fairness:</b> The host didn't write tonight's Missing Club and Guess the Footballer content from memory. It was freshly generated for tonight, with nothing carried over from anything the host had already seen.</li>
         <li><b>It's a new build:</b> This whole app came together in just a few days, so there'll probably be a bug or two. Bear with it, and just flag anything weird.</li>
         <li><b>Host has no special powers:</b> Starting rounds, revealing answers, and moving things along is all the host does. The actual questions, clue order, and shootout/golf outcomes aren't something the host controls or has advance knowledge of.</li>
       </ul>
