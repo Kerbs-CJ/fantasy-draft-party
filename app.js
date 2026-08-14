@@ -2753,10 +2753,10 @@ function renderPartyIntro() {
 
       <h3>The rounds</h3>
       <ol class="party-round-list">
-        <li><b>⚽ Guess the Missing Club</b> — a real footballer's club career shown as a timeline with one club redacted. Answer in your own time; the host reveals the correct club (and how many got it) to everyone at once.</li>
-        <li><b>🥅 Penalty Shootout</b> — a round-robin of 1v1 shootouts, everyone plays everyone once. Blind, simultaneous shot/dive picks; final standing adds placement points to the leaderboard.</li>
-        <li><b>🕵️ Guess the Footballer</b> — a mystery player revealed one clue at a time, most obscure clue first. Guess earlier for more points, but guess wrong and you're frozen out for that round.</li>
-        <li><b>⛳ Football Golf</b> — real stroke play over a 5-hole course, each hole themed after a club. Tee off, then keep dragging to shoot, slingshot-style, from wherever you land until it's holed — fewer strokes scores more (eagle down to a bogey). Final total placement adds points too.</li>
+        <li><b>⚽ Guess the Missing Club</b>: A real footballer's club career shown as a timeline with one club redacted. Answer in your own time; the host reveals the correct club (and how many got it) to everyone at once.</li>
+        <li><b>🥅 Penalty Shootout</b>: A round-robin of 1v1 shootouts, everyone plays everyone once. Blind, simultaneous shot/dive picks; final standing adds placement points to the leaderboard.</li>
+        <li><b>🕵️ Guess the Footballer</b>: A mystery player revealed one clue at a time, most obscure clue first. Guess earlier for more points, but guess wrong and you're frozen out for that round.</li>
+        <li><b>⛳ Football Golf</b>: Real stroke play over a 5-hole course, each hole themed after a club. Tee off, then keep dragging to shoot, slingshot-style, from wherever you land until it's holed. Fewer strokes scores more (eagle down to a bogey). Final total placement adds points too.</li>
       </ol>
       <p>You'll see a running leaderboard after each round, and the big reveal at the very end turns the final combined score into the draft order.</p>
 
