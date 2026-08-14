@@ -1347,10 +1347,15 @@ const POKEMON_HALFTIME_POOL = [
 //    (assets/pikachu-reveal-caterpie.png), so the two share the exact same
 //    outline/canvas — no `id`, since neither phase is real Pikachu/Caterpie
 //    sprite artwork.
+//  - "not even a Pokémon" (Goofy): same custom-art-pair trick as Caterpie —
+//    a silhouette shaped like a pin-up figure (assets/goofy-silhouette.png)
+//    revealing Goofy's actual head/snout in the same pose
+//    (assets/goofy-reveal.png), same shared outline/canvas, no `id`.
 const POKEMON_HALFTIME_OPENERS = [
   { id: 39, name: "Jigglypuff", note: "(seen from above)", img: "assets/jigglypuff-top-down.png" },
   { id: 132, name: "Ditto", silhouetteId: 4, note: "It transformed into a Charmander!" },
   { name: "Caterpie", img: "assets/pikachu-reveal-caterpie.png", silhouetteImg: "assets/pikachu-silhouette.png" },
+  { name: "Goofy", img: "assets/goofy-reveal.png", silhouetteImg: "assets/goofy-silhouette.png" },
 ];
 function halftimeImageUrl(entry) {
   return entry.img || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${entry.id}.png`;
