@@ -210,7 +210,7 @@ const GOLF_MAX_DRAG_PERCENT = 45;
 const GOLF_MAX_SHOT_DISTANCE = 60;
 const GOLF_MIN_DRAG_PERCENT = 4; // below this, a release cancels instead of firing a near-zero shot
 const GOLF_HOLED_THRESHOLD = 5; // how close (course %) counts as "in the hole"
-const GOLF_MAX_STROKES = 12; // holes forcibly finish here, however far short — flat, not per-par, so a tough hole gets real room to work with
+const GOLF_MAX_STROKES = 10; // holes forcibly finish here, however far short — flat, not per-par, so a tough hole gets real room to work with
 // The driving range has no real hole to play, no strokes/par, and no
 // score — just somewhere to practice dragging (and bouncing off
 // something) before the real round. Otherwise works exactly like a real
@@ -3561,7 +3561,7 @@ function renderGolfIntro() {
           </tbody>
         </table>
       </div>
-      <p>A hole force-finishes after ${GOLF_MAX_STROKES} strokes so nobody's stuck. Your points added up across all ${GOLF_HOLES.length} holes are your score for the round — an eagle-every-hole sweep caps at ${GOLF_TERM_POINTS.eagle * GOLF_HOLES.length} points, though on this course that's more a theoretical ceiling than a realistic one.</p>
+      <p>A hole force-finishes after ${GOLF_MAX_STROKES} strokes.</p>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
