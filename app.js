@@ -3280,7 +3280,7 @@ function renderGuess() {
                      })
                      .join("")}
                  </ul>`
-              : `<h3>Guessed (${answeredIds.size}/${players.length})</h3>
+              : `<h3>Players (${answeredIds.size}/${players.length})</h3>
                  <ul class="player-list compact">
                    ${players.map((p) => `<li>${answeredIds.has(p.id) ? "🔒" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
                  </ul>`
