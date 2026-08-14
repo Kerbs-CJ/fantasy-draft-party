@@ -9,12 +9,16 @@ const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 const MISSING_CLUB_COUNT = 10;
 const MISSING_CLUB_POINTS = 12; // flat — no timer, so no speed bonus
 const GUESS_PLAYER_COUNT = 7;
-// Re-rebalanced 2026-08-14, second pass (was [15,12,9,6,3], briefly;
-// [30,24,18,12,6] originally — see the comment above placementPoints).
-// 120 isn't evenly divisible by 7 rounds, so this lands at 119 (7 x 17) —
-// as close to Craig's requested 120 as a clean whole-number tier scale
-// gets; don't chase the exact 120 by making the tiers uneven/non-clean.
-const GUESS_CLUE_POINTS = [17, 14, 11, 8, 5]; // indexed by clueIndex (0 = only 1st clue shown)
+// The 5th clue (always the most obvious/giveaway one) was cut from every
+// entry in content.js's GUESS_PLAYERS 2026-08-14, so every mystery player
+// is now 4 clues, not 5 — this array's length has to match that exactly
+// (indexed by clueIndex). Reallocated for 4 tiers, keeping the same
+// "clue 1-2 noticeably more profitable, then a real drop-off" skew as the
+// 5-tier version it replaced: clue 1 and clue 2 sit close together at the
+// top (20, 17), then a steep cliff to clue 3 and clue 4 (6, 3). Top tier x
+// GUESS_PLAYER_COUNT = 140 (20 x 7), same clean divisible-by-5 max as
+// before the clue cut.
+const GUESS_CLUE_POINTS = [20, 17, 6, 3]; // indexed by clueIndex (0 = only 1st clue shown)
 // Football Golf — a real top-down course, drag-to-shoot. Every player has
 // an actual (x, y) position on the hole (percent coordinates, tee near
 // the bottom, pin near the top) that's part of shared room state, so a
@@ -1280,7 +1284,8 @@ function resolveHeadToHead(group, matches) {
 // before). Re-rebalanced 2026-08-14, second pass: Craig wants the Shootout
 // and Golf capped BELOW the quiz games now (max 80, was 100), while
 // Missing Club (max 120, MISSING_CLUB_POINTS) and Guess the Footballer
-// (max 119, GUESS_CLUE_POINTS) sit above — the opposite of the first pass,
+// (max 140, GUESS_CLUE_POINTS — skewed toward early clues, see its own
+// comment) sit above — the opposite of the first pass,
 // which tried to equalize all 4 around ~100. Don't "fix" this back toward
 // equal without checking with Craig first, he's changed his mind once
 // already. rank is 0-indexed (0 = 1st place).
