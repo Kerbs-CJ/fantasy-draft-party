@@ -2549,8 +2549,13 @@ const PK_CROWD_HTML = generateCrowdDots();
 // constant rather than a function.
 const PK_KEEPER_GLOVE_SVG = `
   <svg viewBox="0 0 100 100" class="pk-keeper-glove" aria-hidden="true">
-    <path d="M32 96 L32 52 Q32 18 50 14 Q68 18 68 52 L68 96 Z" fill="#ef476f" stroke="#c92e50" stroke-width="5" stroke-linejoin="round" />
-    <ellipse cx="26" cy="42" rx="13" ry="17" fill="#ef476f" stroke="#c92e50" stroke-width="5" />
+    <rect x="30" y="76" width="40" height="20" rx="5" fill="#c92e50" stroke="#a8203f" stroke-width="3" />
+    <rect x="4" y="46" width="16" height="32" rx="8" fill="#ef476f" stroke="#c92e50" stroke-width="4" transform="rotate(-38 12 62)" />
+    <rect x="25" y="12" width="13" height="38" rx="6.5" fill="#ef476f" stroke="#c92e50" stroke-width="4" transform="rotate(-16 31.5 46)" />
+    <rect x="40" y="6" width="13" height="42" rx="6.5" fill="#ef476f" stroke="#c92e50" stroke-width="4" transform="rotate(-5 46.5 46)" />
+    <rect x="55" y="6" width="13" height="42" rx="6.5" fill="#ef476f" stroke="#c92e50" stroke-width="4" transform="rotate(5 61.5 46)" />
+    <rect x="70" y="12" width="13" height="38" rx="6.5" fill="#ef476f" stroke="#c92e50" stroke-width="4" transform="rotate(16 76.5 46)" />
+    <rect x="20" y="40" width="60" height="42" rx="20" fill="#ef476f" stroke="#c92e50" stroke-width="4" />
   </svg>`;
 
 function renderPkGoal(entry, kicking, doAnimate) {
