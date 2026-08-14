@@ -314,6 +314,25 @@ input::placeholder { color: #6c9b83; }
   border: 1px solid rgba(0,0,0,0.4);
   box-shadow: 0 2px 4px rgba(0,0,0,0.45);
 }
+/* Moving hazard (added 2026-08-14, see hole.patrol in app.js) — its
+   left/top are driven directly by JS every frame (ensureGolfPatrolAnim),
+   this only handles the static look: a hazard-striped amber pylon with a
+   pulsing glow, deliberately eye-catching since reading its motion is
+   the whole point, unlike the plain grey static .golf-pillar. */
+.golf-patrol-pillar {
+  position: absolute;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: repeating-conic-gradient(#2b2b2b 0deg 20deg, #ffb703 20deg 40deg);
+  border: 2px solid rgba(0,0,0,0.5);
+  box-shadow: 0 0 10px 2px rgba(255,183,3,0.7), 0 2px 4px rgba(0,0,0,0.45);
+  animation: golf-patrol-pulse 1.1s ease-in-out infinite;
+}
+@keyframes golf-patrol-pulse {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(255,183,3,0.55), 0 2px 4px rgba(0,0,0,0.45); }
+  50% { box-shadow: 0 0 14px 4px rgba(255,183,3,0.9), 0 2px 4px rgba(0,0,0,0.45); }
+}
 /* Per-hole club theming — a faint colour wash over the grass using each
    hole's --club-primary/--club-secondary (set inline per hole, see
    renderGolfCourse), plus a small crest badge shown above the course in
@@ -388,6 +407,120 @@ input::placeholder { color: #6c9b83; }
   display: inline-block;
   color: var(--accent);
   font-size: 15px;
+}
+/* Practice screen only (2026-08-14) — a hazard reference guide sits
+   beside the course in the free space a wide screen has next to it,
+   stacking below it on anything narrower. #app is normally capped at
+   640px (see the base rule near the top of this file); widening it only
+   when this legend is actually on screen, via :has(), avoids touching
+   every other screen's layout for the one page that needs more room. */
+body:has(.golf-hazard-legend) #app {
+  max-width: 1100px;
+}
+.golf-practice-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+@media (min-width: 980px) {
+  .golf-practice-layout {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .golf-practice-layout .golf-course-wrap.practice {
+    flex: 0 1 auto;
+  }
+}
+.golf-hazard-legend {
+  flex: 1 1 240px;
+  max-width: 280px;
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.golf-hazard-legend h3 {
+  margin-top: 0;
+}
+.golf-hazard-legend ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.golf-hazard-legend li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--sub);
+  line-height: 1.4;
+}
+.golf-hazard-legend li b {
+  color: var(--text);
+}
+/* Small static previews of each hazard's actual look on the course —
+   deliberately reusing the exact same gradients/colors as the real
+   elements (.golf-wall/.golf-pillar/.golf-slope/.golf-sand/.golf-water/
+   .golf-patrol-pillar) so the legend and the course always visually
+   agree, rather than an independent color key that could drift out of
+   sync if either one changes later. */
+.legend-swatch {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  margin-top: 1px;
+}
+.legend-swatch.wall {
+  background: linear-gradient(160deg, #9a6a3f 0%, #6b4423 100%);
+  border: 1px solid rgba(0,0,0,0.35);
+}
+.legend-swatch.pillar {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #c3c8cd 0%, #6b7075 65%, #45494d 100%);
+  border: 1px solid rgba(0,0,0,0.4);
+}
+.legend-swatch.slope-down,
+.legend-swatch.slope-up {
+  background: rgba(255,255,255,0.14);
+  border: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text);
+}
+.legend-swatch.slope-down::after { content: "▼"; }
+.legend-swatch.slope-up::after { content: "▲"; }
+.legend-swatch.sand {
+  background: #d9b872;
+  border: 1px solid rgba(0,0,0,0.25);
+}
+.legend-swatch.water {
+  background: linear-gradient(160deg, #2d8fd0 0%, #1c5f8f 100%);
+  border: 1px solid rgba(0,0,0,0.25);
+}
+.legend-swatch.wind {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 13px;
+}
+.legend-swatch.wind::after { content: "➤"; }
+.legend-swatch.patrol {
+  border-radius: 50%;
+  background: repeating-conic-gradient(#2b2b2b 0deg 20deg, #ffb703 20deg 40deg);
+  border: 2px solid rgba(0,0,0,0.5);
+  box-shadow: 0 0 6px 1px rgba(255,183,3,0.6);
 }
 /* The actual hole — a real dark cup a ball can visibly sink into
    (animateGolfBallSink), not just a spot on the green a ball happens to

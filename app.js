@@ -90,6 +90,11 @@ const GOLF_HOLES = [
     water: [
       { x: 86, y: 62, w: 14, h: 8 }, // just past the green — overcook the approach and it's gone
     ],
+    // The easiest hole on the course gets the gentlest, slowest patrol —
+    // a fair introduction to the mechanic before the pace ramps up on the
+    // later holes. Sweeps vertically through leg 2's open corridor, clear
+    // of both gates either side.
+    patrol: { id: "arsenal", axis: "y", baseX: 49, baseY: 50, range: 15, r: 3, period: 4500 },
   },
   {
     club: "Liverpool",
@@ -118,6 +123,9 @@ const GOLF_HOLES = [
     water: [
       { x: 22, y: 10, w: 10, h: 8 }, // drift too wide on the final approach and it's gone
     ],
+    // Sweeps horizontally across leg 2's long middle stretch, clear of
+    // both gates above and below it.
+    patrol: { id: "liverpool", axis: "x", baseX: 50, baseY: 45, range: 15, r: 3, period: 3800 },
   },
   {
     club: "Leeds United",
@@ -146,6 +154,10 @@ const GOLF_HOLES = [
     water: [
       { x: 50, y: 24, w: 14, h: 4 }, // right at the back of the cup — overshoot the pin and it's gone
     ],
+    // Only patrols the WEST side of the loop around the cup — the east
+    // side is deliberately left clear, so there's always a totally safe
+    // (if slightly longer) route regardless of timing.
+    patrol: { id: "leeds", axis: "y", baseX: 20, baseY: 25, range: 10, r: 3, period: 4000 },
   },
   {
     club: "Manchester United",
@@ -168,6 +180,11 @@ const GOLF_HOLES = [
     water: [
       { x: 12, y: 30, w: 10, h: 8 }, // short-side miss on the final approach — splash
     ],
+    // Sweeps the open corridor between gate 1 and gate 2 — a new pinch
+    // point on top of the three gates the hole already forces, faster
+    // than Arsenal/Liverpool/Leeds' patrols to match this hole's step up
+    // in difficulty.
+    patrol: { id: "manutd", axis: "y", baseX: 59, baseY: 50, range: 15, r: 3, period: 3200 },
   },
   {
     club: "Barcelona",
@@ -197,6 +214,10 @@ const GOLF_HOLES = [
     water: [
       { x: 82, y: 14, w: 14, h: 10 }, // guarding the final approach to the green
     ],
+    // The grand finale gets the fastest, most aggressive patrol on the
+    // course — sits in leg 2's corridor (west side, clear of both sand
+    // traps), inside gate 3's own gap so it never overlaps that wall.
+    patrol: { id: "barcelona", axis: "y", baseX: 15, baseY: 48, range: 6, r: 2.5, period: 2600 },
   },
 ];
 // Dragging GOLF_MAX_DRAG_PERCENT of the course's own rendered
@@ -252,6 +273,7 @@ const GOLF_PRACTICE_HOLE_VARIANTS = [
     ],
     sand: [{ x: 20, y: 55, w: 14, h: 10 }],
     water: [{ x: 68, y: 15, w: 12, h: 8 }],
+    patrol: { id: "practice0", axis: "x", baseX: 50, baseY: 50, range: 15, r: 3, period: 3500 },
   },
   {
     tee: { x: 50, y: 88 },
@@ -266,6 +288,7 @@ const GOLF_PRACTICE_HOLE_VARIANTS = [
     ],
     sand: [{ x: 60, y: 60, w: 14, h: 10 }],
     water: [{ x: 35, y: 45, w: 14, h: 10 }],
+    patrol: { id: "practice1", axis: "y", baseX: 15, baseY: 50, range: 15, r: 3, period: 3500 },
   },
   {
     tee: { x: 50, y: 88 },
@@ -280,6 +303,7 @@ const GOLF_PRACTICE_HOLE_VARIANTS = [
     ],
     sand: [{ x: 40, y: 60, w: 14, h: 10 }],
     water: [{ x: 65, y: 45, w: 14, h: 10 }],
+    patrol: { id: "practice2", axis: "y", baseX: 85, baseY: 50, range: 15, r: 3, period: 3500 },
   },
 ];
 function currentPracticeHole(gs) {
@@ -385,6 +409,45 @@ const GOLF_SLOPE_ACCEL = 0.05; // percent/tick² added to vy per tick while insi
 // without stopping the ball dead.
 const GOLF_SAND_FRICTION = 0.975;
 
+// Patrolling hazard — added 2026-08-14, one signature moving pillar per
+// hole (see `patrol` on GOLF_HOLES entries), a solid obstacle (uses the
+// same golfCollideBallObstacle collision as a normal pillar) that
+// oscillates back and forth along one axis over real time, so timing a
+// shot around it is a genuine skill, not just aim/power. Deliberately a
+// small CIRCLE, never a gate-width wall, and always placed with clear
+// room either side of its full sweep — it can make a line risky or force
+// a wait, but should never be able to fully seal the only route through
+// a leg for its whole cycle.
+//
+// Position is a pure function of absolute wall-clock time (Math.sin over
+// Date.now()), not shared/written to room state at all — every client
+// computes the identical position independently (a live rAF loop,
+// ensureGolfPatrolAnim, drives its on-screen element directly, same
+// "re-query by id every frame" pattern as the ball-flight animation), so
+// there's no extra DB traffic just to keep a cosmetic patrol in sync.
+//
+// For the SHOT SIMULATION (golfSimulateShot, called once, synchronously,
+// the instant a shot is released — see the file-level comment above
+// GOLF_HOLES for why every hazard effect gets baked into the returned
+// path up front rather than evaluated during replay), the patrol's
+// position at tick T is evaluated at `shotStartTime + T *
+// GOLF_PATROL_MS_PER_TICK` — a NOMINAL simulated-time convention,
+// independent of how animateGolfBallFlight later paces the visual
+// replay (that's distance+easing based, not literally tick-timed, same
+// as it already was for every other hazard). Known, accepted trade-off:
+// during the ~0.6-2.6s flight replay, the on-screen patrol keeps moving
+// in real time rather than freezing at its shot-start position, so in
+// rare cases its rendered spot during a bounce won't exactly match where
+// physics placed it at that tick — the outcome itself is still fully
+// decided (and fair) the instant the shot is taken, this is a minor
+// visual-polish gap, not a fairness one. Revisit only if it's actually
+// noticeable/annoying once played live.
+const GOLF_PATROL_MS_PER_TICK = 40;
+function golfPatrolPosition(patrol, tMs) {
+  const offset = patrol.range * Math.sin((2 * Math.PI * tMs) / patrol.period);
+  return patrol.axis === "x" ? { x: patrol.baseX + offset, y: patrol.baseY } : { x: patrol.baseX, y: patrol.baseY + offset };
+}
+
 // Circle-vs-obstacle collision (the ball is always treated as a circle).
 // Returns null for no collision, or the surface normal plus how far to
 // push the ball back out along it so it's no longer overlapping —
@@ -437,7 +500,7 @@ function golfCollideBallObstacle(bx, by, r, obstacle) {
 // driving range. Returns the full path (course-percent waypoints, one
 // per tick) so the caller can animate the actual roll — bounces and all
 // — rather than a straight line from A to B.
-function golfSimulateShot(hole, start, angle, power, wind) {
+function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.now()) {
   let vx = Math.cos(angle) * power * GOLF_SHOT_V0_MAX;
   let vy = Math.sin(angle) * power * GOLF_SHOT_V0_MAX;
   let x = start.x;
@@ -462,6 +525,14 @@ function golfSimulateShot(hole, start, angle, power, wind) {
       vx += windDx * push;
       vy += windDy * push;
     }
+    // Patrol hazard's position for THIS tick, computed once (see
+    // GOLF_PATROL_MS_PER_TICK) and reused for all 4 substeps below — its
+    // movement over a single tick's worth of simulated time is small
+    // enough that re-evaluating per-substep wouldn't visibly change
+    // anything, same reasoning as wind/friction's own per-tick cadence.
+    const patrolObstacle = hole.patrol
+      ? { shape: "circle", r: hole.patrol.r, ...golfPatrolPosition(hole.patrol, shotStartTime + tick * GOLF_PATROL_MS_PER_TICK) }
+      : null;
     for (let sub = 0; sub < GOLF_SIM_SUBSTEPS; sub++) {
       x += vx / GOLF_SIM_SUBSTEPS;
       y += vy / GOLF_SIM_SUBSTEPS;
@@ -508,6 +579,22 @@ function golfSimulateShot(hole, start, angle, power, wind) {
         if (dot < 0) {
           vx -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.nx;
           vy -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.ny;
+        }
+      }
+      // Same collision math as any solid obstacle, just against wherever
+      // the patrol happens to be for this tick (see patrolObstacle above)
+      // — a ball caught mid-sweep bounces off it exactly like a fixed
+      // pillar it happened to run into.
+      if (patrolObstacle) {
+        const hit = golfCollideBallObstacle(x, y, GOLF_BALL_RADIUS, patrolObstacle);
+        if (hit) {
+          x += hit.pushX;
+          y += hit.pushY;
+          const dot = vx * hit.nx + vy * hit.ny;
+          if (dot < 0) {
+            vx -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.nx;
+            vy -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.ny;
+          }
         }
       }
       if (Math.hypot(hole.pin.x - x, hole.pin.y - y) <= GOLF_HOLED_THRESHOLD) {
@@ -595,6 +682,7 @@ let local = {
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   golfBotScheduled: {}, // `${holeIndex}:${botId}:${strokes}` -> true, so a bot's turn isn't scheduled twice
+  golfPatrolLoopId: null, // element id the patrol-hazard rAF loop is currently driving, so a redundant render doesn't spawn a duplicate loop (see ensureGolfPatrolAnim)
   shootoutAnim: { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
@@ -2506,6 +2594,7 @@ function resetLocalGameState() {
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
   local.golfBotScheduled = {};
+  local.golfPatrolLoopId = null;
   local.shootoutAnim = { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
     holeIndex: null,
@@ -3909,6 +3998,7 @@ function renderGolfIntro() {
       <h3>How a shot works</h3>
       <p>Press and drag your ball like a slingshot — it fires the <b>opposite</b> way you pull. Pull distance sets power, angle sets direction, no timer. Watch for slopes, sand and water as you read the course.</p>
       <p>Every hole also has its own wind, shown above the course before you shoot — the same wind for everyone who plays that hole, pushing the ball for the whole flight, so it's worth aiming to compensate rather than straight at the target.</p>
+      <p>Every hole also has its own <b>patrolling hazard</b> — a striped, glowing pillar that sweeps back and forth in real time. It's a solid obstacle just like a wall or pillar, so read its movement and time your shot around it rather than just aiming past where it happens to be right now.</p>
 
       <h3>Scoring — strokes vs. par</h3>
       <p>Every hole scores on its own — what you shoot relative to par, not who finished where. A tie just means you both earn the same result's points.</p>
@@ -3981,8 +4071,11 @@ function renderGolfPractice() {
       <p class="sub">Practice swings only — nothing here counts. Every hazard the real holes use is here too, wind included, so there's nothing you'll see for the first time in the real round.</p>
       ${renderGolfWindBadge(gs.wind)}
       <p class="sub" style="text-align:center">${instructions}</p>
-      <div class="golf-course-wrap practice">
-        ${renderGolfCourse(hole, gs.swings, local.practiceBallAnim, local.practice, true)}
+      <div class="golf-practice-layout">
+        <div class="golf-course-wrap practice">
+          ${renderGolfCourse(hole, gs.swings, local.practiceBallAnim, local.practice, true)}
+        </div>
+        ${renderGolfHazardLegend()}
       </div>
       <h3>Lanes</h3>
       <ul class="player-list compact">
@@ -4017,6 +4110,32 @@ function renderGolfWindBadge(wind) {
     <div class="golf-wind-badge" title="Wind pushes every shot this way for the whole hole">
       <span class="golf-wind-arrow" style="transform: rotate(${deg}deg);">➤</span>
       <span>${label}</span>
+    </div>`;
+}
+
+// A plain reference guide, not tied to any particular hole's layout —
+// same entry every time, just explaining what each swatch on the course
+// actually does. Sits beside the course on wide screens (the practice
+// screen is the only place with real free space to put it — see
+// .golf-practice-layout / the body:has() width bump in style.css), stacks
+// below it on narrow ones. Static content, no game_state involved.
+function renderGolfHazardLegend() {
+  const entries = [
+    { swatch: "wall", label: "Wall", desc: "Solid — the ball bounces off it." },
+    { swatch: "pillar", label: "Pillar", desc: "A smaller solid post, same bounce as a wall." },
+    { swatch: "slope-down", label: "Slope (down)", desc: "Pushes the ball downward while it's rolling through." },
+    { swatch: "slope-up", label: "Slope (up)", desc: "Pushes the ball upward while it's rolling through." },
+    { swatch: "sand", label: "Sand", desc: "Extra friction — bogs the ball down hard." },
+    { swatch: "water", label: "Water", desc: "Ends the shot on contact, ball back to the tee." },
+    { swatch: "wind", label: "Wind", desc: "Pushes the whole flight one way — same for everyone on the hole." },
+    { swatch: "patrol", label: "Patrolling hazard", desc: "A solid pillar that sweeps back and forth in real time — time your shot around it." },
+  ];
+  return `
+    <div class="golf-hazard-legend">
+      <h3>Hazard guide</h3>
+      <ul>
+        ${entries.map((e) => `<li><span class="legend-swatch ${e.swatch}"></span><span><b>${e.label}</b> — ${e.desc}</span></li>`).join("")}
+      </ul>
     </div>`;
 }
 
@@ -4270,6 +4389,19 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       <p class="golf-power-readout">Power ${Math.round(vec.power * 100)}%</p>`;
   }
 
+  // Moving hazard — real-time position (see golfPatrolPosition), a live
+  // rAF loop (ensureGolfPatrolAnim) takes over from the very next frame
+  // and drives it directly by id from then on. Snapshotting the position
+  // here too just avoids a one-frame flash at the wrong spot before that
+  // loop kicks in, same reasoning as the ball's own "paint at start
+  // position right away" above.
+  let patrolEl = "";
+  if (hole.patrol) {
+    const p0 = golfPatrolPosition(hole.patrol, Date.now());
+    patrolEl = `<div id="golf-patrol-${hole.patrol.id}" class="golf-patrol-pillar" style="left:${p0.x}%; top:${p0.y}%; width:${hole.patrol.r * 2}%;"></div>`;
+    requestAnimationFrame(() => ensureGolfPatrolAnim(hole.patrol));
+  }
+
   const dragging = dragState?.subPhase === "dragging";
   const colorStyle = hole.colors ? `--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};` : "";
   const tint = hole.colors ? `<div class="golf-course-tint"></div>` : "";
@@ -4283,12 +4415,42 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       ${waterEls}
       <div class="golf-tee-mat" style="left:${hole.tee.x}%; top:${hole.tee.y}%;"></div>
       ${obstacles}
+      ${patrolEl}
       <div class="golf-cup" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;">📍</div>
       ${extraContent}
       ${balls}
       ${aimOverlay}
     </div>`;
+}
+
+// Drives the patrol hazard's on-screen position directly via a
+// requestAnimationFrame loop, independent of the app's render() cycle —
+// re-queried by id every frame (same self-correcting pattern as
+// animateGolfBallFlight), so it survives a redundant re-render replacing
+// the DOM node, and quietly stops on its own once the element's gone
+// (screen changed away, or the host moved to a different hole — the id
+// is per-hole, see `hole.patrol.id`, so a new hole's element simply has
+// a different id and this loop naturally can't find its old one
+// anymore). `local.golfPatrolLoopId` is just a guard against starting a
+// second redundant loop for the SAME hazard on every render — it does
+// NOT gate correctness, only avoids piling up duplicate rAF loops.
+function ensureGolfPatrolAnim(patrol) {
+  const elId = `golf-patrol-${patrol.id}`;
+  if (local.golfPatrolLoopId === elId) return;
+  local.golfPatrolLoopId = elId;
+  function frame() {
+    const el = document.getElementById(elId);
+    if (!el) {
+      if (local.golfPatrolLoopId === elId) local.golfPatrolLoopId = null;
+      return;
+    }
+    const pos = golfPatrolPosition(patrol, Date.now());
+    el.style.left = pos.x + "%";
+    el.style.top = pos.y + "%";
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 
 // Rolls a ball from `from` to `to` (course-percent coordinates) via direct
