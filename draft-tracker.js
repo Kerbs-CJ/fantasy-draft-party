@@ -112,6 +112,31 @@ const FAKE_HEADLINE_TEMPLATES = [
   "Weather forecasters link unexplained storm directly to {drafter} finally deciding on {player}.",
   "{player} to headline a Netflix documentary titled 'How I Ended Up At {drafter}'s: A Cautionary Tale'.",
   "BREAKING: {drafter}'s neighbours confirm hearing 'incoherent shouting' the exact moment {player} was drafted.",
+  "{player} legally changes surname to {drafter} 'out of respect', lawyers describe the paperwork as 'deeply unnecessary'.",
+  "NASA confirms the {player}-to-{drafter} deal is now visible from space, mostly because of the size of {drafter}'s celebration.",
+  "{team} retire {player}'s squad number on the spot, replace it with a single question mark and a sad trombone emoji.",
+  "{drafter} spotted burying a time capsule containing only the words '{player}, {price}m, called it', to be opened in 2050.",
+  "Interpol opens, then immediately closes, an investigation into how {drafter} knew about {player} before anyone else did.",
+  "{player}'s childhood coach comes out of retirement solely to say 'I always knew he'd end up at {drafter}'s, somehow'.",
+  "Entire village renames its annual fete 'Drafting Day' in honour of {drafter} securing {player} for £{price}m.",
+  "{team} statue of {player} spotted quietly turning to face {drafter}'s house overnight, groundskeeper 'can't explain it'.",
+  "{drafter} demands a moment of silence for the £{price}m spent on {player}, gets a moment of confused silence instead.",
+  "Historians will one day teach the {player}-to-{drafter} pick as a turning point, mostly because nobody can explain the logic.",
+  "{player}'s childhood bedroom wallpaper reportedly featured {drafter}'s name, in what experts call 'an extraordinary coincidence'.",
+  "{drafter} spotted rehearsing the {player} announcement to a mirror, a rubber duck, and one very unimpressed cat.",
+  "BREAKING: local sundial stops working the moment {drafter} finally commits to {player}, scientists 'stumped'.",
+  "{team} issue a strongly worded statement about {player}, then quietly delete it four minutes later.",
+  "{drafter}'s life coach resigns after the {player} pick, citing 'nothing more I can teach this man'.",
+  "Rumour mill suggests {player} was drafted by {drafter} via a coin flip, a dartboard, and mild peer pressure.",
+  "{player} spotted rehearsing a tearful goodbye to {team} in a car park, using a traffic cone as a stand-in microphone.",
+  "£{price}m {player} deal reportedly sealed with a handshake so firm it required medical attention, {drafter} 'has no regrets'.",
+  "{drafter} unveils {player} to a crowd of exactly nobody, insists the turnout was 'about quality, not quantity'.",
+  "Ancient prophecy resurfaces predicting {drafter} would one day draft {player}, prophecy scholars 'deeply confused' but impressed.",
+  "{team} groundskeeper claims the grass 'looked different' the moment {player} signed for {drafter}, colleagues concerned.",
+  "{drafter}'s smart fridge reportedly congratulated them on the {player} pick before {drafter} had even told anyone.",
+  "{player} spotted wearing a fake moustache in public, told reporters it was 'nothing to do with' the {drafter} move.",
+  "Local pigeon population inexplicably relocates to {drafter}'s garden the same week {player} is announced, ornithologists baffled.",
+  "{drafter} insists the £{price}m {player} deal 'wasn't even the plan', immediately contradicts three earlier statements about the plan.",
 ];
 
 // A deliberately large, generic bank — every joke here is standalone,
@@ -735,17 +760,57 @@ function hashSeed(str) {
   return h;
 }
 
-// Deterministic per pick — seeded off pick_number + the actual player id
-// (both already on the row), so every device shows the EXACT same
-// headline for the exact same pick without needing a new column to store
-// it in. Re-derived fresh each render, not cached, since it's cheap and
-// pick_number/pl_player_id never change once a row exists.
+// Tiny seeded PRNG (mulberry32) — deterministic given the same seed, so
+// every device computes the exact same "random" sequence independently,
+// no DB round-trip needed. Only used for the headline template order
+// below.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// A fixed, shuffled ORDER of every template index, seeded off the room
+// code — same idea as the deterministic-per-pick approach it replaces,
+// but guarantees no repeats across the whole draft (a straight hash %
+// length could and did land two different picks on the same template)
+// instead of just making repeats unpredictable. Computed once and
+// cached; room.code never changes mid-draft so there's nothing to
+// invalidate it with.
+let cachedHeadlineOrder = null;
+let cachedHeadlineOrderRoom = null;
+function headlineTemplateOrder() {
+  if (cachedHeadlineOrderRoom === room.code) return cachedHeadlineOrder;
+  const order = FAKE_HEADLINE_TEMPLATES.map((_, i) => i);
+  const rand = mulberry32(hashSeed(room.code));
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  cachedHeadlineOrder = order;
+  cachedHeadlineOrderRoom = room.code;
+  return order;
+}
+
+// pick_number is 1-indexed and unique per room (no two picks ever share
+// one), so using it directly as the index into this room's shuffled
+// template order guarantees every pick gets a DIFFERENT template, all
+// the way through a full 75-pick draft (15 rounds x 5 drafters) matching
+// FAKE_HEADLINE_TEMPLATES' own count — only wraps (reusing a template) if
+// a draft somehow runs past 75 picks. Re-derived fresh each render, not
+// cached beyond the shuffle order itself, since it's cheap.
 function headlineForPick(pick) {
   const pl = window.PL_PLAYERS.find((p) => p.id === pick.pl_player_id);
   const drafter = players.find((p) => p.id === pick.drafter_id);
   if (!pl || !drafter) return null;
-  const seed = hashSeed(`${pick.pick_number}-${pick.pl_player_id}`);
-  const template = FAKE_HEADLINE_TEMPLATES[seed % FAKE_HEADLINE_TEMPLATES.length];
+  const order = headlineTemplateOrder();
+  const templateIndex = order[(pick.pick_number - 1) % order.length];
+  const template = FAKE_HEADLINE_TEMPLATES[templateIndex];
   return template
     .replaceAll("{player}", pl.name)
     .replaceAll("{drafter}", drafter.name)
