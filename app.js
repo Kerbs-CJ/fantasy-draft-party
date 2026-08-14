@@ -2939,6 +2939,9 @@ function renderGuess() {
       <p class="sub">Player ${pIndex + 1} of ${gs.order.length} — guess earlier for more points</p>
       <div class="side-layout">
         <div class="side-main">
+          <div class="clue-points-strip">
+            ${GUESS_CLUE_POINTS.map((pts, i) => `<span class="clue-point${i === clueIndex ? " current" : ""}">${ordinal(i + 1)} clue: ${pts}pts</span>`).join("")}
+          </div>
           <ol class="clue-list">
             ${cluesShown.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}
           </ol>

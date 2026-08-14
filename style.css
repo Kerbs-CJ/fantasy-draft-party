@@ -503,6 +503,27 @@ input::placeholder { color: #6c9b83; }
   font-size: 13px;
 }
 
+.clue-points-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.clue-point {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--card-border);
+  color: var(--sub);
+}
+.clue-point.current {
+  background: rgba(255,209,102,0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .clue-list {
   margin: 0 0 16px;
   padding-left: 20px;
