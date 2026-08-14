@@ -2895,7 +2895,8 @@ function renderGuessIntro() {
       <p>${GUESS_PLAYER_COUNT} rounds, each a mystery footballer revealed one clue at a time — clues run from most obscure to most obvious.</p>
 
       <h3>How it works</h3>
-      <p>Host reveals clues one at a time. Guess whenever you like — you don't have to wait for the last clue. Get it right and you're locked in for the round; get it wrong and you're frozen out (0 points), so only guess when you're confident.</p>
+      <p>Host reveals clues one at a time. Guess whenever you like, you don't have to wait for the last clue. Get it right and you're locked in for the round, scoring points based on which clue you guessed on.</p>
+      <p class="lock-msg lock-wrong">⚠️ Guess wrong and you're frozen out for the rest of that round. No more guesses, 0 points. Only guess when you're confident.</p>
 
       <h3>Scoring — guess earlier for more points</h3>
       <div class="standings-wrap">
