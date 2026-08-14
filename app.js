@@ -8,19 +8,23 @@ const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 // than silently dropping to 100 just because there are fewer rounds now.
 const MISSING_CLUB_COUNT = 10;
 const MISSING_CLUB_POINTS = 12; // flat — no timer, so no speed bonus
-const GUESS_PLAYER_COUNT = 7;
+// Bumped 7->8 2026-08-14 specifically so the 120-point cap Craig wanted
+// divides in evenly (8 x 15 = 120 exactly) — see the comment on
+// GUESS_CLUE_POINTS below. Don't change this without re-checking that
+// division still works out, or the cap will need rounding again.
+const GUESS_PLAYER_COUNT = 8;
 // The 5th clue (always the most obvious/giveaway one) was cut from every
 // entry in content.js's GUESS_PLAYERS 2026-08-14, so every mystery player
 // is now 4 clues, not 5 — this array's length has to match that exactly
-// (indexed by clueIndex). First reallocation ([20,17,6,3]) had a steep
-// mid-table cliff Craig felt was too skewed — replaced with a steady
-// widening step ([20,15,9,4], -5/-6/-5, 140 max). Then Craig asked to
-// lower the cap to 120 to match Missing Club exactly. 120 isn't evenly
-// divisible by 7 rounds (same issue GUESS_CLUE_POINTS hit before the clue
-// cut) — this scales the same widening-step shape down to the closest
-// clean whole-number top tier, landing at 119 (7 x 17), not chasing the
-// exact 120 by making the tiers uneven.
-const GUESS_CLUE_POINTS = [17, 13, 8, 3]; // indexed by clueIndex (0 = only 1st clue shown)
+// (indexed by clueIndex). Went through a few reallocations the same day:
+// [20,17,6,3] (too steep a mid-table cliff) -> [20,15,9,4] (steady
+// widening step, 140 max) -> [17,13,8,3] (Craig wanted the cap down to
+// 120 to match Missing Club, but 120 isn't divisible by 7 rounds, so this
+// only got to 119) -> current: GUESS_PLAYER_COUNT went 7->8 instead so
+// 120 divides in cleanly (8 x 15), and the tiers rescaled to
+// [15,12,7,3] — same "clue 1-2 close together, real drop-off after"
+// shape, exact 120 max this time.
+const GUESS_CLUE_POINTS = [15, 12, 7, 3]; // indexed by clueIndex (0 = only 1st clue shown)
 // Football Golf — a real top-down course, drag-to-shoot. Every player has
 // an actual (x, y) position on the hole (percent coordinates, tee near
 // the bottom, pin near the top) that's part of shared room state, so a
@@ -1286,8 +1290,8 @@ function resolveHeadToHead(group, matches) {
 // before). Re-rebalanced 2026-08-14, second pass: Craig wants the Shootout
 // and Golf capped BELOW the quiz games now (max 80, was 100), while
 // Missing Club (max 120, MISSING_CLUB_POINTS) and Guess the Footballer
-// (max 119, GUESS_CLUE_POINTS — skewed toward early clues, see its own
-// comment) sit above — the opposite of the first pass,
+// (max 120, GUESS_CLUE_POINTS x GUESS_PLAYER_COUNT — skewed toward early
+// clues, see its own comment) sit above — the opposite of the first pass,
 // which tried to equalize all 4 around ~100. Don't "fix" this back toward
 // equal without checking with Craig first, he's changed his mind once
 // already. rank is 0-indexed (0 = 1st place).
