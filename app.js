@@ -1316,7 +1316,6 @@ const POKEMON_HALFTIME_COUNT = 5;
 // whichever entries should play that trick. `note` is optional flavour
 // text shown alongside the reveal (e.g. "...from above!").
 const POKEMON_HALFTIME_POOL = [
-  { id: 25, name: "Pikachu" },
   { id: 6, name: "Charizard" },
   { id: 143, name: "Snorlax" },
   { id: 94, name: "Gengar" },
@@ -1326,7 +1325,6 @@ const POKEMON_HALFTIME_POOL = [
   { id: 54, name: "Psyduck" },
   { id: 133, name: "Eevee" },
   { id: 1, name: "Bulbasaur" },
-  { id: 52, name: "Meowth" },
   { id: 68, name: "Machamp" },
 ];
 // Curated joke entries that always play, in this exact order, at the START
