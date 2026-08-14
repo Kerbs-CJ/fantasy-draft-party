@@ -1121,6 +1121,56 @@ code {
    benefits from real horizontal room on anything wider than a phone. */
 body.draft-tracker #app { max-width: 900px; }
 
+/* Side panels (headlines/dad jokes, see render() in draft-tracker.js) —
+   purely cosmetic filler for the long stretches waiting on your turn.
+   Hidden below 1200px on purpose: the live draft board is the thing that
+   actually matters, especially on a phone during the real draft night,
+   so this only shows up where there's genuinely spare width to use
+   (a laptop/desktop window), never competing with the board for room. */
+.draft-side { display: none; }
+@media (min-width: 1200px) {
+  body.draft-tracker #app { max-width: 1400px; }
+  .draft-layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 900px) 240px;
+    gap: 24px;
+    align-items: start;
+  }
+  .draft-side { display: block; position: sticky; top: 16px; }
+}
+.draft-side-card { margin: 0 0 16px; }
+.draft-headline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.draft-headline-list li {
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  border-left: 3px solid var(--accent);
+}
+.draft-joke-text {
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 4.5em;
+}
+@keyframes jokeFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.joke-fade-in { animation: jokeFadeIn 0.4s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .joke-fade-in { animation: none; }
+}
+
 .dt-banner {
   text-align: center;
   padding: 16px 20px;

@@ -51,6 +51,138 @@ function isDevBot(player) {
   return !!player && player.name.startsWith(DEV_BOT_PREFIX);
 }
 
+// ── side-panel filler for the long stretches waiting on your turn ──
+// Two purely cosmetic panels flanking the board (see render()) — neither
+// touches picks/scores/anything real, both are just something to look at.
+// Left: a fake "breaking news" headline generated for every actual pick
+// as it happens (see headlineForPick) — right: a random dad joke on a
+// loop (see ensureJokeRotation), completely unrelated to the draft.
+
+// {player}/{drafter}/{team}/{price} get swapped for the real pick's
+// details in headlineForPick. Deliberately silly tabloid parody, not
+// anything resembling real transfer news.
+const FAKE_HEADLINE_TEMPLATES = [
+  "BREAKING: {drafter} stuns the football world by prising {player} away from {team} — sources describe the move as 'inevitable'.",
+  "{player} spotted browsing houses near {drafter}'s fantasy team after shock £{price}m switch.",
+  "EXCLUSIVE: {team} dressing room 'devastated' as {player} completes controversial move to {drafter}'s XI.",
+  "{drafter} breaks the bank for {player} — pundits call it 'the transfer nobody saw coming, mainly because it isn't real.'",
+  "{player}'s agent seen entering secret talks with {drafter} moments before deadline chaos.",
+  "SHOCK: {team} fans launch petition after {player} 'defects' to {drafter}'s fantasy empire.",
+  "{drafter} confirms {player} signing with a single cryptic tweet: '👀'.",
+  "Transfer deadline drama! {player} completes medical, undergoes immediate name change to '{drafter}'s Player'.",
+  "{player} spotted training alone after {team} boss reportedly 'furious' about the {drafter} deal.",
+  "OFFICIAL: {drafter} completes sensational £{price}m raid for {player}, sparking chaos on social media.",
+  "{team} legends left speechless as {player} trades boots for a spot on {drafter}'s bench.",
+  "'It's a statement signing,' says nobody, about {drafter}'s decision to draft {player}.",
+  "{player} thanks {team} for the memories in emotional statement — 'time for a new chapter with {drafter}.'",
+  "PANIC at {team}! Rivals circle as {drafter} snaps up {player} in a move branded 'ruthless'.",
+  "{drafter}'s bold £{price}m gamble on {player} already trending — is this the pick of the century?",
+  "Sources close to {player} confirm he 'always dreamed' of playing fantasy football for {drafter}.",
+  "{team} chairman spotted staring wistfully at an empty {player} shirt display after the {drafter} deal.",
+  "BOMBSHELL: {player} unveiled in {drafter}'s squad, holding a scarf nobody asked him to hold.",
+  "{drafter} insists the {player} pick was 'always the plan,' despite audibly panicking thirty seconds earlier.",
+  "Breaking: local {team} pub falls silent as {player} confirmed for {drafter}'s fantasy side.",
+  "{player} pens heartfelt open letter to {team} fans, then immediately goes live on {drafter}'s bench.",
+  "ANALYSIS: is {drafter}'s swoop for {player} genius, madness, or just the only name left on the list?",
+  "{team} 'considering their options' after watching {player} walk out the door for {drafter}, apparently.",
+  "£{price}m well spent? {drafter} defends the {player} pick as 'a long-term project'.",
+];
+
+// A deliberately large, generic bank — every joke here is standalone,
+// nothing football-specific (that's what the headlines panel is for).
+const DAD_JOKES = [
+  "Why don't skeletons fight each other? They don't have the guts.",
+  "I used to hate facial hair, but then it grew on me.",
+  "Why did the scarecrow win an award? He was outstanding in his field.",
+  "I'm reading a book about anti-gravity. It's impossible to put down.",
+  "Why don't eggs tell jokes? They'd crack each other up.",
+  "What do you call a fish with no eyes? A fsh.",
+  "I used to be a banker, but I lost interest.",
+  "Why did the bicycle fall over? It was two tired.",
+  "What do you call a bear with no teeth? A gummy bear.",
+  "I'm on a seafood diet. I see food and I eat it.",
+  "Why don't scientists trust atoms? Because they make up everything.",
+  "What do you call a fake noodle? An impasta.",
+  "I would tell you a joke about construction, but I'm still working on it.",
+  "Why did the golfer bring two pairs of trousers? In case he got a hole in one.",
+  "I only know 25 letters of the alphabet. I don't know y.",
+  "What did the ocean say to the beach? Nothing, it just waved.",
+  "Why can't you give Elsa a balloon? Because she'll let it go.",
+  "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+  "What do you call a factory that makes okay products? A satisfactory.",
+  "Why did the coffee file a police report? It got mugged.",
+  "I'm terrified of elevators, so I'm going to start taking steps to avoid them.",
+  "What's brown and sticky? A stick.",
+  "Why did the invisible man turn down the job offer? He couldn't see himself doing it.",
+  "I used to play piano by ear, but now I use my hands.",
+  "What do you call a dinosaur that crashes his car? Tyrannosaurus wrecks.",
+  "Why did the math book look sad? It had too many problems.",
+  "I've started telling everyone about the benefits of eating dried grapes. It's all about raisin awareness.",
+  "What do you call a can opener that doesn't work? A can't opener.",
+  "Why don't oysters share their pearls? Because they're shellfish.",
+  "I'm reading a horror story in Braille. Something bad is about to happen, I can feel it.",
+  "What do you call a group of disorganized cats? A cat-astrophe.",
+  "Why did the stadium get hot after the game? All the fans left.",
+  "I bought some shoes from a drug dealer. I don't know what he laced them with, but I've been tripping all day.",
+  "What do you call cheese that isn't yours? Nacho cheese.",
+  "Why did the tomato turn red? Because it saw the salad dressing.",
+  "I'm friends with 25 letters of the alphabet. I don't know y.",
+  "What do you call a sleeping dinosaur? A dino-snore.",
+  "Why did the students eat their homework? Because the teacher said it was a piece of cake.",
+  "I have a joke about chemistry, but I don't think it'll get a reaction.",
+  "What do you call an alligator in a vest? An investigator.",
+  "Why don't skeletons ever go trick or treating? Because they have no body to go with.",
+  "I used to hate maths, but I've come to realize decimals have a point.",
+  "What did one wall say to the other wall? I'll meet you at the corner.",
+  "Why did the picture go to jail? Because it was framed.",
+  "I'm on a whiskey diet. I've lost three days already.",
+  "What do you call a boomerang that doesn't come back? A stick.",
+  "Why did the cookie go to the doctor? Because it felt crummy.",
+  "I told a chemistry joke. There was no reaction.",
+  "What do you call a pig that does karate? A pork chop.",
+  "Why did the belt get arrested? For holding up a pair of trousers.",
+  "I only did a partial family tree because I don't have much stamina.",
+  "What do you call a snowman with a six-pack? An abdominal snowman.",
+  "Why did the man put his money in the freezer? He wanted cold, hard cash.",
+  "I'm afraid for the calendar. Its days are numbered.",
+  "What do you call a fish wearing a bowtie? Sofishticated.",
+  "Why did the cow win an award? Because it was outstanding in its field, moo-ving on.",
+  "I have a fear of speed bumps, but I'm slowly getting over it.",
+  "What do you call a nervous javelin thrower? Shakespeare.",
+  "Why did the barber win the race? He knew a shortcut.",
+  "I used to be addicted to soap, but I'm clean now.",
+  "What do you call a lazy kangaroo? A pouch potato.",
+  "Why did the smartphone go to the optician? It lost its contacts.",
+  "I couldn't figure out why the baseball kept getting bigger. Then it hit me.",
+  "What do you call a droid that takes the long way round? R2-Detour.",
+  "Why do seagulls fly over the sea? Because if they flew over the bay, they'd be bagels.",
+  "I bought a pair of shoes for my dog. He wears them all the time and hasn't noticed they're loafers.",
+  "What did the janitor say when he jumped out of the closet? Supplies!",
+  "Why did the football coach go to the bank? To get his quarterback.",
+  "I'm reading a book on the history of glue. Can't seem to put it down.",
+  "What do you call a very small mother? A minimum.",
+  "Why did the man go on a date with a prune? Because he couldn't find a date.",
+  "I asked the librarian if the library had books on paranoia. She whispered, 'they're right behind you.'",
+  "What's the best thing about Switzerland? I don't know, but the flag is a big plus.",
+  "Why do scuba divers fall backwards out of the boat? If they fell forward, they'd still be in the boat.",
+  "I got a job at a bakery because I kneaded dough.",
+  "What do you call a computer floating in the ocean? A Dell rolling in the deep.",
+  "Why did the golf ball wear a jumper? Because it was a little birdie.",
+  "I used to be a personal trainer. Then I gave my one week's notice.",
+  "What do you call a can crusher in Germany? A Kan-Krusher, obviously.",
+  "Why don't melons get married? Because they cantaloupe.",
+  "I was going to tell a time-travel joke, but you guys didn't like it.",
+  "What do you call a dog magician? A labracadabrador.",
+  "Why did the orange stop rolling down the hill? It ran out of juice.",
+  "I have a stepladder because my real ladder left when I was a kid.",
+  "What do you call a bee that can't make up its mind? A maybe.",
+  "Why did the mushroom get invited to all the parties? Because he was a fungi.",
+  "I'm not a fan of stairs. They're always up to something.",
+  "What did the buffalo say to his kid when he dropped him off at school? Bison.",
+  "Why do bees have sticky hair? Because they use honeycombs.",
+  "I told my suitcase there'd be no vacation this year. Now I'm dealing with emotional baggage.",
+];
+
 let sb = null;
 let session = null; // {roomCode, playerId, name, isHost} — from the main app's localStorage
 let room = null;
@@ -79,6 +211,13 @@ const local = {
   // stay visible anyway. The live draft keeps progressing underneath
   // regardless — render() still calls ensureBotAutoPick() either way.
   viewingSquadFor: null,
+  // Rotates through DAD_JOKES on a timer while waiting for a turn — see
+  // ensureJokeRotation. Starts null so the first render can pick an
+  // opening joke; jokeTimerStarted guards against setInterval being
+  // created again on every render() (this file replaces the whole #app
+  // subtree each time, same pattern as the main party app).
+  currentJoke: null,
+  jokeTimerStarted: false,
 };
 
 init();
@@ -418,13 +557,99 @@ function onChange(e) {
   }
 }
 
+function hashSeed(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+// Deterministic per pick — seeded off pick_number + the actual player id
+// (both already on the row), so every device shows the EXACT same
+// headline for the exact same pick without needing a new column to store
+// it in. Re-derived fresh each render, not cached, since it's cheap and
+// pick_number/pl_player_id never change once a row exists.
+function headlineForPick(pick) {
+  const pl = window.PL_PLAYERS.find((p) => p.id === pick.pl_player_id);
+  const drafter = players.find((p) => p.id === pick.drafter_id);
+  if (!pl || !drafter) return null;
+  const seed = hashSeed(`${pick.pick_number}-${pick.pl_player_id}`);
+  const template = FAKE_HEADLINE_TEMPLATES[seed % FAKE_HEADLINE_TEMPLATES.length];
+  return template
+    .replaceAll("{player}", pl.name)
+    .replaceAll("{drafter}", drafter.name)
+    .replaceAll("{team}", pl.team)
+    .replaceAll("{price}", pl.price);
+}
+
+const HEADLINES_SHOWN = 12; // most recent picks only — a full 75-pick draft doesn't need every headline ever generated sitting in the DOM
+function renderHeadlinesPanel() {
+  const recent = picks
+    .slice()
+    .reverse()
+    .slice(0, HEADLINES_SHOWN)
+    .map(headlineForPick)
+    .filter(Boolean);
+  return `
+    <div class="card draft-side-card">
+      <h3>📰 Breaking News</h3>
+      <p class="sub">Made up, every word.</p>
+      ${
+        recent.length
+          ? `<ul class="draft-headline-list">${recent.map((h) => `<li>${escapeHtml(h)}</li>`).join("")}</ul>`
+          : `<p class="waiting">Headlines roll in as picks happen…</p>`
+      }
+    </div>`;
+}
+
+function renderJokesPanel() {
+  if (!local.currentJoke) local.currentJoke = DAD_JOKES[Math.floor(Math.random() * DAD_JOKES.length)];
+  return `
+    <div class="card draft-side-card">
+      <h3>😂 Dad Jokes</h3>
+      <p id="dad-joke-text" class="draft-joke-text">${escapeHtml(local.currentJoke)}</p>
+    </div>`;
+}
+
+const DAD_JOKE_INTERVAL_MS = 9000;
+// Rotates the joke on a timer via direct DOM mutation, not a full
+// render() — a plain text swap doesn't need the whole board torn down and
+// rebuilt every 9 seconds (that would reset scroll position, interrupt
+// typing in the search box, etc. — same "don't re-render for a cosmetic
+// loop" reasoning as the party app's ball-flight animations).
+// jokeTimerStarted guards this so it only ever creates ONE interval for
+// the page's whole lifetime, no matter how many times render() itself
+// runs afterward.
+function ensureJokeRotation() {
+  if (local.jokeTimerStarted) return;
+  local.jokeTimerStarted = true;
+  setInterval(() => {
+    const el = document.getElementById("dad-joke-text");
+    if (!el) return;
+    let next = local.currentJoke;
+    while (next === local.currentJoke && DAD_JOKES.length > 1) {
+      next = DAD_JOKES[Math.floor(Math.random() * DAD_JOKES.length)];
+    }
+    local.currentJoke = next;
+    el.classList.remove("joke-fade-in");
+    void el.offsetWidth; // restart the CSS fade-in animation from scratch
+    el.textContent = next;
+    el.classList.add("joke-fade-in");
+  }, DAD_JOKE_INTERVAL_MS);
+}
+
 function render() {
   if (!room) {
     APP_EL.innerHTML = renderNoRoom();
     return;
   }
-  APP_EL.innerHTML = renderTopBar() + renderBoard();
+  APP_EL.innerHTML = renderTopBar() + `
+    <div class="draft-layout">
+      <aside class="draft-side draft-side-left">${renderHeadlinesPanel()}</aside>
+      <div class="draft-main">${renderBoard()}</div>
+      <aside class="draft-side draft-side-right">${renderJokesPanel()}</aside>
+    </div>`;
   ensureBotAutoPick();
+  ensureJokeRotation();
 }
 
 function renderTopBar() {
