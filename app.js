@@ -2897,6 +2897,7 @@ function renderLobby() {
         ${players.map((p) => `<li>${p.id === me?.id && p.is_host ? "👑 " : ""}${escapeHtml(p.name)}</li>`).join("")}
       </ul>
 
+      ${isHost ? renderLobbyAddBots() : ""}
       ${
         isHost
           ? `<button class="btn primary" data-action="show-party-intro" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>
@@ -2904,6 +2905,24 @@ function renderLobby() {
             </button>`
           : `<p class="waiting">Waiting for the host to start…</p>`
       }
+    </div>`;
+}
+
+// Host-only, always available here — unlike renderDevAddBots on the Party
+// Intro screen, this one isn't gated behind ?dev=1, so the real host can
+// pad the room out with test bots and try the whole flow solo as an
+// actual host, not by faking a dev session. Reuses the exact same
+// addDevBot/removeLastDevBot functions either way — a bot is just a
+// normal `players` row regardless of who added it or how.
+function renderLobbyAddBots() {
+  const botCount = players.filter((p) => isDevBot(p)).length;
+  return `
+    <div class="lobby-add-bots">
+      <p class="sub">${botCount > 0 ? `${botCount} bot${botCount === 1 ? "" : "s"} in the room.` : "Testing solo? Add a bot or two to get going."}</p>
+      <div class="dev-grid">
+        <button class="btn" data-action="dev-add-bot">🤖 Add a bot</button>
+        ${botCount > 0 ? `<button class="btn" data-action="dev-remove-bot">🗑️ Remove last bot</button>` : ""}
+      </div>
     </div>`;
 }
 

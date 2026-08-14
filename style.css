@@ -980,6 +980,11 @@ code {
   .halftime-sprite { transition: none; }
 }
 
+/* Host-only "add a test bot" on the Lobby screen — NOT gated by ?dev=1,
+   see renderLobbyAddBots — so it's deliberately plain .btn/.sub styling,
+   not the dashed-amber .dev-panel look used for actual dev-only tools. */
+.lobby-add-bots { margin: 4px 0 16px; }
+
 /* dev-only testing affordances (?dev=1) */
 .dev-panel {
   margin-top: 16px;
