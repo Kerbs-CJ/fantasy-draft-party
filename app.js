@@ -3,15 +3,18 @@
 const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 const MISSING_CLUB_COUNT = 12;
-// Rebalanced 2026-08-14 (was 20 — see the comment above placementPoints):
-// 12 rounds x 8pts = 96 max, in the same ~96-105 ballpark as every other
-// game now, so one big Missing Club round can't swamp the other three.
-const MISSING_CLUB_POINTS = 8; // flat — no timer, so no speed bonus
+// Re-rebalanced 2026-08-14, second pass (was 8, briefly; 20 originally —
+// see the comment above placementPoints): Craig wants the two quiz games
+// deliberately ABOVE the Shootout/Golf cap now, not equal to it. 12 rounds
+// x 10pts = 120 max exactly.
+const MISSING_CLUB_POINTS = 10; // flat — no timer, so no speed bonus
 const GUESS_PLAYER_COUNT = 7;
-// Rebalanced 2026-08-14 (was [30,24,18,12,6] — see the comment above
-// placementPoints): same 5:4:3:2:1 shape, just a smaller multiplier (x3
-// instead of x6), so 7 rounds x up to 15pts = 105 max.
-const GUESS_CLUE_POINTS = [15, 12, 9, 6, 3]; // indexed by clueIndex (0 = only 1st clue shown)
+// Re-rebalanced 2026-08-14, second pass (was [15,12,9,6,3], briefly;
+// [30,24,18,12,6] originally — see the comment above placementPoints).
+// 120 isn't evenly divisible by 7 rounds, so this lands at 119 (7 x 17) —
+// as close to Craig's requested 120 as a clean whole-number tier scale
+// gets; don't chase the exact 120 by making the tiers uneven/non-clean.
+const GUESS_CLUE_POINTS = [17, 14, 11, 8, 5]; // indexed by clueIndex (0 = only 1st clue shown)
 // Football Golf — a real top-down course, drag-to-shoot. Every player has
 // an actual (x, y) position on the hole (percent coordinates, tee near
 // the bottom, pin near the top) that's part of shared room state, so a
@@ -1270,18 +1273,19 @@ function resolveHeadToHead(group, matches) {
   });
 }
 
-// 100/80/60/40/20 for a 5-player field (a clean 20-point step per place),
+// 80/64/48/32/16 for a 5-player field (a clean 16-point step per place),
 // scaled to whatever the actual player count is. Used directly for both
-// the Shootout and Golf's final placements (max 100, min 20 — an 80-point
-// swing top to bottom). Missing Club (max 96: 12 rounds x 8pts,
-// MISSING_CLUB_POINTS) and Guess the Footballer (max 105: 7 rounds x up to
-// 15pts, GUESS_CLUE_POINTS) were deliberately rebalanced 2026-08-14 to sit
-// in this same ~96-105 ballpark — they used to cap at 240 and 210, letting
-// one big quiz round swamp the other three games combined. Don't push
-// either quiz game's ceiling back up without re-checking this balance.
-// rank is 0-indexed (0 = 1st place).
+// the Shootout and Golf's final placements (max 80, min 16 — a 64-point
+// swing top to bottom; min is still 20% of max, same proportions as
+// before). Re-rebalanced 2026-08-14, second pass: Craig wants the Shootout
+// and Golf capped BELOW the quiz games now (max 80, was 100), while
+// Missing Club (max 120, MISSING_CLUB_POINTS) and Guess the Footballer
+// (max 119, GUESS_CLUE_POINTS) sit above — the opposite of the first pass,
+// which tried to equalize all 4 around ~100. Don't "fix" this back toward
+// equal without checking with Craig first, he's changed his mind once
+// already. rank is 0-indexed (0 = 1st place).
 function placementPoints(rank, n) {
-  return n > 1 ? Math.round(100 - (80 * rank) / (n - 1)) : 100;
+  return n > 1 ? Math.round(80 - (64 * rank) / (n - 1)) : 80;
 }
 
 async function startRoundRobin() {
