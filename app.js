@@ -3,9 +3,15 @@
 const APP_EL = document.getElementById("app");
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 const MISSING_CLUB_COUNT = 12;
-const MISSING_CLUB_POINTS = 20; // flat — no timer, so no speed bonus
+// Rebalanced 2026-08-14 (was 20 — see the comment above placementPoints):
+// 12 rounds x 8pts = 96 max, in the same ~96-105 ballpark as every other
+// game now, so one big Missing Club round can't swamp the other three.
+const MISSING_CLUB_POINTS = 8; // flat — no timer, so no speed bonus
 const GUESS_PLAYER_COUNT = 7;
-const GUESS_CLUE_POINTS = [30, 24, 18, 12, 6]; // indexed by clueIndex (0 = only 1st clue shown)
+// Rebalanced 2026-08-14 (was [30,24,18,12,6] — see the comment above
+// placementPoints): same 5:4:3:2:1 shape, just a smaller multiplier (x3
+// instead of x6), so 7 rounds x up to 15pts = 105 max.
+const GUESS_CLUE_POINTS = [15, 12, 9, 6, 3]; // indexed by clueIndex (0 = only 1st clue shown)
 // Football Golf — a real top-down course, drag-to-shoot. Every player has
 // an actual (x, y) position on the hole (percent coordinates, tee near
 // the bottom, pin near the top) that's part of shared room state, so a
@@ -1265,15 +1271,15 @@ function resolveHeadToHead(group, matches) {
 }
 
 // 100/80/60/40/20 for a 5-player field (a clean 20-point step per place),
-// scaled to whatever the actual player count is. The shootout's max swing
-// (80, top to bottom) is deliberately gentler than the independently-scored
-// rounds' max swings — Guess the Missing Club's 240 (12 rounds at up to
-// 20pts each — this now runs ABOVE Guess the Footballer's 210, unlike the
-// "noticeably gentler" balance this used to have at 10 rounds; nobody's
-// asked for it to be re-balanced back down, so it's left as-is) and Guess
-// the Footballer's 210 (7 rounds at up to 30pts each) — since the shootout
-// is one placement rather than several separately-scored rounds. rank is
-// 0-indexed (0 = 1st place).
+// scaled to whatever the actual player count is. Used directly for both
+// the Shootout and Golf's final placements (max 100, min 20 — an 80-point
+// swing top to bottom). Missing Club (max 96: 12 rounds x 8pts,
+// MISSING_CLUB_POINTS) and Guess the Footballer (max 105: 7 rounds x up to
+// 15pts, GUESS_CLUE_POINTS) were deliberately rebalanced 2026-08-14 to sit
+// in this same ~96-105 ballpark — they used to cap at 240 and 210, letting
+// one big quiz round swamp the other three games combined. Don't push
+// either quiz game's ceiling back up without re-checking this balance.
+// rank is 0-indexed (0 = 1st place).
 function placementPoints(rank, n) {
   return n > 1 ? Math.round(100 - (80 * rank) / (n - 1)) : 100;
 }
