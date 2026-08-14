@@ -1330,7 +1330,7 @@ const POKEMON_HALFTIME_POOL = [
   { id: 68, name: "Machamp" },
 ];
 // Curated joke entries that always play, in this exact order, at the START
-// of the show (Craig's picks). Three different joke shapes so far:
+// of the show (Craig's picks). Two different joke shapes so far:
 //  - "wrong angle" (Jigglypuff): the reveal IS the same Pokémon, just shot
 //    from a deliberately misleading angle. `img` points at Craig's own
 //    top-down drawing (assets/jigglypuff-top-down.png, his artwork, not a
@@ -1342,19 +1342,9 @@ const POKEMON_HALFTIME_POOL = [
 //    silhouette is Charmander's normal official artwork and the reveal is
 //    Ditto's. Both are the same established PokeAPI sprite-mirror source
 //    used everywhere else in this feature — see halftimeSilhouetteUrl.
-//  - "not even a Pokémon" (Geodude/Milhouse): the classic meme swap — the
-//    silhouette genuinely reads as a Geodude, but the reveal is Milhouse
-//    Van Houten from The Simpsons. No `id`, since neither phase is a real
-//    Pokémon: `silhouetteImg` is Craig's own Geodude silhouette
-//    (assets/geodude-silhouette.png, cropped tight to just the black
-//    shape, transparent elsewhere) and `img` is Milhouse's artwork
-//    (assets/geodude-reveal-milhouse.png) masked to that EXACT same
-//    outline/canvas — same alpha channel, pixel-for-pixel — so the two
-//    swap cleanly with no shape shift on reveal.
 const POKEMON_HALFTIME_OPENERS = [
   { id: 39, name: "Jigglypuff", note: "(seen from above)", img: "assets/jigglypuff-top-down.png" },
   { id: 132, name: "Ditto", silhouetteId: 4, note: "It transformed into a Charmander!" },
-  { name: "Milhouse", note: "(it's not even a Pokémon!)", img: "assets/geodude-reveal-milhouse.png", silhouetteImg: "assets/geodude-silhouette.png" },
 ];
 function halftimeImageUrl(entry) {
   return entry.img || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${entry.id}.png`;
