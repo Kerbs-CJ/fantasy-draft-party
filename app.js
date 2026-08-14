@@ -420,14 +420,15 @@ let local = {
   joinCodeInput: "",
   nameInput: "",
   error: "",
-  missingClub: { qIndex: null, redoNonce: null, answeredQIndex: null, myChoice: null, pending: null, choices: null },
-  guess: { pIndex: null, redoNonce: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
+  missingClub: { qIndex: null, redoNonce: null, sessionId: null, answeredQIndex: null, myChoice: null, pending: null, choices: null },
+  guess: { pIndex: null, redoNonce: null, sessionId: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null },
   revealStarted: false,
   // Host-only "break glass" panel — see renderHostPanel/hostRedoCurrentItem.
   // Kept collapsed by default so it's out of the way on every screen but
   // one tap away for the entire party, not just while ?dev=1 testing.
   hostPanel: { open: false, showScores: false },
   missingClubBotScheduled: {}, // `${botId}-${qIndex}` -> true, so a bot isn't scheduled twice
+  guessBotScheduled: {}, // `${botId}-${pIndex}` -> true, same idea for Guess the Footballer
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   golfBotScheduled: {}, // `${holeIndex}:${botId}:${strokes}` -> true, so a bot's turn isn't scheduled twice
@@ -673,6 +674,16 @@ function correctPlayerIds(gameIndex, roundIndex) {
       .map((s) => s.player_id)
   );
 }
+// Guess the Footballer's results reveal needs more than just "correct or
+// not" — it shows WHICH clue each player answered on. Points map 1:1 back
+// to a clue index via GUESS_CLUE_POINTS (all values are distinct), so
+// there's no need for a separate stored clueIndex on the score row itself.
+function guessResultFor(playerId, pIndex) {
+  const row = scores.find((s) => s.game_index === 2 && s.round_index === pIndex && s.player_id === playerId);
+  if (!row) return null; // never answered
+  if (row.points > 0) return { correct: true, clueIndex: GUESS_CLUE_POINTS.indexOf(row.points) };
+  return { correct: false };
+}
 async function updateRoom(patch) {
   const { data } = await sb.from("rooms").update(patch).eq("code", room.code).select().maybeSingle();
   if (data) room = data;
@@ -718,6 +729,7 @@ async function onClick(e) {
   if (action === "missing-club-next") return missingClubNext();
   if (action === "start-guess-round") return startGuessRound();
   if (action === "guess-reveal-clue") return guessRevealClue();
+  if (action === "guess-reveal-results") return revealGuess();
   if (action === "guess-next") return guessNext();
   if (action === "show-shootout-intro") return updateRoom({ status: "shootout-intro" });
   if (action === "start-round-robin") return startRoundRobin();
@@ -856,8 +868,15 @@ function randomMissingClubOrder() {
   return pool.slice(0, MISSING_CLUB_COUNT);
 }
 
+// Wipes any scores already sitting in this room for game_index 1 before
+// dealing a fresh order — without this, a qIndex from an earlier attempt
+// in the SAME room (typically dev-testing before the real game) could
+// still have a real "answered" score row for someone, so a brand new
+// round that happens to reuse qIndex 0 would show them as already locked
+// in on the results roster even though they haven't touched this attempt.
 async function startMissingClub() {
-  await updateRoom({ status: "missing-club", game_state: { order: randomMissingClubOrder(), qIndex: 0, revealed: false } });
+  await sb.from("scores").delete().eq("room_code", room.code).eq("game_index", 1);
+  await updateRoom({ status: "missing-club", game_state: { order: randomMissingClubOrder(), qIndex: 0, revealed: false, sessionId: crypto.randomUUID() } });
 }
 
 function ensureMissingClubReady() {
@@ -866,10 +885,15 @@ function ensureMissingClubReady() {
   // redoNonce changes when the host uses "Redo this question" on the SAME
   // qIndex — bumping it forces every client to drop its local "already
   // answered" flag and re-render fresh choices, same as a real qIndex change
-  // would. See hostRedoCurrentItem.
-  if (local.missingClub.qIndex !== gs.qIndex || local.missingClub.redoNonce !== (gs.redoNonce || 0)) {
+  // would. See hostRedoCurrentItem. sessionId changes on every fresh
+  // startMissingClub() call, even one that happens to land back on qIndex
+  // 0 — without it, a client whose local state was last touched during
+  // earlier testing at qIndex 0 would wrongly read as already answered in
+  // a brand new attempt (see the comment on startMissingClub).
+  if (local.missingClub.qIndex !== gs.qIndex || local.missingClub.redoNonce !== (gs.redoNonce || 0) || local.missingClub.sessionId !== gs.sessionId) {
     local.missingClub.qIndex = gs.qIndex;
     local.missingClub.redoNonce = gs.redoNonce || 0;
+    local.missingClub.sessionId = gs.sessionId;
     local.missingClub.answeredQIndex = null;
     local.missingClub.myChoice = null;
     local.missingClub.pending = null;
@@ -882,10 +906,13 @@ function ensureGuessReady() {
   const gs = room.game_state || {};
   if (gs.pIndex === undefined) return;
   // See the matching comment in ensureMissingClubReady — redoNonce forces a
-  // fresh local state even when the host redoes the same pIndex.
-  if (local.guess.pIndex !== gs.pIndex || local.guess.redoNonce !== (gs.redoNonce || 0)) {
+  // fresh local state even when the host redoes the same pIndex, and
+  // sessionId forces one even when a brand new startGuessRound() happens to
+  // land back on pIndex 0 (always does, since every round starts at 0).
+  if (local.guess.pIndex !== gs.pIndex || local.guess.redoNonce !== (gs.redoNonce || 0) || local.guess.sessionId !== gs.sessionId) {
     local.guess.pIndex = gs.pIndex;
     local.guess.redoNonce = gs.redoNonce || 0;
+    local.guess.sessionId = gs.sessionId;
     local.guess.answeredPIndex = null;
     local.guess.answeredClueIndex = null;
     local.guess.myChoice = null;
@@ -979,8 +1006,11 @@ async function missingClubNext() {
   }
 }
 
+// Same "wipe before dealing a fresh order" reasoning as startMissingClub —
+// see the comment there.
 async function startGuessRound() {
-  await updateRoom({ status: "guess", game_state: { order: randomGuessOrder(), pIndex: 0, clueIndex: 0 } });
+  await sb.from("scores").delete().eq("room_code", room.code).eq("game_index", 2);
+  await updateRoom({ status: "guess", game_state: { order: randomGuessOrder(), pIndex: 0, clueIndex: 0, revealed: false, sessionId: crypto.randomUUID() } });
 }
 
 // ── guess the footballer ────────────────────────────────────
@@ -1020,6 +1050,39 @@ async function guessAnswer(name) {
   await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 2, round_index: gs.pIndex, points });
 }
 
+// While solo-testing in dev mode, have any dev bots lock in an answer a
+// beat after each mystery player starts — same idea as
+// ensureMissingClubBotAnswer. A bot picks a random choice (not necessarily
+// correct) using whatever clueIndex is actually current when its delay
+// fires, same as a real guess would, so it scores like a real player who
+// answered at that point in the reveal.
+function ensureGuessBotAnswer() {
+  if (!DEV_MODE) return;
+  const gs = room.game_state || {};
+  if (gs.pIndex === undefined) return;
+  const answeredIds = answeredPlayerIds(2, gs.pIndex);
+  for (const bot of players.filter((p) => isDevBot(p) && !answeredIds.has(p.id))) {
+    scheduleGuessBotAnswer(bot, gs.pIndex);
+  }
+}
+
+function scheduleGuessBotAnswer(bot, pIndex) {
+  const key = `${bot.id}-${pIndex}`;
+  if (local.guessBotScheduled[key]) return;
+  local.guessBotScheduled[key] = true;
+  setTimeout(async () => {
+    const gs = room.game_state || {};
+    if (gs.pIndex !== pIndex) return; // host already moved on
+    if (answeredPlayerIds(2, pIndex).has(bot.id)) return; // already answered somehow
+    const entry = window.GUESS_PLAYERS[gs.order[pIndex]];
+    const choices = [entry.name, ...entry.decoys];
+    const pick = choices[Math.floor(Math.random() * choices.length)];
+    const correct = pick === entry.name;
+    const points = correct ? GUESS_CLUE_POINTS[gs.clueIndex] : 0;
+    await sb.from("scores").insert({ room_code: room.code, player_id: bot.id, game_index: 2, round_index: pIndex, points });
+  }, 900 + Math.random() * 2200);
+}
+
 async function guessNext() {
   const gs = room.game_state || {};
   const next = gs.pIndex + 1;
@@ -1030,8 +1093,20 @@ async function guessNext() {
     // are no longer back to back in the round order.
     await updateRoom({ status: "guess-leaderboard" });
   } else {
-    await updateRoom({ game_state: { ...gs, pIndex: next, clueIndex: 0 } });
+    await updateRoom({ game_state: { ...gs, pIndex: next, clueIndex: 0, revealed: false } });
   }
+}
+
+// Host-triggered, available once the final clue for the current mystery
+// player is showing — shows everyone who got it right/wrong (and on which
+// clue) at once, so the room's on the same page before moving on. Unlike
+// Missing Club's reveal, this doesn't gate "Next player"/"Show
+// leaderboard" — guessing here is already spread out over several clues
+// with its own freeze-out rule, so the host can still skip straight past a
+// mystery player without revealing if time's short.
+async function revealGuess() {
+  const gs = room.game_state || {};
+  await updateRoom({ game_state: { ...gs, revealed: true } });
 }
 
 // ── penalty shootout round robin ────────────────────────────
@@ -2109,10 +2184,11 @@ async function hostAddScore(playerId, gameIndex, roundIndex, points) {
 
 // ── dev mode: solo-test any screen without a full lobby ────
 function resetLocalGameState() {
-  local.missingClub = { qIndex: null, answeredQIndex: null, myChoice: null, pending: null, choices: null };
-  local.guess = { pIndex: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
+  local.missingClub = { qIndex: null, redoNonce: null, sessionId: null, answeredQIndex: null, myChoice: null, pending: null, choices: null };
+  local.guess = { pIndex: null, redoNonce: null, sessionId: null, answeredPIndex: null, answeredClueIndex: null, myChoice: null, choices: null };
   local.revealStarted = false;
   local.missingClubBotScheduled = {};
+  local.guessBotScheduled = {};
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
   local.golfBotScheduled = {};
@@ -2498,6 +2574,7 @@ function renderInner() {
       break;
     case "guess":
       ensureGuessReady();
+      ensureGuessBotAnswer();
       html += renderGuess();
       break;
     case "missing-club-leaderboard":
@@ -2940,6 +3017,7 @@ function renderGuessIntro() {
       <h3>How it works</h3>
       <p>Host reveals clues one at a time. Guess whenever you like, you don't have to wait for the last clue. Get it right and you're locked in for the round, scoring points based on which clue you guessed on.</p>
       <p class="lock-msg lock-wrong">⚠️ Guess wrong and you're frozen out for the rest of that round. No more guesses, 0 points. Only guess when you're confident.</p>
+      <p class="lock-msg lock-neutral">🤫 Keep your result to yourself. Everyone guesses at their own pace, so if you shout out that you got it right (or wrong), you're giving it away for everyone still deciding. The host can reveal everyone's result together once the final clue's up, so hold your reaction until then.</p>
 
       <h3>Scoring — guess earlier for more points</h3>
       <div class="standings-wrap">
@@ -2976,6 +3054,7 @@ function renderGuess() {
   const isLastClue = clueIndex >= entry.clues.length - 1;
   const isLastPlayer = pIndex + 1 >= gs.order.length;
   const answeredIds = answeredPlayerIds(2, pIndex);
+  const revealed = !!gs.revealed;
   return `
     <div class="card">
       <h2>🕵️ Guess the Footballer</h2>
@@ -3011,17 +3090,29 @@ function renderGuess() {
         </div>
         <div class="side-roster">
           ${
-            isHost
-              ? `<h3>Guessed (${answeredIds.size}/${players.length})</h3>
+            revealed
+              ? `<h3>Results — ${escapeHtml(entry.name)}</h3>
                  <ul class="player-list compact">
-                   ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+                   ${players
+                     .map((p) => {
+                       const r = guessResultFor(p.id, pIndex);
+                       if (!r) return `<li>⚠️ ${escapeHtml(p.name)} — no answer</li>`;
+                       if (r.correct) return `<li>✅ ${escapeHtml(p.name)} — ${ordinal(r.clueIndex + 1)} clue, ${GUESS_CLUE_POINTS[r.clueIndex]}pts</li>`;
+                       return `<li>❌ ${escapeHtml(p.name)} — wrong</li>`;
+                     })
+                     .join("")}
                  </ul>`
-              : answeredIds.size === players.length
-                ? `<h3>Guessed (${players.length}/${players.length})</h3>
+              : isHost
+                ? `<h3>Guessed (${answeredIds.size}/${players.length})</h3>
                    <ul class="player-list compact">
-                     ${players.map((p) => `<li>✅ ${escapeHtml(p.name)}</li>`).join("")}
+                     ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
                    </ul>`
-                : `<h3>Guessing…</h3><p class="waiting">Who's locked in stays hidden until everyone has answered.</p>`
+                : answeredIds.size === players.length
+                  ? `<h3>Guessed (${players.length}/${players.length})</h3>
+                     <ul class="player-list compact">
+                       ${players.map((p) => `<li>✅ ${escapeHtml(p.name)}</li>`).join("")}
+                     </ul>`
+                  : `<h3>Guessing…</h3><p class="waiting">Who's locked in stays hidden until everyone has answered.</p>`
           }
         </div>
       </div>
@@ -3029,6 +3120,7 @@ function renderGuess() {
         isHost
           ? `<div class="guess-host-controls">
               ${!isLastClue ? `<button class="btn" data-action="guess-reveal-clue">Reveal next clue</button>` : ""}
+              ${isLastClue && !revealed ? `<button class="btn" data-action="guess-reveal-results">🔍 Reveal results</button>` : ""}
               <button class="btn primary" data-action="guess-next">${isLastPlayer ? "Show leaderboard" : "Next player"}</button>
             </div>`
           : ""
