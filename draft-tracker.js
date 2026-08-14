@@ -787,7 +787,7 @@ function renderJokesPanel() {
     </div>`;
 }
 
-const DAD_JOKE_INTERVAL_MS = 9000;
+const DAD_JOKE_INTERVAL_MS = 15000;
 // Rotates the joke on a timer via direct DOM mutation, not a full
 // render() — a plain text swap doesn't need the whole board torn down and
 // rebuilt every 9 seconds (that would reset scroll position, interrupt
