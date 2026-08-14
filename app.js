@@ -434,7 +434,7 @@ const GOLF_TERM_LABEL = {
   par: "⛳ Par",
   bogey: "😬 Bogey",
   "double-bogey": "😵 Double Bogey",
-  "triple-plus": "🐌 Picked up",
+  "triple-plus": "🐌 Triple bogey or worse",
 };
 const DEV_BOT_PREFIX = "🤖 ";
 const DEV_TARGET_PLAYER_COUNT = 5; // matches the real draft-night group size
