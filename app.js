@@ -1302,7 +1302,6 @@ async function submitPick(role, zone) {
 // official artwork with `filter: brightness(0)` (see .halftime-sprite in
 // style.css), which turns every non-transparent pixel solid black while
 // keeping the real outline, and un-filters on reveal.
-const POKEMON_HALFTIME_COUNT = 5;
 // Each entry's image is what BOTH the silhouette (via CSS filter, see
 // .halftime-sprite) and the reveal actually show — same one image, no
 // separate "fake" silhouette needed. Most entries default to standard
@@ -1315,20 +1314,12 @@ const POKEMON_HALFTIME_COUNT = 5;
 // above) — that's the "joke reveal" format; swap in real image URLs for
 // whichever entries should play that trick. `note` is optional flavour
 // text shown alongside the reveal (e.g. "...from above!").
-const POKEMON_HALFTIME_POOL = [
-  { id: 6, name: "Charizard" },
-  { id: 143, name: "Snorlax" },
-  { id: 94, name: "Gengar" },
-  { id: 7, name: "Squirtle" },
-  { id: 150, name: "Mewtwo" },
-  { id: 39, name: "Jigglypuff" },
-  { id: 54, name: "Psyduck" },
-  { id: 133, name: "Eevee" },
-  { id: 1, name: "Bulbasaur" },
-  { id: 68, name: "Machamp" },
-];
-// Curated joke entries that always play, in this exact order, at the START
-// of the show (Craig's picks). Three different joke shapes so far:
+//
+// The show is these 4 curated jokes, always, in this exact order (Craig's
+// picks) — no random fill anymore. There used to be a 5th, randomly-picked
+// slot backed by a plain Pokémon pool; Craig had it removed 2026-08-14 once
+// the 4 curated jokes were locked in, so this list IS the whole show now.
+// Four different joke shapes so far:
 //  - "wrong angle" (Jigglypuff): the reveal IS the same Pokémon, just shot
 //    from a deliberately misleading angle. `img` points at Craig's own
 //    top-down drawing (assets/jigglypuff-top-down.png, his artwork, not a
@@ -1372,16 +1363,10 @@ function renderHalftimeSprite(dex, revealed) {
   const shownUrl = revealed ? halftimeImageUrl(dex) : halftimeSilhouetteUrl(dex);
   return `<img src="${shownUrl}" alt="${revealed ? escapeHtml(dex.name) : "Mystery Pokémon silhouette"}" class="halftime-sprite${revealed ? " revealed" : ""}">`;
 }
-// POKEMON_HALFTIME_OPENERS play first, in order; the rest of the show (up
-// to POKEMON_HALFTIME_COUNT) is filled with a random selection from
-// POKEMON_HALFTIME_POOL, excluding anything already used as an opener so
-// the same Pokémon can't turn up twice in one show.
+// POKEMON_HALFTIME_OPENERS is the whole show now, always in this order —
+// see the comment above the const for why there's no random fill anymore.
 function buildHalftimeOrder() {
-  const openers = POKEMON_HALFTIME_OPENERS;
-  const usedIds = new Set(openers.map((e) => e.id));
-  const fillPool = POKEMON_HALFTIME_POOL.filter((e) => !usedIds.has(e.id));
-  const fillCount = Math.max(0, POKEMON_HALFTIME_COUNT - openers.length);
-  return [...openers, ...shuffle(fillPool).slice(0, fillCount)];
+  return [...POKEMON_HALFTIME_OPENERS];
 }
 
 async function startHalftimeShow() {
