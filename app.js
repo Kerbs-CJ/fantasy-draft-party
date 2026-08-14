@@ -225,20 +225,70 @@ const GOLF_MAX_STROKES = 10; // holes forcibly finish here, however far short �
 // slopes originally, sand and water added 2026-08-14 alongside wind
 // (game_state.golfPractice.wind, see showGolfPractice/hostRerollWind) so
 // there's nothing in the real round that hasn't shown up here first.
-const GOLF_PRACTICE_HOLE = {
-  tee: { x: 50, y: 88 },
-  pin: { x: 50, y: 15 },
-  obstacles: [
-    { x: 65, y: 58, w: 16, h: 8 },
-    { x: 30, y: 40, r: 4, shape: "circle" },
-  ],
-  slopes: [
-    { x: 30, y: 72, w: 18, h: 14, dir: "down" },
-    { x: 65, y: 25, w: 18, h: 14, dir: "up" },
-  ],
-  sand: [{ x: 20, y: 55, w: 14, h: 10 }],
-  water: [{ x: 68, y: 15, w: 12, h: 8 }],
-};
+//
+// THREE hand-laid variants (not procedurally generated — a random
+// generator risks an unwinnable layout, e.g. a hazard boxing in the pin,
+// with no human check before it ships to a live party), added 2026-08-14
+// so the host can reroll the whole practice hole for genuinely different
+// terrain, not just a fresh wind/reset swings on the same layout (see
+// hostRerollPracticeHole). `tee` is deliberately IDENTICAL across all
+// three — same fixed launch point every time, like a real driving range
+// — only the pin and every hazard's position actually change. The
+// active variant lives in game_state.golfPractice.layoutIndex; use
+// currentPracticeHole(gs) everywhere instead of reaching for
+// GOLF_PRACTICE_HOLE_VARIANTS[0] directly, so a stale/missing index
+// always safely falls back to the original layout.
+const GOLF_PRACTICE_HOLE_VARIANTS = [
+  {
+    tee: { x: 50, y: 88 },
+    pin: { x: 50, y: 15 },
+    obstacles: [
+      { x: 65, y: 58, w: 16, h: 8 },
+      { x: 30, y: 40, r: 4, shape: "circle" },
+    ],
+    slopes: [
+      { x: 30, y: 72, w: 18, h: 14, dir: "down" },
+      { x: 65, y: 25, w: 18, h: 14, dir: "up" },
+    ],
+    sand: [{ x: 20, y: 55, w: 14, h: 10 }],
+    water: [{ x: 68, y: 15, w: 12, h: 8 }],
+  },
+  {
+    tee: { x: 50, y: 88 },
+    pin: { x: 22, y: 18 },
+    obstacles: [
+      { x: 70, y: 35, w: 16, h: 8 },
+      { x: 45, y: 70, r: 4, shape: "circle" },
+    ],
+    slopes: [
+      { x: 75, y: 72, w: 18, h: 14, dir: "down" },
+      { x: 20, y: 55, w: 18, h: 14, dir: "up" },
+    ],
+    sand: [{ x: 60, y: 60, w: 14, h: 10 }],
+    water: [{ x: 35, y: 45, w: 14, h: 10 }],
+  },
+  {
+    tee: { x: 50, y: 88 },
+    pin: { x: 78, y: 18 },
+    obstacles: [
+      { x: 30, y: 35, w: 16, h: 8 },
+      { x: 55, y: 70, r: 4, shape: "circle" },
+    ],
+    slopes: [
+      { x: 25, y: 72, w: 18, h: 14, dir: "down" },
+      { x: 80, y: 55, w: 18, h: 14, dir: "up" },
+    ],
+    sand: [{ x: 40, y: 60, w: 14, h: 10 }],
+    water: [{ x: 65, y: 45, w: 14, h: 10 }],
+  },
+];
+function currentPracticeHole(gs) {
+  return GOLF_PRACTICE_HOLE_VARIANTS[gs?.layoutIndex] || GOLF_PRACTICE_HOLE_VARIANTS[0];
+}
+// Fixed reference to the default/first layout — used only where a hole
+// shape is needed with no game_state in scope yet (e.g. seeding a local
+// animation tracker before the room's practice state has loaded).
+const GOLF_PRACTICE_HOLE = GOLF_PRACTICE_HOLE_VARIANTS[0];
 // ── golf shot physics ───────────────────────────────────────
 // A real simulated roll, not a straight line — the ball moves tick by
 // tick, losing speed to friction, bouncing off the course boundary and
@@ -871,6 +921,7 @@ async function onClick(e) {
   if (action === "host-skip-golf-turn") return hostSkipGolfTurn();
   if (action === "host-reroll-practice-wind") return hostRerollPracticeWind();
   if (action === "host-reset-practice-area") return hostResetPracticeArea();
+  if (action === "host-reroll-practice-hole") return hostRerollPracticeHole();
   if (action === "host-reroll-wind") return hostRerollWind();
   if (action === "host-edit-score") {
     const input = document.getElementById(`score-input-${btn.dataset.id}`);
@@ -2055,7 +2106,14 @@ async function showGolfPractice() {
   // (shared `swings` resets to {} here, but the animation trackMap is
   // local-only and wouldn't otherwise know to reset alongside it) and
   // could spuriously animate a ball sliding back to the tee on arrival.
-  await updateRoom({ status: "golf-practice", game_state: { golfPractice: { swings: {}, session: Date.now(), wind: randomWind() } } });
+  // layoutIndex starts random too, same reasoning as wind — no reason
+  // the group should always see the exact same practice hole first.
+  await updateRoom({
+    status: "golf-practice",
+    game_state: {
+      golfPractice: { swings: {}, session: Date.now(), wind: randomWind(), layoutIndex: Math.floor(Math.random() * GOLF_PRACTICE_HOLE_VARIANTS.length) },
+    },
+  });
 }
 
 // Host-only, re-rolls the practice range's wind to a fresh random
@@ -2069,15 +2127,35 @@ async function hostRerollPracticeWind() {
 }
 
 // Host-only, resets the WHOLE driving range for everyone at once — every
-// player's ball snaps back to the tee and a fresh wind is rolled. Same
-// shape as showGolfPractice()'s initial state (fresh `session` so every
-// device's ensurePracticeReady() re-seeds local.practiceBallAnim, same
-// as first arriving), just re-triggerable without leaving/re-entering
-// the screen. Distinct from "Change wind" (hostRerollPracticeWind),
-// which leaves everyone's swings on the range untouched — this clears
-// the whole board.
+// player's ball snaps back to the tee and a fresh wind is rolled, same
+// hole layout. Same shape as showGolfPractice()'s initial state (fresh
+// `session` so every device's ensurePracticeReady() re-seeds
+// local.practiceBallAnim, same as first arriving), just re-triggerable
+// without leaving/re-entering the screen. Distinct from "Change wind"
+// (leaves swings untouched) and "New practice hole" below (changes the
+// terrain itself) — this one just clears the board on the SAME hole.
 async function hostResetPracticeArea() {
-  await updateRoom({ game_state: { golfPractice: { swings: {}, session: Date.now(), wind: randomWind() } } });
+  const gs = room.game_state?.golfPractice;
+  await updateRoom({ game_state: { golfPractice: { swings: {}, session: Date.now(), wind: randomWind(), layoutIndex: gs?.layoutIndex ?? 0 } } });
+}
+
+// Host-only, rerolls the practice hole's actual TERRAIN — a different
+// pin position and a different arrangement of obstacles/slopes/sand/
+// water (see GOLF_PRACTICE_HOLE_VARIANTS), not just a fresh wind or
+// reset positions on the same layout. Guarantees a genuinely different
+// layout each press (skips re-picking the current index) rather than
+// leaving it to chance whether anything visibly changed. Swings reset
+// along with it — an old landing spot references the OLD terrain's tee
+// line/hazards and would be meaningless (or visually overlapping a
+// hazard that wasn't there before) against a new layout. Wind is left
+// alone — a separate concern with its own dedicated reroll.
+async function hostRerollPracticeHole() {
+  const gs = room.game_state?.golfPractice;
+  if (!gs) return;
+  const n = GOLF_PRACTICE_HOLE_VARIANTS.length;
+  let next = Math.floor(Math.random() * n);
+  if (n > 1 && next === gs.layoutIndex) next = (next + 1) % n;
+  await updateRoom({ game_state: { golfPractice: { ...gs, layoutIndex: next, swings: {}, session: Date.now() } } });
 }
 
 // Same idea, for the REAL round's current hole — a recovery/tuning lever
@@ -2152,7 +2230,7 @@ async function practicePointerUp() {
     return;
   }
   const gs = room.game_state?.golfPractice || { swings: {} };
-  const sim = golfSimulateShot(GOLF_PRACTICE_HOLE, ballPos, vec.angle, vec.power, gs.wind);
+  const sim = golfSimulateShot(currentPracticeHole(gs), ballPos, vec.angle, vec.power, gs.wind);
   local.practice = {
     ...local.practice,
     subPhase: "recap",
@@ -2523,7 +2601,7 @@ async function devJump(status) {
   if (status === "golf-intro") await ensureDevBotIfNeeded();
   if (status === "golf-practice") {
     await ensureDevBotIfNeeded();
-    game_state = { golfPractice: { swings: {}, session: Date.now(), wind: randomWind() } };
+    game_state = { golfPractice: { swings: {}, session: Date.now(), wind: randomWind(), layoutIndex: Math.floor(Math.random() * GOLF_PRACTICE_HOLE_VARIANTS.length) } };
   }
   if (status === "golf") {
     await ensureDevBotIfNeeded();
@@ -3864,11 +3942,11 @@ function renderGolfIntro() {
     </div>`;
 }
 
-function practiceSwingLabel(swing) {
+function practiceSwingLabel(swing, hole) {
   if (!swing) return "⏳ Hasn't swung yet";
   if (swing.holed) return "🎯 Reached the green!";
   if (swing.splashed) return "💦 In the water";
-  const dist = Math.hypot(GOLF_PRACTICE_HOLE.pin.x - swing.x, GOLF_PRACTICE_HOLE.pin.y - swing.y);
+  const dist = Math.hypot(hole.pin.x - swing.x, hole.pin.y - swing.y);
   if (dist <= 15) return "👍 Close!";
   if (dist <= 30) return "😬 On the fairway";
   return "🫣 Way off";
@@ -3877,6 +3955,7 @@ function practiceSwingLabel(swing) {
 function renderGolfPractice() {
   const isHost = myPlayer()?.is_host;
   const gs = room.game_state.golfPractice || { swings: {} };
+  const hole = currentPracticeHole(gs);
   // The ball itself now renders wherever each player's last swing landed
   // (gs.swings, same shape as the real round's gs.balls) and rolls there
   // on screen via the real simulated path, exactly like the scored round
@@ -3903,16 +3982,17 @@ function renderGolfPractice() {
       ${renderGolfWindBadge(gs.wind)}
       <p class="sub" style="text-align:center">${instructions}</p>
       <div class="golf-course-wrap practice">
-        ${renderGolfCourse(GOLF_PRACTICE_HOLE, gs.swings, local.practiceBallAnim, local.practice, true)}
+        ${renderGolfCourse(hole, gs.swings, local.practiceBallAnim, local.practice, true)}
       </div>
       <h3>Lanes</h3>
       <ul class="player-list compact">
-        ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceSwingLabel(gs.swings[p.id])}</li>`).join("")}
+        ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceSwingLabel(gs.swings[p.id], hole)}</li>`).join("")}
       </ul>
       ${
         isHost
           ? `<div class="guess-host-controls">
               <button class="btn" data-action="host-reroll-practice-wind">🎲 Change wind</button>
+              <button class="btn" data-action="host-reroll-practice-hole">🔀 New practice hole</button>
               <button class="btn" data-action="host-reset-practice-area">🔄 Reset practice area</button>
               <button class="btn" data-action="show-golf-intro">⬅️ Back</button>
               <button class="btn primary" data-action="start-golf" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>⛳ Start Football Golf</button>
