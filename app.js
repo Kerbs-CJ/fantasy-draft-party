@@ -749,6 +749,7 @@ async function onClick(e) {
   if (action === "golf-next-hole") return golfNextHole();
   if (action === "reveal") return startReveal();
   if (action === "reveal-next-pick") return revealNextPick();
+  if (action === "show-score-breakdown") return updateRoom({ status: "score-breakdown" });
   if (action === "dev-jump") return devJump(btn.dataset.status);
   if (action === "dev-add-bot") return addDevBot();
   if (action === "dev-remove-bot") return removeLastDevBot();
@@ -2635,6 +2636,9 @@ function renderInner() {
       ensureRevealConfetti();
       html += renderReveal();
       break;
+    case "score-breakdown":
+      html += renderScoreBreakdown();
+      break;
     default:
       html += `<p>Unknown state.</p>`;
   }
@@ -2777,6 +2781,7 @@ function renderDevBar() {
     ["golf", "Golf"],
     ["golf-leaderboard", "Golf LB"],
     ["reveal", "Reveal"],
+    ["score-breakdown", "Score Breakdown"],
   ];
   return `
     <div class="dev-bar">
@@ -3980,11 +3985,63 @@ function renderReveal() {
       </div>
       ${
         isDone
-          ? `<a class="btn primary reveal-tracker-btn" href="draft-tracker.html?room=${encodeURIComponent(room.code)}">📋 Go to Draft Tracker</a>`
+          ? isMeHost()
+            ? `<button class="btn primary reveal-tracker-btn" data-action="show-score-breakdown">📊 See Score Breakdown</button>`
+            : `<p class="waiting">Waiting for host to show the score breakdown…</p>`
           : isMeHost()
             ? `<button class="btn primary" data-action="reveal-next-pick">🔍 Reveal Pick #${nextPickNumber}</button>`
             : `<p class="waiting">Waiting for host to reveal Pick #${nextPickNumber}…</p>`
       }
+    </div>`;
+}
+
+// Per-game, per-player points, plus the overall total again — a "so we're
+// all on the same page" summary before heading to the Draft Tracker, same
+// spirit as Guess the Footballer's results reveal. gameOrder follows the
+// actual play order (Missing Club -> Shootout -> Guess the Footballer ->
+// Golf), not GAME_LABELS' numeric game_index order, so the columns read
+// left-to-right the same way the night actually went.
+function renderScoreBreakdown() {
+  const totals = totalsByPlayer();
+  const gameOrder = [1, 3, 2, 4];
+  const perGame = {};
+  for (const gi of gameOrder) {
+    perGame[gi] = {};
+    for (const t of totalsForGame(gi)) perGame[gi][t.player.id] = t.total;
+  }
+  return `
+    <div class="card">
+      <h2>📊 Score Breakdown</h2>
+      <p class="sub">How everyone scored on each game.</p>
+      <div class="standings-wrap">
+        <table class="standings-table">
+          <thead>
+            <tr>
+              <th>Player</th>
+              ${gameOrder.map((gi) => `<th>${GAME_LABELS[gi]}</th>`).join("")}
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${totals
+              .map(
+                (t) => `<tr>
+                  <td>${escapeHtml(t.player.name)}</td>
+                  ${gameOrder.map((gi) => `<td>${perGame[gi][t.player.id] ?? 0}</td>`).join("")}
+                  <td><b>${t.total}</b></td>
+                </tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Overall</h3>
+      <ol class="leaderboard">
+        ${totals.map((t) => `<li><span>${escapeHtml(t.player.name)}</span><b>${t.total}</b></li>`).join("")}
+      </ol>
+
+      <a class="btn primary" href="draft-tracker.html?room=${encodeURIComponent(room.code)}">📋 Go to Draft Tracker</a>
     </div>`;
 }
 
