@@ -181,6 +181,116 @@ const DAD_JOKES = [
   "What did the buffalo say to his kid when he dropped him off at school? Bison.",
   "Why do bees have sticky hair? Because they use honeycombs.",
   "I told my suitcase there'd be no vacation this year. Now I'm dealing with emotional baggage.",
+  "What do you call a parade of rabbits hopping backwards? A receding hare-line.",
+  "Why did the scarecrow become a successful motivational speaker? He was outstanding in his field, and great at making people scared straight.",
+  "I used to work at a shoe recycling shop. It was sole destroying.",
+  "What do you call an elephant that doesn't matter? An irrelephant.",
+  "Why don't calendars ever get invited to parties? Because their days are numbered.",
+  "I have a joke about pizza, but it's too cheesy.",
+  "What do you call a fish that needs help with his vocals? Auto-tuna.",
+  "Why did the traffic light turn red? You would too if you had to change in the middle of the street.",
+  "I ordered a chicken and an egg online. I'll let you know which comes first.",
+  "What do you call an amazing pencil drawing of a shrimp? A doodle prawn.",
+  "Why don't programmers like nature? It has too many bugs.",
+  "I used to be a baker, but I couldn't make enough dough.",
+  "What do you call a pony with a sore throat? A little hoarse.",
+  "Why did the hipster burn his mouth? He drank his coffee before it was cool.",
+  "I'm on a roll this week. It's a bread joke, but I kneaded it.",
+  "What did the buffalo say when his son left for college? Bison.",
+  "Why do bicycles fall over easily? Because they're two-tired.",
+  "I burnt 2000 calories today. I left my pizza in the oven.",
+  "What do you call a factory worker who makes okay products? Satisfactory.",
+  "Why did the tomato blush? Because it saw the salad dressing change.",
+  "I've been to the dentist many times, so I know the drill.",
+  "What do you call a sad cup of coffee? A depresso.",
+  "Why did the astronaut break up with his girlfriend? He needed space.",
+  "I don't trust stairs. They're always up to something.",
+  "What do you call a boomerang that won't come back? A stick, and a bit of a disappointment.",
+  "Why did the karate teacher run away from her lessons? She wasn't ready for a black belt in cowardice.",
+  "I'm reading a book about Stockholm syndrome. It's starting to grow on me.",
+  "What did one hat say to the other? Stay here, I'm going on ahead.",
+  "Why did the gym close down? It just didn't work out.",
+  "I like to tell dad jokes. Sometimes he laughs.",
+  "What do you call a can opener that doesn't open cans? A can't opener, and a bit useless.",
+  "Why don't skeletons watch scary movies? They don't have the stomach for it.",
+  "I got my daughter a fridge for her birthday. I can't wait to see her face light up when she opens it.",
+  "What do you call a group of musical whales? An orca-stra.",
+  "Why did the belt go to prison? Because it held up a pair of trousers.",
+  "I bought some batteries, but they weren't included.",
+  "What's a pirate's favorite letter? You'd think it's R, but his true love is the C.",
+  "Why did the cookie cry? Because its mother had been away for so long.",
+  "I told my wife she should embrace her mistakes. She gave me a hug.",
+  "What do you call a nosy pepper? Jalapeño business.",
+  "Why did the man run around his bed? Because he was trying to catch up on his sleep.",
+  "I've been trying to write a joke about my time management. Never seem to find the time.",
+  "What do you call an old snowman? Water.",
+  "Why did the golfer bring extra socks? In case he got a hole in one.",
+  "I'm friends with all electricians. We have great current relationships.",
+  "What do you call a magician's dog? A labracadabrador, and yes, I know I already told this one.",
+  "Why did the scientist install a knocker on his door? He wanted to win the No-bell prize.",
+  "I used to be indecisive. Now I'm not so sure.",
+  "What do you call a very rude mountain? Mount Fuji-erk.",
+  "Why did the man name his dogs Rolex and Timex? Because they were watchdogs.",
+  "I've decided to sell my vacuum cleaner. It was just collecting dust.",
+  "What do you call a poor Santa Claus? St. Nickel-less.",
+  "Why did the beach blush? Because the sea weed.",
+  "I told my doctor I broke my arm in two places. He told me to stop going to those places.",
+  "What do you call a dog that does magic tricks? A labracadabrador. (Really, that's my favorite one.)",
+  "Why did the two 4's skip lunch? Because they already 8.",
+  "I've just written a song about tortillas. Actually, it's more of a wrap.",
+  "What do you call a fish with two knees? A tuna-fin, and I'm sorry.",
+  "Why did the man bring a ladder to the bar? He heard the drinks were on the house.",
+  "I asked my dog what's two minus two. He said nothing.",
+  "What do you call a droid that goes around in circles? R2 detour, again, but it's a classic.",
+  "Why don't ants ever get sick? Because they have tiny anti-bodies.",
+  "I got fired from the calendar factory. All I did was take a day off.",
+  "What do you call a cow with no legs? Ground beef.",
+  "Why did the man put his car in the oven? He wanted a hot rod.",
+  "I'm on a new diet. It's called 'seafood.' I see food, and I eat it.",
+  "What do you call a snowman party? A snowball.",
+  "Why did the baker stop making donuts? He was tired of the hole business.",
+  "I told my computer I needed a break, and now it won't stop sending me Kit-Kat ads.",
+  "What do you call a fake stone in Ireland? A sham rock.",
+  "Why did the light bulb fail its exam? It wasn't that bright.",
+  "I'm not saying my wife is bossy, but her favorite Spice Girl is Bossy Spice.",
+  "What do you call a group of unorganized cows? A moo-ving mess.",
+  "Why did the man bring string to the party? So he could tie one on.",
+  "I'm so good at sleeping, I can do it with my eyes closed.",
+  "What did the drummer call his twin daughters? Anna one, Anna two.",
+  "Why did the football team go to the bakery? Because they needed a good roll.",
+  "I've just been on a once-in-a-lifetime holiday. Never again.",
+  "What do you call a can of soup that doesn't work? Souper broken.",
+  "Why did the man get cold looking at his mail? Because it had a lot of static in it.",
+  "I quit my job at the helium factory. I refuse to be spoken to in that tone.",
+  "What do you call a nervous wreck at a spelling bee? A ner-vous.",
+  "Why did the cheese go to the party alone? Because it was grate on its own.",
+  "I told my kids I was named after Thomas Jefferson. They said, 'but Dad, your name is Steve.'",
+  "What do you call a Frenchman wearing sandals? Philippe Flop.",
+  "Why did the melon jump into the lake? It wanted to be a watermelon.",
+  "I made a pencil with two erasers. It was pointless.",
+  "What do you call an owl who does magic tricks? Hoo-dini.",
+  "Why do vegetarians give great presents? Because they're good with the whole grain.",
+  "I asked the gym instructor if he could teach me to do the splits. He said, 'how flexible are you?' I said, 'I can't make Tuesdays.'",
+  "What do you call a duck that gets all A's? A wise quacker.",
+  "Why did the man stare at the frozen orange juice can? Because it said concentrate.",
+  "I have a joke about trains, but I think it might derail.",
+  "What do you call a bear caught in the rain? A drizzly bear.",
+  "Why did the woman put her money in the blender? She wanted to make liquid assets.",
+  "I bought the world's worst thesaurus yesterday. Not only is it terrible, it's terrible.",
+  "What do you call a fish that plays the guitar? A bass player, obviously.",
+  "Why did the man's watch go to jail? It was stealing time.",
+  "I was wondering why the ball kept getting bigger. Then it hit me.",
+  "What do you call a peanut in a spacesuit? An astro-nut.",
+  "Why don't opticians ever finish their sentences? Because they're always making spectacles of themselves.",
+  "I got a job at the local gym, but I quit after one day. It just wasn't working out.",
+  "What do you call a boat full of friendly people? A friend-ship.",
+  "Why did the gardener plant a lightbulb? He wanted to grow a power plant.",
+  "I made a belt out of watches once. It was a waist of time.",
+  "What do you call a fairy that hasn't had a bath? Stinker Bell.",
+  "Why did the man take a pencil to bed? To draw the curtains.",
+  "What do you call a super sad strawberry? A blueberry.",
+  "Why did the man get a job at the orange juice factory? He heard it was a good squeeze.",
+  "I told my friend 10 jokes to make him laugh. Sadly, no pun in ten did.",
 ];
 
 let sb = null;
@@ -298,6 +408,26 @@ async function loadPicks() {
   picks = data || [];
 }
 
+// Merges into room.game_state rather than replacing it — this page never
+// owned that column (the party app does, for its own rounds), so writing
+// here has to not clobber whatever's already sitting in it from the
+// reveal stage. Only ever used for the headlines/dad-jokes start toggles.
+async function updateRoomGameState(patch) {
+  const game_state = { ...(room.game_state || {}), ...patch };
+  const { data } = await sb.from("rooms").update({ game_state }).eq("code", room.code).select().maybeSingle();
+  if (data) room = data;
+  render();
+}
+
+async function startHeadlines() {
+  if (!myPlayer()?.is_host) return;
+  await updateRoomGameState({ draftWidgets: { ...(room.game_state?.draftWidgets || {}), headlines: true } });
+}
+async function startJokes() {
+  if (!myPlayer()?.is_host) return;
+  await updateRoomGameState({ draftWidgets: { ...(room.game_state?.draftWidgets || {}), jokes: true } });
+}
+
 function subscribe() {
   channel = sb
     .channel("draft-" + room.code)
@@ -318,6 +448,20 @@ function subscribe() {
       { event: "DELETE", schema: "public", table: "draft_picks", filter: `room_code=eq.${room.code}` },
       (payload) => {
         picks = picks.filter((p) => p.id !== payload.old.id);
+        render();
+      }
+    )
+    // Only used for the headlines/dad-jokes "start" toggles right now (see
+    // updateRoom/renderHeadlinesPanel/renderJokesPanel) — the draft itself
+    // doesn't touch room.status or game_state at all, that's all still
+    // owned by the party app. Every device needs to hear this, not just
+    // the host's, since the whole point is the OTHER players' panels
+    // switching on together the moment the host starts them.
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "rooms", filter: `code=eq.${room.code}` },
+      (payload) => {
+        room = payload.new;
         render();
       }
     )
@@ -531,6 +675,8 @@ function onClick(e) {
     render();
   }
   if (btn.dataset.action === "undo-last-pick") undoLastPick();
+  if (btn.dataset.action === "start-headlines") startHeadlines();
+  if (btn.dataset.action === "start-jokes") startJokes();
 }
 
 // Live-filters as you type without losing your place in the search box —
@@ -581,8 +727,27 @@ function headlineForPick(pick) {
     .replaceAll("{price}", pl.price);
 }
 
+// Both panels stay off (host-only "Start" button, non-host sees a waiting
+// message) until the host explicitly switches them on — added so Craig
+// can walk everyone through the actual draft first without a headline or
+// a random joke landing mid-explanation. game_state.draftWidgets is
+// shared room state (see updateRoomGameState/subscribe's rooms UPDATE
+// listener), so one host click turns it on for every device at once, not
+// just the host's own.
 const HEADLINES_SHOWN = 12; // most recent picks only — a full 75-pick draft doesn't need every headline ever generated sitting in the DOM
 function renderHeadlinesPanel() {
+  const isHost = !!myPlayer()?.is_host;
+  if (!room.game_state?.draftWidgets?.headlines) {
+    return `
+      <div class="card draft-side-card">
+        <h3>📰 Breaking News</h3>
+        ${
+          isHost
+            ? `<p class="sub">Off for now — start it whenever you're ready.</p><button class="btn" data-action="start-headlines">▶️ Start Breaking News</button>`
+            : `<p class="waiting">Waiting for the host to start this…</p>`
+        }
+      </div>`;
+  }
   const recent = picks
     .slice()
     .reverse()
@@ -602,6 +767,18 @@ function renderHeadlinesPanel() {
 }
 
 function renderJokesPanel() {
+  const isHost = !!myPlayer()?.is_host;
+  if (!room.game_state?.draftWidgets?.jokes) {
+    return `
+      <div class="card draft-side-card">
+        <h3>😂 Dad Jokes</h3>
+        ${
+          isHost
+            ? `<p class="sub">Off for now — start it whenever you're ready.</p><button class="btn" data-action="start-jokes">▶️ Start Dad Jokes</button>`
+            : `<p class="waiting">Waiting for the host to start this…</p>`
+        }
+      </div>`;
+  }
   if (!local.currentJoke) local.currentJoke = DAD_JOKES[Math.floor(Math.random() * DAD_JOKES.length)];
   return `
     <div class="card draft-side-card">
