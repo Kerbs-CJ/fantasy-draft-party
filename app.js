@@ -802,6 +802,8 @@ async function onClick(e) {
   // (above the dev-mode section) for what each of these actually does.
   if (action === "host-redo-item") return hostRedoCurrentItem();
   if (action === "host-force-finish") return forceFinishShootoutMatch(btn.dataset.winner);
+  if (action === "host-skip-shootout-turn") return hostSkipShootoutTurn();
+  if (action === "host-skip-golf-turn") return hostSkipGolfTurn();
   if (action === "host-edit-score") {
     const input = document.getElementById(`score-input-${btn.dataset.id}`);
     const points = Number(input?.value);
@@ -1401,21 +1403,25 @@ function resolveKick(match) {
   return match;
 }
 
-async function submitPick(role, zone) {
+async function submitPick(role, zone, hostOverride) {
   const { data: freshRoom } = await sb.from("rooms").select("*").eq("code", room.code).single();
   const gs = freshRoom.game_state;
   const match = gs.match;
   if (!match) return;
   // Only the actual shooter/keeper for this turn may submit their pick —
   // spectators (and anyone poking at the console) can't hijack a kick that
-  // isn't theirs. The one exception is a genuine bot player, since some
-  // real human's own device has to be the one actually driving it; see
-  // ensureBotAutoPick/scheduleBotPick. Not gated on DEV_MODE — a normal
-  // host with bots added via the Lobby needs this to work too, and
-  // isDevBot already means only an actual bot row can ever trigger it.
+  // isn't theirs. Exceptions: a genuine bot player, since some real
+  // human's own device has to be the one actually driving it (see
+  // ensureBotAutoPick/scheduleBotPick); and the host explicitly skipping a
+  // stuck turn (hostOverride, see hostSkipShootoutTurn) — re-checked
+  // against isMeHost() here too, not just trusted from the caller, same
+  // "enforce it here, not just hide the button" reasoning as everywhere
+  // else in this app. Not gated on DEV_MODE — a normal host with bots
+  // added via the Lobby needs this to work too, and isDevBot already means
+  // only an actual bot row can ever trigger that path.
   const targetId = role === "shooter" ? (match.turn === "p1" ? match.p1 : match.p2) : match.turn === "p1" ? match.p2 : match.p1;
   const targetIsBot = isDevBot(players.find((p) => p.id === targetId));
-  if (myPlayer()?.id !== targetId && !targetIsBot) return;
+  if (myPlayer()?.id !== targetId && !targetIsBot && !(hostOverride && isMeHost())) return;
   const key = role === "shooter" ? "shooterPick" : "keeperPick";
   if (match[key] !== null) return;
   const updated = { ...match, [key]: zone };
@@ -2189,12 +2195,29 @@ async function forceFinishShootoutMatch(winnerId) {
   await updateRoom({ status: "round-robin", game_state: { roundRobin, match: null } });
 }
 
+// A much smaller lever than forceFinishShootoutMatch — for "they stepped
+// away for a second," not "this match is unrecoverable." Fills in a
+// random pick for whichever role (shooter and/or keeper) hasn't gone yet,
+// exactly like a bot's pick (see scheduleBotPick) — the match carries on
+// completely normally afterward, nothing else about it changes. Reuses
+// submitPick itself (not a separate write path) so this can never drift
+// out of sync with the real resolution logic.
+async function hostSkipShootoutTurn() {
+  const match = room.game_state?.match;
+  if (!match || match.winnerId) return;
+  const randomZone = () => ZONES[Math.floor(Math.random() * ZONES.length)];
+  if (match.shooterPick === null) await submitPick("shooter", randomZone(), true);
+  if (match.keeperPick === null) await submitPick("keeper", randomZone(), true);
+}
+
 // Sends every player's ball on the CURRENT hole back to the tee and drops
 // any results already banked for it (a player who'd already holed out gets
 // to replay it too, along with everyone else) — previous holes are
 // untouched. Also resets the turn order back to the top (see
-// golfCurrentTurnPlayerId) — this is the escape valve if turn-based play
-// ever genuinely gets stuck on one player. redoNonce forces every client's
+// golfCurrentTurnPlayerId). This is the BIG lever for a hole that's
+// genuinely broken; for "one player's away, everyone else is waiting on
+// their turn," reach for hostSkipGolfTurn below instead — it only skips
+// the one stroke, not the whole hole. redoNonce forces every client's
 // local drag/recap state to reset even though holeIndex itself hasn't
 // changed (see ensureGolfReady).
 async function resetCurrentGolfHole() {
@@ -2220,6 +2243,30 @@ async function resetCurrentGolfHole() {
       },
     },
   });
+}
+
+// A much smaller lever than resetCurrentGolfHole — takes ONE stroke on
+// behalf of whoever's turn it currently is (real player or bot, doesn't
+// matter) and nothing else about the hole changes; everyone else's balls,
+// strokes, and the turn order stay exactly as they were. Exact same
+// aim-at-the-pin-with-jitter shot generation as a bot's own turn (see
+// ensureGolfBotSwing) — reuses golfSubmitShot itself, which already
+// accepts acting on behalf of any player id with no ownership check, so
+// this needs no special-casing there.
+async function hostSkipGolfTurn() {
+  const gs = room.game_state?.golf;
+  if (!gs) return;
+  const hole = GOLF_HOLES[gs.holeIndex];
+  if (!hole) return;
+  const turnId = golfCurrentTurnPlayerId(gs);
+  if (!turnId) return;
+  const ballPos = golfBallFor(gs, hole, turnId);
+  const dx = hole.pin.x - ballPos.x;
+  const dy = hole.pin.y - ballPos.y;
+  const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.6;
+  const power = 0.55 + Math.random() * 0.4;
+  const sim = golfSimulateShot(hole, ballPos, angle, power);
+  await golfSubmitShot({ power, ...sim }, turnId);
 }
 
 // Overwrites one scores row's points in place — for a mis-scored answer or
@@ -2815,9 +2862,45 @@ function renderHostPanel() {
       ${open ? renderHostPanelBody() : ""}
     </div>`;
 }
+// Which "skip a stuck turn" button (if any) applies on the CURRENT
+// screen — null everywhere except mid-shootout-match or mid-golf, and
+// even then only once there's actually a pending turn to skip (a
+// shootout with both picks already in, or golf between holes, has
+// nothing to offer here). See hostSkipShootoutTurn/hostSkipGolfTurn for
+// what each button actually does.
+function hostSkipTurnInfo() {
+  if (room.status === "shootout") {
+    const match = room.game_state?.match;
+    if (!match || match.winnerId) return null;
+    const shooterId = match.turn === "p1" ? match.p1 : match.p2;
+    const keeperId = match.turn === "p1" ? match.p2 : match.p1;
+    const pendingNames = [];
+    if (match.shooterPick === null) pendingNames.push(playerName(shooterId));
+    if (match.keeperPick === null) pendingNames.push(playerName(keeperId));
+    if (!pendingNames.length) return null;
+    return {
+      action: "host-skip-shootout-turn",
+      label: `⏭️ Skip ${pendingNames.join(" and ")}'s pick`,
+      note: "Fills in a random pick for whoever hasn't gone yet — the match carries on completely normally afterward.",
+    };
+  }
+  if (room.status === "golf") {
+    const gs = room.game_state?.golf;
+    if (!gs) return null;
+    const turnId = golfCurrentTurnPlayerId(gs);
+    if (!turnId) return null;
+    return {
+      action: "host-skip-golf-turn",
+      label: `⏭️ Skip ${playerName(turnId)}'s turn`,
+      note: "Takes one shot on their behalf, aimed roughly at the pin — everyone else's progress and the turn order are untouched.",
+    };
+  }
+  return null;
+}
 function renderHostPanelBody() {
   const redoLabel = hostRedoLabel();
   const match = room.status === "shootout" ? room.game_state?.match : null;
+  const skipInfo = hostSkipTurnInfo();
   return `
     <div class="host-panel">
       <div class="host-panel-section">
@@ -2828,6 +2911,15 @@ function renderHostPanelBody() {
             : `<p class="host-panel-note">Nothing live to redo on this screen.</p>`
         }
       </div>
+      ${
+        skipInfo
+          ? `<div class="host-panel-section">
+              <h4>Skip a stuck turn</h4>
+              <p class="host-panel-note">${skipInfo.note}</p>
+              <button class="btn" data-action="${skipInfo.action}">${skipInfo.label}</button>
+            </div>`
+          : ""
+      }
       ${
         match
           ? `<div class="host-panel-section">
