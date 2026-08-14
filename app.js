@@ -410,7 +410,19 @@ function golfSimulateShot(hole, start, angle, power) {
   }
   return { path, endX: x, endY: y, holed, splashed };
 }
-const GOLF_TERM_POINTS = { eagle: 50, birdie: 35, par: 25, bogey: 15, "double-bogey": 8, "triple-plus": 3 };
+// Rescaled 2026-08-14 — these used to only decide INTERNAL ranking (who
+// finishes 1st-5th), with the actual score being placement points off
+// that ranking (same as the Shootout). Craig wanted the real per-hole
+// scores to count directly instead, but the original scale (eagle 50 down
+// to triple-plus 3) would have let a hot round hit 250 across 5 holes —
+// wildly higher than every other game's ~80-120 cap and exactly the
+// "one game dominates everything" problem already fixed elsewhere. This
+// scale keeps the same shape/ratios, just divided down by roughly 3x and
+// rounded clean, so an eagle-every-hole sweep caps at exactly 80 (16 x 5)
+// — the same ceiling Golf already had under placement scoring. See
+// finishGolf, which now inserts this raw per-hole total directly as the
+// score instead of converting it to a placement.
+const GOLF_TERM_POINTS = { eagle: 16, birdie: 11, par: 8, bogey: 5, "double-bogey": 3, "triple-plus": 1 };
 const GOLF_TERM_LABEL = {
   eagle: "🦅 Eagle!",
   birdie: "🐦 Birdie!",
@@ -1284,17 +1296,20 @@ function resolveHeadToHead(group, matches) {
 }
 
 // 80/64/48/32/16 for a 5-player field (a clean 16-point step per place),
-// scaled to whatever the actual player count is. Used directly for both
-// the Shootout and Golf's final placements (max 80, min 16 — a 64-point
-// swing top to bottom; min is still 20% of max, same proportions as
-// before). Re-rebalanced 2026-08-14, second pass: Craig wants the Shootout
-// and Golf capped BELOW the quiz games now (max 80, was 100), while
-// Missing Club (max 120, MISSING_CLUB_POINTS) and Guess the Footballer
-// (max 120, GUESS_CLUE_POINTS x GUESS_PLAYER_COUNT — skewed toward early
-// clues, see its own comment) sit above — the opposite of the first pass,
-// which tried to equalize all 4 around ~100. Don't "fix" this back toward
-// equal without checking with Craig first, he's changed his mind once
-// already. rank is 0-indexed (0 = 1st place).
+// scaled to whatever the actual player count is. Used directly for the
+// Shootout's final placement (max 80, min 16 — a 64-point swing top to
+// bottom; min is still 20% of max). Golf USED to use this too, but was
+// switched 2026-08-14 to score off its own raw per-hole GOLF_TERM_POINTS
+// total instead (see finishGolf) — its max is still 80 (an eagle sweep),
+// just reached a different way, not through this function.
+// Re-rebalanced 2026-08-14: Craig wants the Shootout/Golf capped BELOW the
+// quiz games now (max 80, was 100), while Missing Club (max 120,
+// MISSING_CLUB_POINTS) and Guess the Footballer (max 120, GUESS_CLUE_POINTS
+// x GUESS_PLAYER_COUNT — skewed toward early clues, see its own comment)
+// sit above — the opposite of an earlier pass that tried to equalize all
+// 4 around ~100. Don't "fix" this back toward equal without checking with
+// Craig first, he's changed his mind once already. rank is 0-indexed
+// (0 = 1st place).
 function placementPoints(rank, n) {
   return n > 1 ? Math.round(80 - (64 * rank) / (n - 1)) : 80;
 }
@@ -1839,19 +1854,25 @@ async function golfNextHole() {
   }
 }
 
+// Rescaled 2026-08-14 — this used to insert placementPoints(i, n) here
+// (1st/2nd/3rd... converted to placement points, same as the Shootout).
+// Craig wanted the actual per-hole GOLF_TERM_POINTS total to count
+// directly instead, since a flat 5-way placement flattens the difference
+// between "won by one shot" and "won by a mile." The sort below is now
+// only for display order on the leaderboard, not for scoring — the total
+// itself IS the score.
 async function finishGolf(gs) {
   const totals = players.map((p) => ({
     player: p,
     total: (gs.results[p.id] || []).reduce((sum, r) => sum + r.points, 0),
   }));
   totals.sort((a, b) => b.total - a.total);
-  const n = totals.length;
-  const inserts = totals.map((t, i) => ({
+  const inserts = totals.map((t) => ({
     room_code: room.code,
     player_id: t.player.id,
     game_index: 4,
     round_index: 0,
-    points: placementPoints(i, n),
+    points: t.total,
   }));
   if (inserts.length) await sb.from("scores").insert(inserts);
   await updateRoom({ status: "golf-leaderboard" });
@@ -3463,7 +3484,7 @@ function renderGolfIntro() {
           </tbody>
         </table>
       </div>
-      <p>A hole force-finishes after ${GOLF_MAX_STROKES} strokes so nobody's stuck. Total points across all ${GOLF_HOLES.length} holes decide final placement — same points system as the shootout.</p>
+      <p>A hole force-finishes after ${GOLF_MAX_STROKES} strokes so nobody's stuck. Your total points added up across all ${GOLF_HOLES.length} holes ARE your score for this round — an eagle-every-hole sweep caps at ${GOLF_TERM_POINTS.eagle * GOLF_HOLES.length} points.</p>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
