@@ -991,14 +991,18 @@ async function submitMissingClubAnswer(club, qIndex) {
   await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 1, round_index: qIndex, points });
 }
 
-// While solo-testing in dev mode, have any dev bots lock in an answer a
-// beat after each question appears — same idea as ensureBotAutoPick for
-// the shootout. Bots pick a random choice (not necessarily correct, same
-// as a real random guesser would); this only needs a `scores` insert,
-// unlike the shootout's picks, since "who's answered" is already derived
-// from the scores table via answeredPlayerIds().
+// Have any dev bots in the room (added via the Lobby's "Add a bot" —
+// see renderLobbyAddBots — or the ?dev=1 dev bar, either way) lock in an
+// answer a beat after each question appears — same idea as
+// ensureBotAutoPick for the shootout. NOT gated on DEV_MODE: a normal
+// host testing solo needs their bots to actually play, not just sit
+// there — and with zero bots in the room (an ordinary real game),
+// isDevBot's filter below finds nobody and this is a no-op regardless.
+// Bots pick a random choice (not necessarily correct, same as a real
+// random guesser would); this only needs a `scores` insert, unlike the
+// shootout's picks, since "who's answered" is already derived from the
+// scores table via answeredPlayerIds().
 function ensureMissingClubBotAnswer() {
-  if (!DEV_MODE) return;
   const gs = room.game_state || {};
   if (gs.qIndex === undefined) return;
   const answeredIds = answeredPlayerIds(1, gs.qIndex);
@@ -1092,14 +1096,14 @@ async function guessAnswer(name) {
   await sb.from("scores").insert({ room_code: room.code, player_id: me.id, game_index: 2, round_index: gs.pIndex, points });
 }
 
-// While solo-testing in dev mode, have any dev bots lock in an answer a
-// beat after each mystery player starts — same idea as
-// ensureMissingClubBotAnswer. A bot picks a random choice (not necessarily
-// correct) using whatever clueIndex is actually current when its delay
-// fires, same as a real guess would, so it scores like a real player who
-// answered at that point in the reveal.
+// Have any dev bots in the room lock in an answer a beat after each
+// mystery player starts — same idea as ensureMissingClubBotAnswer, and
+// same reasoning for not gating on DEV_MODE (see its comment). A bot
+// picks a random choice (not necessarily correct) using whatever
+// clueIndex is actually current when its delay fires, same as a real
+// guess would, so it scores like a real player who answered at that
+// point in the reveal.
 function ensureGuessBotAnswer() {
-  if (!DEV_MODE) return;
   const gs = room.game_state || {};
   if (gs.pIndex === undefined) return;
   const answeredIds = answeredPlayerIds(2, gs.pIndex);
@@ -1392,12 +1396,14 @@ async function submitPick(role, zone) {
   if (!match) return;
   // Only the actual shooter/keeper for this turn may submit their pick —
   // spectators (and anyone poking at the console) can't hijack a kick that
-  // isn't theirs. The one exception is dev mode, where a solo tester
-  // deliberately plays bot roles on their own device; see
-  // ensureBotAutoPick/scheduleBotPick.
+  // isn't theirs. The one exception is a genuine bot player, since some
+  // real human's own device has to be the one actually driving it; see
+  // ensureBotAutoPick/scheduleBotPick. Not gated on DEV_MODE — a normal
+  // host with bots added via the Lobby needs this to work too, and
+  // isDevBot already means only an actual bot row can ever trigger it.
   const targetId = role === "shooter" ? (match.turn === "p1" ? match.p1 : match.p2) : match.turn === "p1" ? match.p2 : match.p1;
   const targetIsBot = isDevBot(players.find((p) => p.id === targetId));
-  if (myPlayer()?.id !== targetId && !(DEV_MODE && targetIsBot)) return;
+  if (myPlayer()?.id !== targetId && !targetIsBot) return;
   const key = role === "shooter" ? "shooterPick" : "keeperPick";
   if (match[key] !== null) return;
   const updated = { ...match, [key]: zone };
@@ -1899,17 +1905,17 @@ function ensureGolfAnim() {
   }
 }
 
-// While solo-testing in dev mode, have whichever dev bot's turn it
-// currently is take its shot a beat after the turn actually reaches them —
-// same idea as ensureBotAutoPick for the shootout. Turn-based play means a
-// bot's turn genuinely blocks the whole group now (unlike the old
-// everyone-at-once golf, where an idle bot was harmless), so this exists
-// to keep solo dev testing moving without the host having to manually
-// swing on a bot's behalf. Aims roughly at the pin with some jitter and a
+// Have whichever dev bot's turn it currently is take its shot a beat
+// after the turn actually reaches them — same idea as ensureBotAutoPick
+// for the shootout, and same reasoning for not gating on DEV_MODE (see
+// ensureMissingClubBotAnswer's comment). Turn-based play means a bot's
+// turn genuinely blocks the whole group (unlike the old everyone-at-once
+// golf, where an idle bot was harmless), so this exists to keep any
+// bot-populated room moving without the host having to manually swing on
+// a bot's behalf. Aims roughly at the pin with some jitter and a
 // randomized power — a plausible shot, not a solved one, same spirit as
 // the shootout bots picking a random zone.
 function ensureGolfBotSwing() {
-  if (!DEV_MODE) return;
   const gs = room.game_state?.golf;
   if (!gs) return;
   const turnId = golfCurrentTurnPlayerId(gs);
@@ -2532,12 +2538,12 @@ function renderPkGoal(entry, kicking, doAnimate) {
     </div>`;
 }
 
-// While solo-testing in dev mode, auto-play any bot's turn a beat after
-// it comes up. With multiple bots (a full-size test group), a given
-// match might be bot-vs-bot with no human in it at all — so shooter and
-// keeper are checked and scheduled independently, not either/or.
+// Auto-play any bot's turn a beat after it comes up — same reasoning for
+// not gating on DEV_MODE as ensureMissingClubBotAnswer above. With
+// multiple bots (a full-size test group), a given match might be
+// bot-vs-bot with no human in it at all — so shooter and keeper are
+// checked and scheduled independently, not either/or.
 function ensureBotAutoPick() {
-  if (!DEV_MODE) return;
   const match = room.game_state?.match;
   if (!match || match.winnerId) return;
   const shooterId = match.turn === "p1" ? match.p1 : match.p2;
