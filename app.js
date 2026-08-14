@@ -870,6 +870,7 @@ async function onClick(e) {
   if (action === "host-skip-shootout-turn") return hostSkipShootoutTurn();
   if (action === "host-skip-golf-turn") return hostSkipGolfTurn();
   if (action === "host-reroll-practice-wind") return hostRerollPracticeWind();
+  if (action === "host-reset-practice-area") return hostResetPracticeArea();
   if (action === "host-reroll-wind") return hostRerollWind();
   if (action === "host-edit-score") {
     const input = document.getElementById(`score-input-${btn.dataset.id}`);
@@ -2065,6 +2066,18 @@ async function hostRerollPracticeWind() {
   const gs = room.game_state?.golfPractice;
   if (!gs) return;
   await updateRoom({ game_state: { golfPractice: { ...gs, wind: randomWind() } } });
+}
+
+// Host-only, resets the WHOLE driving range for everyone at once — every
+// player's ball snaps back to the tee and a fresh wind is rolled. Same
+// shape as showGolfPractice()'s initial state (fresh `session` so every
+// device's ensurePracticeReady() re-seeds local.practiceBallAnim, same
+// as first arriving), just re-triggerable without leaving/re-entering
+// the screen. Distinct from "Change wind" (hostRerollPracticeWind),
+// which leaves everyone's swings on the range untouched — this clears
+// the whole board.
+async function hostResetPracticeArea() {
+  await updateRoom({ game_state: { golfPractice: { swings: {}, session: Date.now(), wind: randomWind() } } });
 }
 
 // Same idea, for the REAL round's current hole — a recovery/tuning lever
@@ -3900,6 +3913,7 @@ function renderGolfPractice() {
         isHost
           ? `<div class="guess-host-controls">
               <button class="btn" data-action="host-reroll-practice-wind">🎲 Change wind</button>
+              <button class="btn" data-action="host-reset-practice-area">🔄 Reset practice area</button>
               <button class="btn" data-action="show-golf-intro">⬅️ Back</button>
               <button class="btn primary" data-action="start-golf" ${players.length < 2 && !DEV_MODE ? "disabled" : ""}>⛳ Start Football Golf</button>
             </div>`
