@@ -2999,7 +2999,7 @@ function renderMissingClubIntro() {
       <p>Tap the club you think is missing, then hit Confirm to lock it in — no rush, answer whenever you're ready. A side panel shows who's still deciding. Once the host reveals, that same panel shows exactly who got it right and who didn't — everyone's answers are out in the open.</p>
 
       <h3>Scoring</h3>
-      <p>Guess right and you score a flat <b>${MISSING_CLUB_POINTS} points</b> — get it wrong, or don't answer before the reveal, and it's 0. No bonus for speed, no penalty for taking your time.</p>
+      <p>Guess right and you score a flat <b>${MISSING_CLUB_POINTS} points</b> — get it wrong and it's 0. No bonus for speed, no penalty for taking your time.</p>
 
       <h3>Players (${players.length})</h3>
       <ul class="player-list">
