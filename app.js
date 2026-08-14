@@ -271,8 +271,10 @@ const GOLF_SIM_SUBSTEPS = 4; // each tick's movement is split into smaller steps
 // once per tick (not per substep) to keep it directly comparable to
 // GOLF_FRICTION/GOLF_SHOT_V0_MAX's own per-tick calibration. `strength`
 // (see randomWind) scales it between barely-there and a genuine aim
-// adjustment.
-const GOLF_WIND_MAX_ACCEL = 0.035;
+// adjustment. Lowered 0.035 -> 0.02 same day after live testing: "Strong
+// wind" (strength near 1.0) was overpowering the shot entirely rather
+// than just nudging it off target.
+const GOLF_WIND_MAX_ACCEL = 0.02;
 // Regenerated once per hole (see startGolf/golfNextHole), NOT on a
 // same-hole retry (resetCurrentGolfHole deliberately leaves gs.wind
 // alone, same reasoning as it leaving turnOrder alone) — a retry replays
