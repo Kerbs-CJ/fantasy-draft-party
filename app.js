@@ -2106,8 +2106,8 @@ async function practicePointerUp() {
     render();
     return;
   }
-  const gs = room.game_state?.golfPractice;
-  const sim = golfSimulateShot(GOLF_PRACTICE_HOLE, ballPos, vec.angle, vec.power, gs?.wind);
+  const gs = room.game_state?.golfPractice || { swings: {} };
+  const sim = golfSimulateShot(GOLF_PRACTICE_HOLE, ballPos, vec.angle, vec.power, gs.wind);
   local.practice = {
     ...local.practice,
     subPhase: "recap",
@@ -2119,7 +2119,6 @@ async function practicePointerUp() {
     currentClient: null,
   };
   render();
-  const gs = room.game_state?.golfPractice || { swings: {} };
   // `path` is what makes the ball actually roll on screen (see
   // renderGolfCourse) — same real simulated path as the scored round, not
   // a separate "landing dot" system. The ball rests wherever it lands, so
@@ -2479,7 +2478,7 @@ async function devJump(status) {
   if (status === "golf-intro") await ensureDevBotIfNeeded();
   if (status === "golf-practice") {
     await ensureDevBotIfNeeded();
-    game_state = { golfPractice: { swings: {}, session: Date.now() } };
+    game_state = { golfPractice: { swings: {}, session: Date.now(), wind: randomWind() } };
   }
   if (status === "golf") {
     await ensureDevBotIfNeeded();
