@@ -2964,10 +2964,19 @@ function renderGuess() {
           ${answered && !isHost ? `<p class="waiting">Waiting for host to continue…</p>` : ""}
         </div>
         <div class="side-roster">
-          <h3>Guessed (${answeredIds.size}/${players.length})</h3>
-          <ul class="player-list compact">
-            ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
-          </ul>
+          ${
+            isHost
+              ? `<h3>Guessed (${answeredIds.size}/${players.length})</h3>
+                 <ul class="player-list compact">
+                   ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+                 </ul>`
+              : answeredIds.size === players.length
+                ? `<h3>Guessed (${players.length}/${players.length})</h3>
+                   <ul class="player-list compact">
+                     ${players.map((p) => `<li>✅ ${escapeHtml(p.name)}</li>`).join("")}
+                   </ul>`
+                : `<h3>Guessing…</h3><p class="waiting">Who's locked in stays hidden until everyone has answered.</p>`
+          }
         </div>
       </div>
       ${
