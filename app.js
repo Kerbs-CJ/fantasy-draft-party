@@ -3245,9 +3245,11 @@ function renderGuess() {
             ${local.guess.choices
               .map((name) => {
                 let cls = "choice";
-                if (answered) {
+                if (answered && revealed) {
                   if (name === entry.name) cls += " correct";
                   else if (name === local.guess.myChoice) cls += " wrong";
+                } else if (answered && name === local.guess.myChoice) {
+                  cls += " selected";
                 }
                 return `<button class="${cls}" data-action="guess-answer" data-name="${escapeHtml(name)}" ${answered ? "disabled" : ""}>${escapeHtml(name)}</button>`;
               })
@@ -3255,9 +3257,11 @@ function renderGuess() {
           </div>
           ${
             answered
-              ? myCorrect
-                ? `<p class="lock-msg lock-correct">🔒 Locked in — correct! ${GUESS_CLUE_POINTS[local.guess.answeredClueIndex]} points.</p>`
-                : `<p class="lock-msg lock-wrong">🥶 Wrong — you're frozen out for this one. 0 points.</p>`
+              ? revealed
+                ? myCorrect
+                  ? `<p class="lock-msg lock-correct">🔒 Locked in — correct! ${GUESS_CLUE_POINTS[local.guess.answeredClueIndex]} points.</p>`
+                  : `<p class="lock-msg lock-wrong">🥶 Wrong — you're frozen out for this one. 0 points.</p>`
+                : `<p class="lock-msg lock-neutral">🔒 Locked in — you'll find out once the host reveals it.</p>`
               : ""
           }
           ${answered && !isHost ? `<p class="waiting">Waiting for host to continue…</p>` : ""}
@@ -3276,17 +3280,10 @@ function renderGuess() {
                      })
                      .join("")}
                  </ul>`
-              : isHost
-                ? `<h3>Guessed (${answeredIds.size}/${players.length})</h3>
-                   <ul class="player-list compact">
-                     ${players.map((p) => `<li>${answeredIds.has(p.id) ? "✅" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
-                   </ul>`
-                : answeredIds.size === players.length
-                  ? `<h3>Guessed (${players.length}/${players.length})</h3>
-                     <ul class="player-list compact">
-                       ${players.map((p) => `<li>✅ ${escapeHtml(p.name)}</li>`).join("")}
-                     </ul>`
-                  : `<h3>Guessing…</h3><p class="waiting">Who's locked in stays hidden until everyone has answered.</p>`
+              : `<h3>Guessed (${answeredIds.size}/${players.length})</h3>
+                 <ul class="player-list compact">
+                   ${players.map((p) => `<li>${answeredIds.has(p.id) ? "🔒" : "⏳"} ${escapeHtml(p.name)}</li>`).join("")}
+                 </ul>`
           }
         </div>
       </div>
