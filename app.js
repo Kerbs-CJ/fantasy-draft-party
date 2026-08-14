@@ -3376,22 +3376,35 @@ const ZONE_POS = {
   R: { x: 80, y: 66 },
 };
 
-function renderPkScoreboard(match) {
+// `revealCount` caps how many of match.log's kicks are actually reflected
+// here — defaults to all of them (every non-animated view: match summary,
+// waiting-for-next-kick, etc.). The DB write for a kick (resolveKick)
+// lands, and match.score/match.log update, well before the client-side
+// flight animation for that SAME kick finishes playing — so during the
+// "kicking" phase specifically, renderShootout passes log.length - 1 here
+// to hold the scoreboard back at its pre-kick state, otherwise a
+// spectator sees the goal/save (and the score change) instantly, before
+// the ball's even left the shooter's foot. Circle SLOTS still use the
+// real total kick count (not revealCount) so the row doesn't visibly
+// grow/shrink as the reveal catches up a moment later.
+function renderPkScoreboard(match, revealCount = match.log.length) {
   const nameOf = (id) => players.find((p) => p.id === id)?.name || "?";
   const row = (playerId) => {
-    const kicks = match.log.filter((k) => k.shooter === playerId);
-    const slots = Math.max(5, kicks.length);
+    const allKicks = match.log.filter((k) => k.shooter === playerId);
+    const visibleKicks = match.log.slice(0, revealCount).filter((k) => k.shooter === playerId);
+    const slots = Math.max(5, allKicks.length);
     let circles = "";
     for (let i = 0; i < slots; i++) {
-      const kick = kicks[i];
+      const kick = visibleKicks[i];
       const cls = kick ? (kick.scored ? "scored" : "missed") : "pending";
       circles += `<span class="pk-circle ${cls}"></span>`;
     }
+    const scoreSoFar = visibleKicks.filter((k) => k.scored).length;
     return `
       <div class="pk-team">
         <div class="pk-team-row">
           <span class="pk-team-name">${escapeHtml(nameOf(playerId))}</span>
-          <span class="pk-team-score">${match.score[playerId] || 0}</span>
+          <span class="pk-team-score">${scoreSoFar}</span>
         </div>
         <div class="pk-circles">${circles}</div>
       </div>`;
@@ -3425,7 +3438,7 @@ function renderShootout() {
       <div class="card${impactClass}">
         <h2>⚽ ${escapeHtml(nameOf(match.p1))} vs ${escapeHtml(nameOf(match.p2))}</h2>
         <p class="sub">${roundLabel}</p>
-        ${renderPkScoreboard(match)}
+        ${renderPkScoreboard(match, anim.phase === "kicking" ? match.log.length - 1 : match.log.length)}
         ${renderPkGoal(entry, anim.phase === "kicking", doAnimate)}
         ${
           anim.phase === "result"
