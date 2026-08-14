@@ -3716,6 +3716,35 @@ function renderGolf() {
 // is drawn here (for the initial render when a drag begins) but updated
 // afterwards via direct DOM mutation, not further render() calls; see
 // golfPointerDown for why.
+// A big, faded ORIGINAL circular emblem watermarked into the grass — same
+// diagonal split-color + centered initials treatment as the small
+// .golf-club-crest badge on the intro screen (see renderGolfIntro), just
+// blown up and low-opacity so it reads as a pitch marking rather than
+// competing with the obstacles/ball for attention. This is NOT a
+// reproduction of the club's actual registered crest (that's trademarked
+// artwork this app has no license to use) — it's original per-hole
+// decoration built from the same colors/initials already in GOLF_HOLES,
+// deliberately uniform across every hole so all 5 read as one consistent
+// set. Purely cosmetic: doesn't touch hitboxes/obstacles, sits behind
+// every gameplay element in the DOM (see renderGolfCourse).
+function renderGolfCrestWatermark(hole) {
+  const gradId = `crestGrad-${hole.crest.replace(/[^a-zA-Z0-9]/g, "")}`;
+  return `
+    <svg class="golf-crest-watermark" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="${hole.colors.primary}" />
+          <stop offset="50%" stop-color="${hole.colors.primary}" />
+          <stop offset="50%" stop-color="${hole.colors.secondary}" />
+          <stop offset="100%" stop-color="${hole.colors.secondary}" />
+        </linearGradient>
+      </defs>
+      <circle cx="50" cy="50" r="41" fill="url(#${gradId})" stroke="rgba(255,255,255,0.9)" stroke-width="2.5" />
+      <circle cx="50" cy="50" r="34" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1" />
+      <text x="50" y="58" text-anchor="middle" font-size="17" font-weight="800" fill="rgba(255,255,255,0.95)" style="paint-order: stroke; stroke: rgba(0,0,0,0.4); stroke-width: 2px; stroke-linejoin: round;">${escapeHtml(hole.crest)}</text>
+    </svg>`;
+}
+
 function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, extraContent = "") {
   // Ground first (slopes — tinted grass the ball rolls over, not through),
   // then solid obstacles on top, matching how they behave: a slope is
@@ -3824,9 +3853,11 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
   const dragging = dragState?.subPhase === "dragging";
   const colorStyle = hole.colors ? `--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};` : "";
   const tint = hole.colors ? `<div class="golf-course-tint"></div>` : "";
+  const crestWatermark = hole.colors && hole.crest ? renderGolfCrestWatermark(hole) : "";
   return `
     <div class="golf-course${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}" style="${colorStyle}">
       ${tint}
+      ${crestWatermark}
       ${slopeEls}
       ${sandEls}
       ${waterEls}

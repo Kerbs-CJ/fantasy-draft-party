@@ -306,6 +306,22 @@ input::placeholder { color: #6c9b83; }
   mix-blend-mode: overlay;
   pointer-events: none;
 }
+/* The big per-hole crest watermark (see renderGolfCrestWatermark) —
+   width-driven with aspect-ratio:1 so it stays a true circle in actual
+   pixels regardless of .golf-course's own 4:3 box, and low-opacity so it
+   reads as a pitch marking, not something competing with the obstacles/
+   ball for attention. Sits in the DOM before every gameplay element (see
+   renderGolfCourse), so no z-index needed to keep it behind them. */
+.golf-crest-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 58%;
+  aspect-ratio: 1;
+  opacity: 0.22;
+  pointer-events: none;
+}
 .golf-club-badge {
   display: flex;
   align-items: center;
