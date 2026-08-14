@@ -299,7 +299,7 @@ const GOLF_SIM_SUBSTEPS = 4; // each tick's movement is split into smaller steps
 // flight toward the wind direction, ~0.65 ("moderate") roughly ~30%,
 // and strength 1.0 ("strong") upwards of ~50%+ — genuinely felt, not
 // three labels on the same invisible effect.
-const GOLF_WIND_FACTOR = 0.015; // fraction of current speed diverted toward wind direction, per tick, at strength 1.0 — scales down linearly with wind.strength below that
+const GOLF_WIND_FACTOR = 0.021; // fraction of current speed diverted toward wind direction, per tick, at strength 1.0 — scales down linearly with wind.strength below that. Raised from 0.015 same day, Craig felt it still had room to be stronger once the model itself was fixed.
 // Regenerated once per hole (see startGolf/golfNextHole), NOT on a
 // same-hole retry (resetCurrentGolfHole deliberately leaves gs.wind
 // alone, same reasoning as it leaving turnOrder alone) — a retry replays
