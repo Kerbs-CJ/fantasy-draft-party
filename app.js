@@ -2290,6 +2290,16 @@ async function devJump(status) {
     // which would silently soft-lock a dev-jumped-straight-to-golf room.
     game_state = { golf: { holeIndex: 0, results: {}, balls: golfBallsAtTee(GOLF_HOLES[0]), turnOrder: players.map((p) => p.id), turnPos: 0 } };
   }
+  if (status === "reveal") {
+    // Same snapshot startReveal() builds — without this, jumping straight
+    // here left game_state.reveal completely unset, so renderReveal() had
+    // nothing to show but "waiting for host to start the reveal" forever,
+    // even for the host, since there was no reveal-pick button to click.
+    await ensureDevBotIfNeeded();
+    const totals = totalsByPlayer();
+    const order = totals.slice().reverse().map((e) => ({ playerId: e.player.id, total: e.total }));
+    game_state = { reveal: { order, index: 0, revealed: false } };
+  }
   await updateRoom({ status, game_state });
 }
 
