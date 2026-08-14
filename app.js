@@ -3272,7 +3272,7 @@ function renderGuess() {
               ? revealed
                 ? myCorrect
                   ? `<p class="lock-msg lock-correct">🔒 Locked in — correct! ${GUESS_CLUE_POINTS[local.guess.answeredClueIndex]} points.</p>`
-                  : `<p class="lock-msg lock-wrong">🥶 Wrong — you're frozen out for this one. 0 points.</p>`
+                  : `<p class="lock-msg lock-wrong">Wrong</p>`
                 : `<p class="lock-msg lock-neutral">🔒 Locked in — you'll find out once the host reveals it.</p>`
               : ""
           }
