@@ -3232,7 +3232,7 @@ function renderShootoutIntro() {
       <h2>⚽ Penalty Shootout</h2>
 
       <h3>The format</h3>
-      <p>Round robin: every player faces every other player exactly once — ${matchCount} matches for ${n} players. No brackets, no eliminations, no one sits out.</p>
+      <p>Round robin: every player faces every other player exactly once — ${matchCount} matches for ${n} players. No brackets, no eliminations — you'll watch a few matches between your own, but everyone plays the exact same number of games.</p>
 
       <h3>How a match works</h3>
       <p>Best-of-5 shootout: shooter picks a side, keeper picks a side to dive, both blind. Guess wrong and it's a goal. Still level after 5? Sudden death until someone blinks.</p>
