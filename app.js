@@ -4089,11 +4089,10 @@ function renderGolfPractice() {
     <div class="card">
       <h2>🏌️ Driving Range</h2>
       <p class="sub">Practice swings only — nothing here counts. Every hazard the real holes use is here too, wind included, so there's nothing you'll see for the first time in the real round.</p>
-      ${renderGolfWindBadge(gs.wind)}
       <p class="sub" style="text-align:center">${instructions}</p>
       <div class="golf-practice-layout">
         <div class="golf-course-wrap practice">
-          ${renderGolfCourse(hole, gs.swings, local.practiceBallAnim, local.practice, true)}
+          ${renderGolfCourse(hole, gs.swings, local.practiceBallAnim, local.practice, true, renderGolfWindBadge(gs.wind))}
         </div>
         ${renderGolfHazardLegend()}
       </div>
@@ -4229,10 +4228,9 @@ function renderGolf() {
     <div class="card">
       <h2>⛳ Football Golf</h2>
       ${badge}
-      ${renderGolfWindBadge(gs.wind)}
       ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
       ${turnBanner}
-      ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered && isMyTurn)}
+      ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered && isMyTurn, renderGolfWindBadge(gs.wind))}
       <h3>Totals</h3>
       <ul class="player-list compact">
         ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total}</li>`).join("")}
@@ -4391,7 +4389,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       if (holed && !animating && sunk) return "";
       return `
         <div id="golf-ball-${p.id}" class="golf-course-ball${holedOut ? " holed" : ""}" style="left:${renderX}%; top:${renderY}%;" title="${escapeHtml(p.name)}">
-          <span class="golf-ball-emoji">⚽</span>
+          <span class="golf-ball-icon"></span>
           <span class="golf-course-ball-label">${escapeHtml(p.name)}</span>
         </div>`;
     })
@@ -4437,7 +4435,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       ${obstacles}
       ${patrolEl}
       <div class="golf-cup" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
-      <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;">📍</div>
+      <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;"></div>
       ${extraContent}
       ${balls}
       ${aimOverlay}
@@ -4488,7 +4486,7 @@ function ensureGolfPatrolAnim(patrol) {
 function animateGolfBallFlight(ballId, path, durationMs, holed) {
   const ballEl = document.getElementById(ballId);
   if (!ballEl || path.length < 2) return;
-  const emojiEl = ballEl.querySelector(".golf-ball-emoji");
+  const emojiEl = ballEl.querySelector(".golf-ball-icon");
   const last = path[path.length - 1];
   if (prefersReducedMotion()) {
     ballEl.style.left = last.x + "%";
@@ -4529,7 +4527,7 @@ function animateGolfBallFlight(ballId, path, durationMs, holed) {
     const y = a.y + (b.y - a.y) * segT;
     el.style.left = x + "%";
     el.style.top = y + "%";
-    const emoji = el.querySelector(".golf-ball-emoji") || emojiEl;
+    const emoji = el.querySelector(".golf-ball-icon") || emojiEl;
     if (emoji) emoji.style.transform = `translate(-50%, -50%) rotate(${spinDeg * raw}deg)`;
     if (raw < 1) {
       requestAnimationFrame(frame);
@@ -4574,7 +4572,7 @@ function animateGolfBallSink(ballId) {
   function frame(now) {
     const el = document.getElementById(ballId);
     if (!el) return; // gone from the DOM (redundant render already settled past it) — nothing left to animate
-    const emoji = el.querySelector(".golf-ball-emoji");
+    const emoji = el.querySelector(".golf-ball-icon");
     const label = el.querySelector(".golf-course-ball-label");
     const cup = document.querySelector(".golf-cup");
     const raw = Math.min(1, (now - t0) / sinkMs);
