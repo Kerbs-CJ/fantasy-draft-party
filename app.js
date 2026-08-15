@@ -231,6 +231,19 @@ const GOLF_MAX_DRAG_PERCENT = 45;
 const GOLF_MAX_SHOT_DISTANCE = 60;
 const GOLF_MIN_DRAG_PERCENT = 4; // below this, a release cancels instead of firing a near-zero shot
 const GOLF_HOLED_THRESHOLD = 5; // how close (course %) counts as "in the hole"
+// Real golf: a putt/approach hit too hard lips out — it skims over or
+// across the cup instead of dropping, even dead-center. Added 2026-08-15
+// after Craig pointed out a full-power shot aimed straight at the pin
+// always went in, which made the actual approach/line-up part of a hole
+// pointless once you were close enough to just blast it. Only a ball
+// that's slow enough WHEN IT PASSES OVER the hole (see the speed check
+// next to GOLF_HOLED_THRESHOLD in golfSimulateShot) actually captures —
+// friction still decays every tick regardless of the pin, so a shot that
+// blows past too fast keeps rolling and can still fall in on a LATER,
+// slower pass (bouncing back off a wall, rolling back down a slope,
+// etc.) exactly like a real overhit putt trickling back toward the cup.
+const GOLF_HOLE_CAPTURE_SPEED = 0.32; // ~15% of GOLF_SHOT_V0_MAX at full power — well above GOLF_STOP_SPEED (0.05) so this isn't just "already stopped", but low enough that a hard, direct shot is still moving too fast to drop when it first reaches the pin
+const GOLF_LIP_OUT_FRICTION = 0.8; // extra one-time speed haircut the tick a too-fast ball grazes the rim without capturing — a lip-out isn't perfectly free, but it's not a full bounce either
 const GOLF_MAX_STROKES = 10; // holes forcibly finish here, however far short — flat, not per-par, so a tough hole gets real room to work with
 // The driving range has no real hole to play, no strokes/par, and no
 // score — just somewhere to practice dragging (and bouncing off
@@ -598,10 +611,17 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
         }
       }
       if (Math.hypot(hole.pin.x - x, hole.pin.y - y) <= GOLF_HOLED_THRESHOLD) {
-        holed = true;
-        x = hole.pin.x;
-        y = hole.pin.y;
-        break;
+        if (Math.hypot(vx, vy) <= GOLF_HOLE_CAPTURE_SPEED) {
+          holed = true;
+          x = hole.pin.x;
+          y = hole.pin.y;
+          break;
+        }
+        // Lipped out — too fast to drop this pass. Keep rolling (see
+        // GOLF_HOLE_CAPTURE_SPEED above for why), just a little slower
+        // for having grazed the rim.
+        vx *= GOLF_LIP_OUT_FRICTION;
+        vy *= GOLF_LIP_OUT_FRICTION;
       }
     }
     path.push({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
