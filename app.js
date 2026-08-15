@@ -294,26 +294,36 @@ const GOLF_MAX_STROKES = 10; // holes forcibly finish here, however far short �
 // always safely falls back to the original layout.
 const GOLF_PRACTICE_HOLE_VARIANTS = [
   {
+    // Rearranged 2026-08-15 (Craig: wanted every hazard evenly laid out
+    // so people can deliberately practice each one, not clustered/
+    // overlapping like the original layout was). A clean 3x3 grid, one
+    // hazard type per cell, generous clearance between every pair
+    // (11-22 units on every shared edge) so nothing crowds anything
+    // else: left column is the static side-hazards (slope-up, wall,
+    // sand, tee-to-pin top-to-bottom), right column mirrors it (water,
+    // pillar, slope-down), and the CENTER column — the direct tee-to-pin
+    // line — is deliberately all three TIMED mechanics stacked in a row
+    // (windmill near the pin, drawbridge in the middle, patrol near the
+    // tee), so going straight up the middle doubles as a gauntlet of
+    // everything that's timing-based, while the side lanes let you
+    // isolate and repeat just one static hazard at a time.
     tee: { x: 50, y: 88 },
     pin: { x: 50, y: 15 },
     obstacles: [
-      { x: 65, y: 58, w: 16, h: 8 },
-      { x: 30, y: 40, r: 4, shape: "circle" },
+      { x: 20, y: 54, w: 16, h: 8 }, // wall — left, middle row
+      { x: 80, y: 54, r: 4, shape: "circle" }, // pillar — right, middle row
     ],
     slopes: [
-      { x: 30, y: 72, w: 18, h: 14, dir: "down" },
-      { x: 65, y: 25, w: 18, h: 14, dir: "up" },
+      { x: 20, y: 32, w: 18, h: 14, dir: "up" }, // left, top row (near pin)
+      { x: 80, y: 76, w: 18, h: 14, dir: "down" }, // right, bottom row (near tee)
     ],
-    sand: [{ x: 20, y: 55, w: 14, h: 10 }],
-    water: [{ x: 68, y: 15, w: 12, h: 8 }],
-    patrol: { id: "practice0", axis: "x", baseX: 50, baseY: 50, range: 15, r: 3, period: 3500 },
-    // Windmill/drawbridge (added 2026-08-15) — only on this one practice
-    // variant for now, just so both new mechanics are actually testable
-    // tonight; not yet on variants 1/2 or any real hole. Full practice
-    // parity + real per-hole placement both land in the upcoming
-    // course-design pass, same as every other hazard already did.
-    windmill: { id: "practice0-mill", pivotX: 83, pivotY: 70, length: 9, thickness: 3, r: 3, period: 3000 },
-    drawbridge: { id: "practice0-gate", x: 50, y: 40, w: 20, h: 6, period: 2500, openRatio: 0.45 },
+    sand: [{ x: 20, y: 76, w: 14, h: 10 }], // left, bottom row (near tee)
+    water: [{ x: 80, y: 32, w: 12, h: 8 }], // right, top row (near pin)
+    // Center column, tee to pin: patrol (bottom/near tee) -> drawbridge
+    // (middle) -> windmill (top/near pin).
+    patrol: { id: "practice0", axis: "x", baseX: 50, baseY: 76, range: 15, r: 3, period: 3500 },
+    drawbridge: { id: "practice0-gate", x: 50, y: 54, w: 20, h: 6, period: 2500, openRatio: 0.45 },
+    windmill: { id: "practice0-mill", pivotX: 50, pivotY: 32, length: 9, thickness: 3, r: 3, period: 3000 },
   },
   {
     tee: { x: 50, y: 88 },
