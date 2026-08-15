@@ -980,8 +980,13 @@ let local = {
   // drawbridge collision against — null the rest of the time (no ball in
   // flight). Only ensureGolfDrawbridgeAnim checks this, via
   // golfHazardClock — see that function's comment for why patrol/
-  // windmill don't.
+  // windmill don't. Reference-counted via golfHazardFreezeCount below —
+  // more than one ball can be rolling on the same client at once now
+  // (a real shot plus an idle hazard knock on someone else's ball,
+  // say), and this only actually goes back to null once every
+  // concurrent replay has finished, not just the first one to.
   golfHazardFrozenT: null,
+  golfHazardFreezeCount: 0,
   golfIdleHazardCheckStarted: false, // guards ensureGolfIdleHazardCheck's setInterval so it only ever starts once per page load
   golfBallFlightActive: {}, // playerId -> true while their ball's roll (animateGolfBallFlight) is genuinely in progress on THIS client — see golfApplyIdleHazardKnocks
   shootoutAnim: { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
@@ -2953,6 +2958,7 @@ function resetLocalGameState() {
   local.golfWindmillLoopId = null;
   local.golfDrawbridgeLoopId = null;
   local.golfHazardFrozenT = null;
+  local.golfHazardFreezeCount = 0;
   local.golfBallFlightActive = {};
   local.shootoutAnim = { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
@@ -5000,7 +5006,21 @@ function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
     }
     return;
   }
-  local.golfHazardFrozenT = shotStartTime;
+  // Reference-counted, not a plain set (2026-08-15, fixing a real bug) —
+  // an idle hazard knock (see golfApplyIdleHazardKnocks) can now start a
+  // SECOND ball rolling on the SAME client while a real shot's own
+  // replay is still going, and a single shared "frozen at T" value
+  // can't correctly serve two different shots' two different T's at
+  // once: whichever replay finished first was clearing it back to null
+  // out from under the other one, un-freezing the drawbridge mid-flight,
+  // which then got re-frozen the next frame — exactly the rapid
+  // flashing Craig saw, on a perfectly ordinary shot that had nothing to
+  // do with the drawbridge itself. Only the FIRST concurrent replay sets
+  // the frozen reference time; any overlapping ones just add to the
+  // count and leave it alone, so the drawbridge stays on ONE stable
+  // frozen moment for the whole overlap instead of jumping between two.
+  local.golfHazardFreezeCount = (local.golfHazardFreezeCount || 0) + 1;
+  if (local.golfHazardFreezeCount === 1) local.golfHazardFrozenT = shotStartTime;
   local.golfBallFlightActive[playerId] = true;
   // Cumulative arc length at each waypoint, so "40% of the way through
   // the animation" means 40% of the actual distance rolled, not just the
@@ -5037,7 +5057,14 @@ function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
     if (raw < 1) {
       requestAnimationFrame(frame);
     } else {
-      local.golfHazardFrozenT = null; // flight's over — the drawbridge goes back to tracking real time
+      // Only actually unfreezes once EVERY concurrently-running replay
+      // has finished (see the comment above where this is incremented)
+      // — if another ball is still mid-roll on this client, the
+      // drawbridge stays frozen on whatever moment it already had
+      // rather than flipping to live time out from under that other
+      // replay.
+      local.golfHazardFreezeCount = Math.max(0, (local.golfHazardFreezeCount || 0) - 1);
+      if (local.golfHazardFreezeCount === 0) local.golfHazardFrozenT = null;
       local.golfBallFlightActive[playerId] = false; // ...and this ball is fair game for an idle hazard knock again
       if (holed) animateGolfBallSink(ballId);
     }
