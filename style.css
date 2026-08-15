@@ -407,13 +407,18 @@ input::placeholder { color: #6c9b83; }
   color: var(--accent);
   font-size: 15px;
 }
-/* Practice screen only (2026-08-14) — a hazard reference guide sits
-   beside the course in the free space a wide screen has next to it,
-   stacking below it on anything narrower. #app is normally capped at
-   640px (see the base rule near the top of this file); widening it only
-   when this legend is actually on screen, via :has(), avoids touching
-   every other screen's layout for the one page that needs more room. */
-body:has(.golf-hazard-legend) #app {
+/* Any golf hole screen, real or practice (2026-08-14, widened 2026-08-15
+   to cover real holes too — .golf-course's own max-width was bumped to
+   760px to match the practice range, but a wider element can't actually
+   grow past its parent's rendered box, so #app itself needs the same
+   bump or the real holes stay stuck at the old ~608px). #app is normally
+   capped at 640px (see the base rule near the top of this file); widening
+   it only when a golf course is actually on screen, via :has(), avoids
+   touching every other screen's layout for the pages that need more room.
+   (On the practice screen this also happens to be exactly the room the
+   hazard legend needs beside the course — see .golf-practice-layout —
+   but it's not what triggers the widening anymore, .golf-course is.) */
+body:has(.golf-course) #app {
   max-width: 1100px;
 }
 /* NOTE: deliberately no align-items:center here (tried once, reverted —
