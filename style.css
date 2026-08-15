@@ -971,6 +971,40 @@ body:has(.golf-course) #app {
   flex-direction: column;
   gap: 8px;
 }
+/* Host-only manual wind dial, practice-only (see
+   renderPracticeWindControls). Sits in its own bordered block above the
+   regular row of host buttons, since it holds real input state (two
+   sliders) rather than being a one-tap action like everything else in
+   .guess-host-controls. */
+.practice-wind-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+}
+.practice-wind-controls label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sub);
+}
+.practice-wind-controls input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.practice-wind-buttons {
+  display: flex;
+  gap: 8px;
+}
+.practice-wind-buttons .btn {
+  flex: 1;
+}
 
 .card ol:not(.clue-list) {
   margin: 0 0 4px;

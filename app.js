@@ -1309,6 +1309,12 @@ async function onClick(e) {
   if (action === "host-skip-shootout-turn") return hostSkipShootoutTurn();
   if (action === "host-skip-golf-turn") return hostSkipGolfTurn();
   if (action === "host-reroll-practice-wind") return hostRerollPracticeWind();
+  if (action === "host-set-practice-wind") {
+    const angle = Number(document.getElementById("practice-wind-angle")?.value);
+    const strength = Number(document.getElementById("practice-wind-strength")?.value);
+    return hostSetPracticeWind(angle, strength);
+  }
+  if (action === "host-turn-off-practice-wind") return hostTurnOffPracticeWind();
   if (action === "host-reset-practice-area") return hostResetPracticeArea();
   if (action === "host-reroll-practice-hole") return hostRerollPracticeHole();
   if (action === "host-reroll-wind") return hostRerollWind();
@@ -2502,12 +2508,18 @@ async function showGolfPractice() {
   // (shared `swings` resets to {} here, but the animation trackMap is
   // local-only and wouldn't otherwise know to reset alongside it) and
   // could spuriously animate a ball sliding back to the tee on arrival.
-  // layoutIndex starts random too, same reasoning as wind — no reason
-  // the group should always see the exact same practice hole first.
+  // layoutIndex still starts random — no reason the group should always
+  // see the exact same practice hole first. wind now starts OFF (null),
+  // changed 2026-08-15 at Craig's request — the driving range is meant
+  // to be a calm baseline for feeling out drag/power before anything
+  // else gets added, and the real holes each still get their own
+  // randomWind() as before (untouched — this only applies to practice).
+  // The host can turn it on deliberately via hostSetPracticeWind/
+  // hostRerollPracticeWind below, both practice-only.
   await updateRoom({
     status: "golf-practice",
     game_state: {
-      golfPractice: { swings: {}, session: Date.now(), wind: randomWind(), layoutIndex: Math.floor(Math.random() * GOLF_PRACTICE_HOLE_VARIANTS.length) },
+      golfPractice: { swings: {}, session: Date.now(), wind: null, layoutIndex: Math.floor(Math.random() * GOLF_PRACTICE_HOLE_VARIANTS.length) },
     },
   });
 }
@@ -2522,8 +2534,40 @@ async function hostRerollPracticeWind() {
   await updateRoom({ game_state: { golfPractice: { ...gs, wind: randomWind() } } });
 }
 
+// Host-only, sets the practice range's wind to an EXACT direction/
+// strength instead of a random one (added 2026-08-15, alongside wind
+// starting off by default — see showGolfPractice) — so the host can
+// deliberately show the group "here's what a strong crosswind feels
+// like" rather than only being able to reroll and hope for one.
+// `angleDeg` is 0-360 (converted to the radians golfSimulateShot/
+// renderGolfWindBadge expect), `strengthPct` 0-100 (converted to the
+// 0-1 fraction those same places use) — read straight off the two range
+// inputs by the onClick dispatcher, same "uncontrolled input, read at
+// click time" pattern as hostEditScore's score input. Deliberately
+// practice-only: real holes keep getting their own randomWind() per
+// hole, untouched, same as before — this control doesn't touch that
+// mechanism or appear anywhere near a real hole's screen.
+async function hostSetPracticeWind(angleDeg, strengthPct) {
+  const gs = room.game_state?.golfPractice;
+  if (!gs) return;
+  const angle = (((angleDeg % 360) + 360) % 360) * (Math.PI / 180);
+  const strength = clamp(strengthPct / 100, 0, 1);
+  await updateRoom({ game_state: { golfPractice: { ...gs, wind: { angle, strength } } } });
+}
+
+// Host-only, turns the practice range's wind fully off — a plain null,
+// same as the range's own default starting state, rather than a
+// strength-0 wind object (which would still show a "Light breeze"
+// badge, just misleadingly labelled). Practice-only, same as
+// hostSetPracticeWind above.
+async function hostTurnOffPracticeWind() {
+  const gs = room.game_state?.golfPractice;
+  if (!gs) return;
+  await updateRoom({ game_state: { golfPractice: { ...gs, wind: null } } });
+}
+
 // Host-only, resets the WHOLE driving range for everyone at once — every
-// player's ball snaps back to the tee and a fresh wind is rolled, same
+// player's ball snaps back to the tee and wind goes back off, same
 // hole layout. Same shape as showGolfPractice()'s initial state (fresh
 // `session` so every device's ensurePracticeReady() re-seeds
 // local.practiceBallAnim, same as first arriving), just re-triggerable
@@ -2532,7 +2576,10 @@ async function hostRerollPracticeWind() {
 // terrain itself) — this one just clears the board on the SAME hole.
 async function hostResetPracticeArea() {
   const gs = room.game_state?.golfPractice;
-  await updateRoom({ game_state: { golfPractice: { swings: {}, session: Date.now(), wind: randomWind(), layoutIndex: gs?.layoutIndex ?? 0 } } });
+  // wind resets to off (null), same as showGolfPractice()'s own initial
+  // state — a full board reset should give the same calm baseline a
+  // fresh visit does, not silently roll a new random wind back on.
+  await updateRoom({ game_state: { golfPractice: { swings: {}, session: Date.now(), wind: null, layoutIndex: gs?.layoutIndex ?? 0 } } });
 }
 
 // Host-only, rerolls the practice hole's actual TERRAIN — a different
@@ -3002,7 +3049,7 @@ async function devJump(status) {
   if (status === "golf-intro") await ensureDevBotIfNeeded();
   if (status === "golf-practice") {
     await ensureDevBotIfNeeded();
-    game_state = { golfPractice: { swings: {}, session: Date.now(), wind: randomWind(), layoutIndex: Math.floor(Math.random() * GOLF_PRACTICE_HOLE_VARIANTS.length) } };
+    game_state = { golfPractice: { swings: {}, session: Date.now(), wind: null, layoutIndex: Math.floor(Math.random() * GOLF_PRACTICE_HOLE_VARIANTS.length) } };
   }
   if (status === "golf") {
     await ensureDevBotIfNeeded();
@@ -4393,10 +4440,11 @@ function renderGolfPractice() {
       <ul class="player-list compact">
         ${players.map((p) => `<li>${escapeHtml(p.name)}: ${practiceSwingLabel(gs.swings[p.id], hole)}</li>`).join("")}
       </ul>
+      ${isHost ? renderPracticeWindControls(gs.wind) : ""}
       ${
         isHost
           ? `<div class="guess-host-controls">
-              <button class="btn" data-action="host-reroll-practice-wind">🎲 Change wind</button>
+              <button class="btn" data-action="host-reroll-practice-wind">🎲 Random wind</button>
               <button class="btn" data-action="host-reroll-practice-hole">🔀 New practice hole</button>
               <button class="btn" data-action="host-reset-practice-area">🔄 Reset practice area</button>
               <button class="btn" data-action="show-golf-intro">⬅️ Back</button>
@@ -4404,6 +4452,34 @@ function renderGolfPractice() {
             </div>`
           : ""
       }
+    </div>`;
+}
+
+// Host-only manual wind dial, practice-only (added 2026-08-15 alongside
+// wind starting off by default — see showGolfPractice/hostSetPracticeWind
+// for the full reasoning; real holes are untouched, they keep their own
+// randomWind() per hole with no manual control anywhere). Two plain
+// range inputs, read directly off the DOM at click time by onClick's
+// "host-set-practice-wind" handler — same uncontrolled-input pattern as
+// the host score-edit inputs — rather than wired through local state and
+// a render on every drag, which would fight the slider's own native
+// dragging feel. Defaults to 0°/50% the first time there's no wind yet
+// to read a value back from.
+function renderPracticeWindControls(wind) {
+  const angleDeg = wind ? Math.round((wind.angle * 180) / Math.PI) : 0;
+  const strengthPct = wind ? Math.round(wind.strength * 100) : 50;
+  return `
+    <div class="practice-wind-controls">
+      <label>Direction
+        <input type="range" id="practice-wind-angle" min="0" max="359" value="${angleDeg}">
+      </label>
+      <label>Strength
+        <input type="range" id="practice-wind-strength" min="0" max="100" value="${strengthPct}">
+      </label>
+      <div class="practice-wind-buttons">
+        <button class="btn small" data-action="host-set-practice-wind">🌬️ Set wind</button>
+        <button class="btn small" data-action="host-turn-off-practice-wind">🚫 Wind off</button>
+      </div>
     </div>`;
 }
 
