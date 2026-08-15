@@ -179,11 +179,19 @@ const GOLF_HOLES = [
     drawbridge: { id: "liverpool-gate", x: 63, y: 57, w: 10, h: 20, period: 3200, openRatio: 0.4 },
     // TWO patrols now (added 2026-08-15) — a hole can have more than one,
     // see the note above ensureGolfPatrolAnim for what that took. Both
-    // sweep the same corridor between gate 2 and gate 3, close together
-    // just either side of its centre (was a single one at baseX 50).
+    // sweep the same corridor between gate 2 and gate 3, either side of
+    // its centre with a bit more room between them than the first attempt
+    // (baseX 58/46, was 56/48). The second one's range is NEGATIVE
+    // (-5, not 5) so its motion is a mirror image of the first's, not
+    // identical — same |range|/period, so they still cover the same
+    // ground at the same pace, but golfPatrolPosition's
+    // `range * Math.sin(...)` means a negated range is exactly a 180°
+    // phase flip (sin is odd: -sin(x) === sin(x+π)) — when one is at the
+    // top of its sweep the other is at the bottom, no new field or
+    // phase-tracking code needed, just the sign.
     patrols: [
-      { id: "liverpool", axis: "y", baseX: 56, baseY: 31, range: 5, r: 3, period: 3800 },
-      { id: "liverpool2", axis: "y", baseX: 48, baseY: 31, range: 5, r: 3, period: 3800 },
+      { id: "liverpool", axis: "y", baseX: 58, baseY: 31, range: 5, r: 3, period: 3800 },
+      { id: "liverpool2", axis: "y", baseX: 46, baseY: 31, range: -5, r: 3, period: 3800 },
     ],
   },
   {
