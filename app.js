@@ -726,7 +726,7 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
     y = hole.tee.y;
     path.push({ x, y });
   }
-  return { path, endX: x, endY: y, holed, splashed };
+  return { path, endX: x, endY: y, holed, splashed, shotStartTime };
 }
 // Golf scoring, fourth pass in one day (2026-08-14) — history, in case
 // this gets touched again:
@@ -793,6 +793,14 @@ let local = {
   golfPatrolLoopId: null, // element id the patrol-hazard rAF loop is currently driving, so a redundant render doesn't spawn a duplicate loop (see ensureGolfPatrolAnim)
   golfWindmillLoopId: null, // same guard, for the windmill's rAF loop (see ensureGolfWindmillAnim)
   golfDrawbridgeLoopId: null, // same guard, for the drawbridge's rAF loop (see ensureGolfDrawbridgeAnim)
+  // Set by animateGolfBallFlight while a shot is actively replaying, to
+  // the exact nominal time golfSimulateShot used for whichever tick is
+  // currently on screen — null the rest of the time (no ball in flight).
+  // ensureGolfPatrolAnim/-Windmill-/-DrawbridgeAnim all check this FIRST,
+  // ahead of real Date.now(), so what's on screen during a replay always
+  // matches what the physics actually resolved against (see the comment
+  // above animateGolfBallFlight for the bug this fixes).
+  golfHazardNominalT: null,
   shootoutAnim: { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
@@ -2150,7 +2158,14 @@ async function golfSubmitShot(shot, botPlayerId) {
   const holed = shot.holed;
   const strokes = currentBall.strokes + 1;
   const holedOut = holed || strokes >= GOLF_MAX_STROKES;
-  const balls = { ...gs.balls, [me.id]: { x: shot.endX, y: shot.endY, strokes, holedOut, holed, path: shot.path } };
+  // shotStartTime is stored alongside the path (not just used locally at
+  // simulate-time) so every device replaying this shot's flight can
+  // reconstruct the exact nominal timeline golfSimulateShot resolved
+  // collisions against — see animateGolfBallFlight for why that matters
+  // for the drawbridge specifically (2026-08-15 bug: Craig hit a
+  // drawbridge that visually looked open mid-flight but had actually
+  // been resolved as closed).
+  const balls = { ...gs.balls, [me.id]: { x: shot.endX, y: shot.endY, strokes, holedOut, holed, path: shot.path, shotStartTime: shot.shotStartTime } };
 
   let results = gs.results;
   if (holedOut) {
@@ -2449,7 +2464,7 @@ async function practicePointerUp() {
   // it preserves `session`, which ensurePracticeReady depends on to know
   // this ISN'T a fresh driving-range visit; losing it here would reset
   // everyone's tracked ball positions on every single shot.
-  await updateRoom({ game_state: { golfPractice: { ...gs, swings: { ...gs.swings, [me.id]: { x: sim.endX, y: sim.endY, holed: sim.holed, splashed: sim.splashed, path: sim.path } } } } });
+  await updateRoom({ game_state: { golfPractice: { ...gs, swings: { ...gs.swings, [me.id]: { x: sim.endX, y: sim.endY, holed: sim.holed, splashed: sim.splashed, path: sim.path, shotStartTime: sim.shotStartTime } } } } });
   // Reached the green — after giving the roll animation time to actually
   // play out, send the ball back to the tee as a real second move (its
   // own write, its own path), so anyone can practice forever. This is
@@ -2707,6 +2722,7 @@ function resetLocalGameState() {
   local.golfPatrolLoopId = null;
   local.golfWindmillLoopId = null;
   local.golfDrawbridgeLoopId = null;
+  local.golfHazardNominalT = null;
   local.shootoutAnim = { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
     holeIndex: null,
@@ -4458,7 +4474,11 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         // finishes assigning innerHTML, which happens synchronously
         // AFTER this function returns. rAF fires on the next frame,
         // by which point it does.
-        requestAnimationFrame(() => animateGolfBallFlight(ballId, path, durationMs, holed));
+        // ball.shotStartTime came off the stored result (see
+        // golfSubmitShot/practice's updateRoom) — falls back to "now" only
+        // for the rare case of pre-existing room data from before this
+        // field existed; a live shot always has it.
+        requestAnimationFrame(() => animateGolfBallFlight(ballId, path, durationMs, holed, ball.shotStartTime || Date.now()));
         // Paint at the START position right away, so there's no flash at
         // the destination before the rAF loop takes over a frame later.
         renderX = path[0].x;
@@ -4588,6 +4608,18 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
     </div>`;
 }
 
+// What time every timed-hazard visual (patrol/windmill/drawbridge)
+// should render itself at, right now. Normally real wall-clock time —
+// but while a shot is actively replaying (animateGolfBallFlight sets
+// local.golfHazardNominalT every frame, see its own comment for the full
+// story), hazards instead show whatever nominal time the physics
+// actually resolved that exact moment of the replay against, so a
+// player watching the flight never sees a hazard state that contradicts
+// the collision that already happened.
+function golfHazardClock() {
+  return local.golfHazardNominalT != null ? local.golfHazardNominalT : Date.now();
+}
+
 // Drives the patrol hazard's on-screen position directly via a
 // requestAnimationFrame loop, independent of the app's render() cycle —
 // re-queried by id every frame (same self-correcting pattern as
@@ -4609,7 +4641,7 @@ function ensureGolfPatrolAnim(patrol) {
       if (local.golfPatrolLoopId === elId) local.golfPatrolLoopId = null;
       return;
     }
-    const pos = golfPatrolPosition(patrol, Date.now());
+    const pos = golfPatrolPosition(patrol, golfHazardClock());
     el.style.left = pos.x + "%";
     el.style.top = pos.y + "%";
     requestAnimationFrame(frame);
@@ -4630,7 +4662,7 @@ function ensureGolfWindmillAnim(windmill) {
       if (local.golfWindmillLoopId === elId) local.golfWindmillLoopId = null;
       return;
     }
-    const deg = golfWindmillAngleDeg(windmill, Date.now());
+    const deg = golfWindmillAngleDeg(windmill, golfHazardClock());
     el.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
     requestAnimationFrame(frame);
   }
@@ -4641,7 +4673,8 @@ function ensureGolfWindmillAnim(windmill) {
 // moving anything — see golfIsDrawbridgeOpen for the actual open/closed
 // logic (identical calculation the physics simulation uses, so what
 // players see always matches what a shot taken right now would resolve
-// against).
+// against — see golfHazardClock for how that holds true DURING a replay
+// too, not just when idle).
 function ensureGolfDrawbridgeAnim(drawbridge) {
   const elId = `golf-drawbridge-${drawbridge.id}`;
   if (local.golfDrawbridgeLoopId === elId) return;
@@ -4652,7 +4685,7 @@ function ensureGolfDrawbridgeAnim(drawbridge) {
       if (local.golfDrawbridgeLoopId === elId) local.golfDrawbridgeLoopId = null;
       return;
     }
-    el.classList.toggle("open", golfIsDrawbridgeOpen(drawbridge, Date.now()));
+    el.classList.toggle("open", golfIsDrawbridgeOpen(drawbridge, golfHazardClock()));
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -4670,7 +4703,21 @@ function ensureGolfDrawbridgeAnim(drawbridge) {
 // just a straight line from A to B. Walks it by arc length (total
 // distance travelled, not just point count) so the ball moves at a
 // roughly steady pace through however many bounces the shot took.
-function animateGolfBallFlight(ballId, path, durationMs, holed) {
+//
+// `shotStartTime` (added 2026-08-15, fixing a real bug) is the SAME
+// value golfSimulateShot resolved every timed hazard's collisions
+// against at release time. While this replay is running, it drives
+// local.golfHazardNominalT — which ensureGolfPatrolAnim/-Windmill-/
+// -DrawbridgeAnim all check FIRST, ahead of real Date.now() — so the
+// drawbridge/windmill/patrol you're WATCHING during a flight shows
+// exactly the state the physics actually used, tick for tick. Before
+// this, those three loops always free-ran on true wall-clock time, so a
+// closed-drawbridge collision baked in at release could finish replaying
+// several real seconds later showing the gate visually open — Craig hit
+// exactly this ("hit the gate when it was faded and there was still
+// collision"). Cleared back to null the instant the roll finishes, so
+// hazards go back to tracking real time between shots, same as before.
+function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
   const ballEl = document.getElementById(ballId);
   if (!ballEl || path.length < 2) return;
   const emojiEl = ballEl.querySelector(".golf-ball-icon");
@@ -4716,10 +4763,20 @@ function animateGolfBallFlight(ballId, path, durationMs, holed) {
     el.style.top = y + "%";
     const emoji = el.querySelector(".golf-ball-icon") || emojiEl;
     if (emoji) emoji.style.transform = `translate(-50%, -50%) rotate(${spinDeg * raw}deg)`;
+    // path[k] is the ball's position right after tick (k-1) finished (see
+    // golfSimulateShot — path.push happens once per tick, after the
+    // initial seed entry) — so mid-way between path[i-1] and path[i], the
+    // tick whose hazard state is actually on screen is tick (i-1), which
+    // golfSimulateShot evaluated at nominal time shotStartTime + (i-1) *
+    // GOLF_PATROL_MS_PER_TICK. Recomputing this every frame keeps it
+    // exactly in step with wherever the replay currently is, bounce for
+    // bounce, not just accurate at the start and end.
+    local.golfHazardNominalT = shotStartTime + (i - 1) * GOLF_PATROL_MS_PER_TICK;
     if (raw < 1) {
       requestAnimationFrame(frame);
-    } else if (holed) {
-      animateGolfBallSink(ballId);
+    } else {
+      local.golfHazardNominalT = null; // flight's over — hazards go back to tracking real time
+      if (holed) animateGolfBallSink(ballId);
     }
   }
   requestAnimationFrame(frame);
