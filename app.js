@@ -135,7 +135,7 @@ const GOLF_HOLES = [
     // a fair introduction to the mechanic before the pace ramps up on the
     // later holes. Sits right in turn 1's own gap (x35, y3-32) — time it
     // or wait, the same choice every timed hazard on this course gives.
-    patrol: { id: "arsenal", axis: "y", baseX: 35, baseY: 17, range: 10, r: 3, period: 4500 },
+    patrols: [{ id: "arsenal", axis: "y", baseX: 35, baseY: 17, range: 10, r: 3, period: 4500 }],
   },
   {
     club: "Liverpool",
@@ -167,17 +167,24 @@ const GOLF_HOLES = [
       { x: 20, y: 11, w: 10, h: 5 }, // final approach — overshoot and it's gone
     ],
     // Rotated 90° to a vertical orientation (w/h swapped from the
-    // original 18x10) and moved left, sized to sit EXACTLY in the y47-67
-    // gap between gate 2 (bottom edge y47) and gate 1 (top edge y67) —
-    // touches both, no gap on either end, a real bridge connecting them
-    // rather than a small gate floating in open space. Still only 10
-    // units wide (x35-45), so there's room to route around it via the
-    // rest of the corridor when it's closed.
-    drawbridge: { id: "liverpool-gate", x: 40, y: 57, w: 10, h: 20, period: 3200, openRatio: 0.4 },
-    // Moved further into the middle of the corridor (was baseX 85, right
-    // at the edge) so it sits properly between gate 2 and gate 3 rather
-    // than off to one side of the space between them.
-    patrol: { id: "liverpool", axis: "y", baseX: 50, baseY: 31, range: 5, r: 3, period: 3800 },
+    // original 18x10) sized to sit EXACTLY in the y47-67 gap between
+    // gate 2 (bottom edge y47) and gate 1 (top edge y67) — touches both,
+    // no gap on either end, a real bridge connecting them rather than a
+    // small gate floating in open space. Still only 10 units wide
+    // (x58-68), so there's room to route around it via the rest of the
+    // corridor when it's closed. Positioned near the EAST end of gate 2
+    // — gate 2's own solid span ends at x70 (its gap starts there), so
+    // this bridges gate 1/gate 2 near that edge rather than the middle
+    // of their shared boundary.
+    drawbridge: { id: "liverpool-gate", x: 63, y: 57, w: 10, h: 20, period: 3200, openRatio: 0.4 },
+    // TWO patrols now (added 2026-08-15) — a hole can have more than one,
+    // see the note above ensureGolfPatrolAnim for what that took. Both
+    // sweep the same corridor between gate 2 and gate 3, close together
+    // just either side of its centre (was a single one at baseX 50).
+    patrols: [
+      { id: "liverpool", axis: "y", baseX: 56, baseY: 31, range: 5, r: 3, period: 3800 },
+      { id: "liverpool2", axis: "y", baseX: 48, baseY: 31, range: 5, r: 3, period: 3800 },
+    ],
   },
   {
     club: "Leeds United",
@@ -260,7 +267,7 @@ const GOLF_HOLES = [
     // point on top of the three gates the hole already forces, faster
     // than Arsenal/Liverpool/Leeds' patrols to match this hole's step up
     // in difficulty.
-    patrol: { id: "manutd", axis: "y", baseX: 59, baseY: 50, range: 15, r: 3, period: 3200 },
+    patrols: [{ id: "manutd", axis: "y", baseX: 59, baseY: 50, range: 15, r: 3, period: 3200 }],
   },
   {
     club: "Barcelona",
@@ -295,7 +302,7 @@ const GOLF_HOLES = [
     // The grand finale gets the fastest, most aggressive patrol on the
     // course — sits in leg 2's corridor (west side, clear of both sand
     // traps), inside gate 3's own gap so it never overlaps that wall.
-    patrol: { id: "barcelona", axis: "y", baseX: 15, baseY: 48, range: 6, r: 2.5, period: 2600 },
+    patrols: [{ id: "barcelona", axis: "y", baseX: 15, baseY: 48, range: 6, r: 2.5, period: 2600 }],
     // Course redesign 2026-08-15 — the finale is the one hole that
     // combines TWO timed hazards (every other hole has exactly one; see
     // the note on Liverpool's drawbridge above for the full per-hole
@@ -399,7 +406,7 @@ const GOLF_PRACTICE_HOLE_VARIANTS = [
     water: [{ x: 80, y: 32, w: 12, h: 8 }], // right, top row (near pin)
     // Center column, tee to pin: patrol (bottom/near tee) -> drawbridge
     // (middle) -> windmill (top/near pin).
-    patrol: { id: "practice0", axis: "x", baseX: 50, baseY: 76, range: 15, r: 3, period: 3500 },
+    patrols: [{ id: "practice0", axis: "x", baseX: 50, baseY: 76, range: 15, r: 3, period: 3500 }],
     drawbridge: { id: "practice0-gate", x: 50, y: 54, w: 20, h: 6, period: 2500, openRatio: 0.45 },
     windmill: { id: "practice0-mill", pivotX: 50, pivotY: 32, length: 9, thickness: 3, r: 3, period: 3000 },
   },
@@ -416,7 +423,7 @@ const GOLF_PRACTICE_HOLE_VARIANTS = [
     ],
     sand: [{ x: 60, y: 60, w: 14, h: 10 }],
     water: [{ x: 35, y: 45, w: 14, h: 10 }],
-    patrol: { id: "practice1", axis: "y", baseX: 15, baseY: 50, range: 15, r: 3, period: 3500 },
+    patrols: [{ id: "practice1", axis: "y", baseX: 15, baseY: 50, range: 15, r: 3, period: 3500 }],
   },
   {
     tee: { x: 50, y: 88 },
@@ -431,7 +438,7 @@ const GOLF_PRACTICE_HOLE_VARIANTS = [
     ],
     sand: [{ x: 40, y: 60, w: 14, h: 10 }],
     water: [{ x: 65, y: 45, w: 14, h: 10 }],
-    patrol: { id: "practice2", axis: "y", baseX: 85, baseY: 50, range: 15, r: 3, period: 3500 },
+    patrols: [{ id: "practice2", axis: "y", baseX: 85, baseY: 50, range: 15, r: 3, period: 3500 }],
   },
 ];
 function currentPracticeHole(gs) {
@@ -538,8 +545,10 @@ const GOLF_SLOPE_ACCEL = 0.05; // percent/tick² added to vy per tick while insi
 const GOLF_SAND_FRICTION = 0.975;
 
 // Patrolling hazard — added 2026-08-14, one signature moving pillar per
-// hole (see `patrol` on GOLF_HOLES entries), a solid obstacle (uses the
-// same golfCollideBallObstacle collision as a normal pillar) that
+// hole originally (see `patrols` on GOLF_HOLES entries — an array since
+// 2026-08-15, when Liverpool became the first hole with two), a solid
+// obstacle (uses the same golfCollideBallObstacle collision as a normal
+// pillar) that
 // oscillates back and forth along one axis over real time, so timing a
 // shot around it is a genuine skill, not just aim/power. Deliberately a
 // small CIRCLE, never a gate-width wall, and always placed with clear
@@ -759,7 +768,10 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
     // enough that re-evaluating per-substep wouldn't visibly change
     // anything, same reasoning as wind/friction's own per-tick cadence.
     const nominalT = shotStartTime + tick * GOLF_PATROL_MS_PER_TICK;
-    const patrolObstacle = hole.patrol ? { shape: "circle", r: hole.patrol.r, ...golfPatrolPosition(hole.patrol, nominalT) } : null;
+    // A hole can have more than one patrol (added 2026-08-15 for
+    // Liverpool) — hole.patrols is always an array now, one obstacle per
+    // entry, same collide() loop as windmillNodes just below.
+    const patrolObstacles = (hole.patrols || []).map((p) => ({ shape: "circle", r: p.r, ...golfPatrolPosition(p, nominalT) }));
     const windmillNodes = hole.windmill ? golfWindmillNodes(hole.windmill, nominalT) : null;
     for (let sub = 0; sub < GOLF_SIM_SUBSTEPS; sub++) {
       x += vx / GOLF_SIM_SUBSTEPS;
@@ -802,7 +814,7 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
       // drawbridge frozen at release (see above) — a ball caught against
       // any of them bounces off exactly like a fixed pillar it happened
       // to run into.
-      if (patrolObstacle) collide(patrolObstacle);
+      for (const po of patrolObstacles) collide(po);
       if (windmillNodes) {
         for (const node of windmillNodes) collide(node);
       }
@@ -850,7 +862,7 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
 function golfIdleHazardHit(hole, ballPos) {
   const now = Date.now();
   const candidates = [];
-  if (hole.patrol) candidates.push({ shape: "circle", r: hole.patrol.r, ...golfPatrolPosition(hole.patrol, now) });
+  for (const p of hole.patrols || []) candidates.push({ shape: "circle", r: p.r, ...golfPatrolPosition(p, now) });
   if (hole.windmill) candidates.push(...golfWindmillNodes(hole.windmill, now));
   if (hole.drawbridge && !golfIsDrawbridgeOpen(hole.drawbridge, now)) {
     candidates.push({ x: hole.drawbridge.x, y: hole.drawbridge.y, w: hole.drawbridge.w, h: hole.drawbridge.h });
@@ -1041,7 +1053,7 @@ let local = {
   botShooterScheduledFor: null,
   botKeeperScheduledFor: null,
   golfBotScheduled: {}, // `${holeIndex}:${botId}:${strokes}` -> true, so a bot's turn isn't scheduled twice
-  golfPatrolLoopId: null, // element id the patrol-hazard rAF loop is currently driving, so a redundant render doesn't spawn a duplicate loop (see ensureGolfPatrolAnim)
+  golfPatrolLoopIds: new Set(), // element ids the patrol-hazard rAF loops are currently driving (a hole can have more than one patrol) — same duplicate-loop guard as golfWindmillLoopId below, just a Set since there can be several at once (see ensureGolfPatrolAnim)
   golfWindmillLoopId: null, // same guard, for the windmill's rAF loop (see ensureGolfWindmillAnim)
   golfDrawbridgeLoopId: null, // same guard, for the drawbridge's rAF loop (see ensureGolfDrawbridgeAnim)
   // Set by animateGolfBallFlight, for the duration of one shot's replay,
@@ -3023,7 +3035,7 @@ function resetLocalGameState() {
   local.botShooterScheduledFor = null;
   local.botKeeperScheduledFor = null;
   local.golfBotScheduled = {};
-  local.golfPatrolLoopId = null;
+  local.golfPatrolLoopIds = new Set();
   local.golfWindmillLoopId = null;
   local.golfDrawbridgeLoopId = null;
   local.golfHazardFrozenT = null;
@@ -4864,12 +4876,16 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
   // here too just avoids a one-frame flash at the wrong spot before that
   // loop kicks in, same reasoning as the ball's own "paint at start
   // position right away" above.
-  let patrolEl = "";
-  if (hole.patrol) {
-    const p0 = golfPatrolPosition(hole.patrol, Date.now());
-    patrolEl = `<div id="golf-patrol-${hole.patrol.id}" class="golf-patrol-pillar" style="left:${p0.x}%; top:${p0.y}%; width:${hole.patrol.r * 2}%;"></div>`;
-    requestAnimationFrame(() => ensureGolfPatrolAnim(hole.patrol));
-  }
+  // A hole can have more than one patrol (added 2026-08-15 for
+  // Liverpool) — hole.patrols is always an array, one element/anim loop
+  // per entry, each keyed by its own id.
+  const patrolEl = (hole.patrols || [])
+    .map((patrol) => {
+      const p0 = golfPatrolPosition(patrol, Date.now());
+      requestAnimationFrame(() => ensureGolfPatrolAnim(patrol));
+      return `<div id="golf-patrol-${patrol.id}" class="golf-patrol-pillar" style="left:${p0.x}%; top:${p0.y}%; width:${patrol.r * 2}%;"></div>`;
+    })
+    .join("");
 
   // Windmill — same live-position-via-rAF pattern as the patrol pillar
   // above, just rotation instead of translation. Rendered as ONE smooth
@@ -4968,19 +4984,25 @@ function golfHazardClock() {
 // animateGolfBallFlight), so it survives a redundant re-render replacing
 // the DOM node, and quietly stops on its own once the element's gone
 // (screen changed away, or the host moved to a different hole — the id
-// is per-hole, see `hole.patrol.id`, so a new hole's element simply has
-// a different id and this loop naturally can't find its old one
-// anymore). `local.golfPatrolLoopId` is just a guard against starting a
-// second redundant loop for the SAME hazard on every render — it does
-// NOT gate correctness, only avoids piling up duplicate rAF loops.
+// is per-hole/per-patrol, see `hole.patrols[i].id`, so a new hole's
+// elements simply have different ids and this loop naturally can't find
+// its old one anymore). `local.golfPatrolLoopIds` is a Set, not a single
+// value — a hole can now have MORE THAN ONE patrol at once (added
+// 2026-08-15 for Liverpool), and a single shared "last started id"
+// guard would have been actively wrong here: starting a second patrol's
+// loop would silently overwrite the first one's guard, leaving it
+// unprotected against a redundant render spawning a duplicate loop for
+// it. The Set tracks every currently-running patrol loop independently.
+// It does NOT gate correctness either way, only avoids piling up
+// duplicate rAF loops.
 function ensureGolfPatrolAnim(patrol) {
   const elId = `golf-patrol-${patrol.id}`;
-  if (local.golfPatrolLoopId === elId) return;
-  local.golfPatrolLoopId = elId;
+  if (local.golfPatrolLoopIds.has(elId)) return;
+  local.golfPatrolLoopIds.add(elId);
   function frame() {
     const el = document.getElementById(elId);
     if (!el) {
-      if (local.golfPatrolLoopId === elId) local.golfPatrolLoopId = null;
+      local.golfPatrolLoopIds.delete(elId);
       return;
     }
     const pos = golfPatrolPosition(patrol, Date.now());
