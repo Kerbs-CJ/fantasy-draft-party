@@ -104,19 +104,26 @@ const GOLF_HOLES = [
       // Caps the corridor's floor past turn 1, so it's a real enclosed
       // channel and not open field beyond it. Positioned at y40-46, NOT
       // flush with turn 1's own gap ceiling (y32) — turn 2's upper piece
-      // (below) only starts blocking at y35, so capping the floor at y32
-      // would seal off y32-35 as dead space with no opening on either
+      // (below) only starts blocking at y33 (originally y35, trimmed
+      // slightly — see its own comment), so capping the floor at y32
+      // would seal off y32-33 as dead space with no opening on either
       // side (found and fixed during verification — a genuine soft-lock,
-      // not just a clearance nitpick). y40-46 gives 5 real units of
-      // overlap with turn 2's gap (y35-65) instead of a sealed gap.
+      // not just a clearance nitpick). y40-46 gives real overlap with
+      // turn 2's gap (y33-65) instead of a sealed gap.
       { x: 50, y: 43, w: 32, h: 6 },
-      { x: 65, y: 19, w: 6, h: 32 }, // turn 2, upper piece — the gap is the MIDDLE band (y 35-65) between this and the piece below
+      // Trimmed 2 units off turn 2's upper piece (was h:32/y:19, blocking
+      // to y35) at Craig's request — the passage past this piece and the
+      // capping wall above felt just barely too tight to fit through
+      // cleanly. Gap is now the MIDDLE band (y 33-65) between this and
+      // the piece below, was y35-65.
+      { x: 65, y: 18, w: 6, h: 30 }, // turn 2, upper piece
       { x: 65, y: 81, w: 6, h: 32 }, // turn 2, lower piece
+      { x: 17, y: 58, r: 3.5, shape: "circle" }, // a third loose cannonball, between the tee and leg 1's post below
       { x: 22, y: 30, r: 3.5, shape: "circle" }, // leg 1 — a loose cannonball, right in the mouth of the opening corridor
       { x: 78, y: 40, r: 3.5, shape: "circle" }, // leg 3 — a loose cannonball guarding the final approach
     ],
     slopes: [
-      { x: 50, y: 16, w: 16, h: 22, dir: "down" }, // inside the enclosed corridor past turn 1 — resists cutting straight across it
+      { x: 50, y: 16, w: 16, h: 22, dir: "up" }, // inside the enclosed corridor past turn 1 — resists cutting straight across it
     ],
     water: [
       // Repositioned with the pin (was y62, guarding the old mid-height
