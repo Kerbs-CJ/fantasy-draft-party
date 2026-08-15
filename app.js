@@ -115,7 +115,7 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-liverpool.png",
     ballHue: 140, // dark red/maroon bg -> teal/green ball
     name: "Anfield (The Kop)",
-    description: "Two gates either side of the Kop — swing wide, then swing back, all the way into the far corner.",
+    description: "Two gates either side of the Kop, and a timed gate guarding the stretch between them — swing wide, wait or thread it, then swing back into the far corner.",
     par: 4,
     // Mirrored horizontally from the original bottom-left tee / top-right
     // pin (a pure reflection, so every clearance already checked for the
@@ -137,9 +137,17 @@ const GOLF_HOLES = [
     water: [
       { x: 22, y: 10, w: 10, h: 8 }, // drift too wide on the final approach and it's gone
     ],
-    // Sweeps horizontally across leg 2's long middle stretch, clear of
-    // both gates above and below it.
-    patrol: { id: "liverpool", axis: "x", baseX: 50, baseY: 45, range: 15, r: 3, period: 3800 },
+    // Course redesign 2026-08-15 — this hole's patrol was swapped for a
+    // drawbridge, teaching that mechanic on the 2nd-easiest hole (Arsenal
+    // keeps the original patrol as the "learn this one" hole; Leeds gets
+    // a windmill next; see the file-level note above GOLF_PRACTICE_HOLE_
+    // VARIANTS for the full per-hole allocation reasoning). Sits in leg
+    // 2's long middle stretch, past the slope, guarding the approach into
+    // gate 2's own gap — the corridor here is wide enough (y35-55) that a
+    // ball can still route around the gate's own y-span (y47-53) without
+    // waiting, so it's a genuine "thread it or take the detour" choice,
+    // not a hard stop.
+    drawbridge: { id: "liverpool-gate", x: 66, y: 50, w: 18, h: 6, period: 3200, openRatio: 0.4 },
   },
   {
     club: "Leeds United",
@@ -148,7 +156,7 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-leeds.png",
     ballHue: 350, // blue bg -> orange/amber ball
     name: "Elland Road",
-    description: "Thread the middle gate, then the cup opens away from the tee — go all the way round.",
+    description: "Thread the middle gate, then the cup opens away from the tee — a windmill guards the west loop-around, the east side stays clear.",
     par: 3,
     tee: { x: 50, y: 88 },
     pin: { x: 50, y: 16 },
@@ -170,10 +178,15 @@ const GOLF_HOLES = [
     water: [
       { x: 50, y: 24, w: 14, h: 4 }, // right at the back of the cup — overshoot the pin and it's gone
     ],
-    // Only patrols the WEST side of the loop around the cup — the east
-    // side is deliberately left clear, so there's always a totally safe
-    // (if slightly longer) route regardless of timing.
-    patrol: { id: "leeds", axis: "y", baseX: 20, baseY: 25, range: 10, r: 3, period: 4000 },
+    // Course redesign 2026-08-15 — patrol swapped for a windmill, same
+    // spot and same role the patrol had (guards the WEST loop-around
+    // route only; the east side stays deliberately clear, so there's
+    // always a totally safe if slightly longer route regardless of
+    // timing) — see the note on Liverpool's drawbridge above for the
+    // full per-hole allocation reasoning. Reach (length+r = 9.5) stays
+    // clear of the cup's west wall (x32-38) with a ~2.5 unit margin and
+    // well inside the course's own left edge.
+    windmill: { id: "leeds-mill", pivotX: 20, pivotY: 25, length: 7, thickness: 3, r: 2.5, period: 3600 },
   },
   {
     club: "Manchester United",
@@ -211,7 +224,7 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-barcelona.png",
     ballHue: 123, // maroon/magenta bg -> green ball
     name: "Camp Nou",
-    description: "The grand finale — corner to corner, four gates, water guarding the green, no easy way through.",
+    description: "The grand finale — corner to corner, four gates, a windmill in the thick of it, water guarding the green, no easy way through.",
     par: 6,
     // Corner to corner — the longest possible line the course allows —
     // through FOUR gates instead of three, with sand bogging down an
@@ -238,6 +251,17 @@ const GOLF_HOLES = [
     // course — sits in leg 2's corridor (west side, clear of both sand
     // traps), inside gate 3's own gap so it never overlaps that wall.
     patrol: { id: "barcelona", axis: "y", baseX: 15, baseY: 48, range: 6, r: 2.5, period: 2600 },
+    // Course redesign 2026-08-15 — the finale is the one hole that
+    // combines TWO timed hazards (every other hole has exactly one; see
+    // the note on Liverpool's drawbridge above for the full per-hole
+    // reasoning), on top of the four gates/sand/water it already had.
+    // Sits in the corridor between gate 3 and gate 4 (east side, clear of
+    // sand2's footprint), reach (length+r = 7) kept clear of gate 3's
+    // wall above it (~2 unit margin) and gate 4's own wall below-left of
+    // it (the sweep's x-range starts past gate 4's solid portion, which
+    // ends at x70, so it never overlaps gate 4 either — only sits inside
+    // its gap).
+    windmill: { id: "barcelona-mill", pivotX: 79, pivotY: 29, length: 5, thickness: 3, r: 2, period: 3000 },
   },
 ];
 // Dragging GOLF_MAX_DRAG_PERCENT of the course's own rendered
