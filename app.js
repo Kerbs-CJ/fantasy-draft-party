@@ -86,27 +86,46 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-arsenal.png",
     ballHue: 0, // navy bg -> warm orange/gold ball
     name: "The Emirates",
-    description: "Two gates down the cannon barrel — south, then north.",
+    description: "A proper maze now, not just two open gates — dogleg north through the corridor, then south again to the green.",
     par: 3,
+    // Course redesign 2026-08-15 — Craig felt every hole but Barcelona
+    // read as "a couple of barriers in an open field" rather than an
+    // actual mini-golf maze. Rebuilt as a genuinely ENCLOSED corridor
+    // (see the file-level note above GOLF_PRACTICE_HOLE_VARIANTS for the
+    // full per-hole redesign reasoning): not just a wall-with-a-gap, but
+    // a wall-with-a-gap PLUS a capping wall on the far side, so the space
+    // beyond the gap is a real bounded channel, not open green. Easiest
+    // hole on the course, so kept to a single S-bend (2 turns) — every
+    // other redesigned hole has more.
     tee: { x: 12, y: 50 },
     pin: { x: 86, y: 50 },
     obstacles: [
-      { x: 35, y: 37.5, w: 6, h: 69 }, // gate 1 — gap south (y 72-97)
-      { x: 63, y: 62.5, w: 6, h: 69 }, // gate 2 — gap north (y 3-28)
-      { x: 20, y: 85, r: 3.5, shape: "circle" }, // leg 1 — a loose cannonball
-      { x: 78, y: 14, r: 3.5, shape: "circle" }, // leg 3 — a loose cannonball
+      { x: 35, y: 64.5, w: 6, h: 65 }, // turn 1 — blocks the south 2/3, gap north (y 3-32)
+      // Caps the corridor's floor past turn 1, so it's a real enclosed
+      // channel and not open field beyond it. Positioned at y40-46, NOT
+      // flush with turn 1's own gap ceiling (y32) — turn 2's upper piece
+      // (below) only starts blocking at y35, so capping the floor at y32
+      // would seal off y32-35 as dead space with no opening on either
+      // side (found and fixed during verification — a genuine soft-lock,
+      // not just a clearance nitpick). y40-46 gives 5 real units of
+      // overlap with turn 2's gap (y35-65) instead of a sealed gap.
+      { x: 50, y: 43, w: 32, h: 6 },
+      { x: 65, y: 19, w: 6, h: 32 }, // turn 2, upper piece — the gap is the MIDDLE band (y 35-65) between this and the piece below
+      { x: 65, y: 81, w: 6, h: 32 }, // turn 2, lower piece
+      { x: 22, y: 30, r: 3.5, shape: "circle" }, // leg 1 — a loose cannonball, right in the mouth of the opening corridor
+      { x: 78, y: 40, r: 3.5, shape: "circle" }, // leg 3 — a loose cannonball guarding the final approach
     ],
     slopes: [
-      { x: 49, y: 50, w: 12, h: 20, dir: "down" }, // leg 2 — resists the cut through the middle
+      { x: 50, y: 16, w: 16, h: 22, dir: "down" }, // inside the enclosed corridor past turn 1 — resists cutting straight across it
     ],
     water: [
       { x: 86, y: 62, w: 14, h: 8 }, // just past the green — overcook the approach and it's gone
     ],
     // The easiest hole on the course gets the gentlest, slowest patrol —
     // a fair introduction to the mechanic before the pace ramps up on the
-    // later holes. Sweeps vertically through leg 2's open corridor, clear
-    // of both gates either side.
-    patrol: { id: "arsenal", axis: "y", baseX: 49, baseY: 50, range: 15, r: 3, period: 4500 },
+    // later holes. Sits right in turn 1's own gap (x35, y3-32) — time it
+    // or wait, the same choice every timed hazard on this course gives.
+    patrol: { id: "arsenal", axis: "y", baseX: 35, baseY: 17, range: 10, r: 3, period: 4500 },
   },
   {
     club: "Liverpool",
@@ -115,39 +134,34 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-liverpool.png",
     ballHue: 140, // dark red/maroon bg -> teal/green ball
     name: "Anfield (The Kop)",
-    description: "Two gates either side of the Kop, and a timed gate guarding the stretch between them — swing wide, wait or thread it, then swing back into the far corner.",
+    description: "A real three-gate zigzag corner to corner — a slope and a timed gate both guard the long middle stretch.",
     par: 4,
-    // Mirrored horizontally from the original bottom-left tee / top-right
-    // pin (a pure reflection, so every clearance already checked for the
-    // gates/pillars/slope below still holds exactly), then tee and pin
-    // both pushed further into their corners for real extra distance —
-    // pin now top-left, tee bottom-right, and noticeably longer than the
-    // original diagonal.
+    // Course redesign 2026-08-15 — was 2 gates in an otherwise open
+    // diagonal; now 3 alternating gates (west/east/west) forming a
+    // genuine zigzag, with the patrol swapped for a drawbridge (teaching
+    // that mechanic on the 2nd-easiest hole — Arsenal keeps patrol,
+    // Leeds gets a windmill next; see the note above GOLF_PRACTICE_HOLE_
+    // VARIANTS for the full per-hole reasoning). Tee/pin unchanged.
     tee: { x: 92, y: 92 },
     pin: { x: 8, y: 8 },
     obstacles: [
-      { x: 36.5, y: 58, w: 67, h: 6 }, // gate 1 — gap east (x 70-97)
-      { x: 63.5, y: 32, w: 67, h: 6 }, // gate 2 — gap west (x 3-30)
-      { x: 80, y: 72, r: 4, shape: "circle" }, // leg 1 — a steward's post
-      { x: 24, y: 20, r: 3, shape: "circle" }, // leg 3 — a steward's post
+      { x: 63.5, y: 70, w: 67, h: 6 }, // gate 1 — gap west (x 3-30)
+      { x: 36.5, y: 44, w: 67, h: 6 }, // gate 2 — gap east (x 70-97)
+      { x: 63.5, y: 18, w: 67, h: 6 }, // gate 3 — gap west (x 3-30)
+      { x: 75, y: 85, r: 4, shape: "circle" }, // leg 1 — a steward's post right before gate 1's gap
     ],
     slopes: [
-      { x: 52, y: 45, w: 18, h: 16, dir: "up" }, // leg 2 — a boost through the long middle stretch
+      { x: 16, y: 57, w: 20, h: 14, dir: "up" }, // guards the west entry into the long middle stretch, between gate 1 and gate 2
     ],
     water: [
-      { x: 22, y: 10, w: 10, h: 8 }, // drift too wide on the final approach and it's gone
+      { x: 20, y: 11, w: 10, h: 5 }, // final approach — overshoot and it's gone
     ],
-    // Course redesign 2026-08-15 — this hole's patrol was swapped for a
-    // drawbridge, teaching that mechanic on the 2nd-easiest hole (Arsenal
-    // keeps the original patrol as the "learn this one" hole; Leeds gets
-    // a windmill next; see the file-level note above GOLF_PRACTICE_HOLE_
-    // VARIANTS for the full per-hole allocation reasoning). Sits in leg
-    // 2's long middle stretch, past the slope, guarding the approach into
-    // gate 2's own gap — the corridor here is wide enough (y35-55) that a
-    // ball can still route around the gate's own y-span (y47-53) without
-    // waiting, so it's a genuine "thread it or take the detour" choice,
-    // not a hard stop.
-    drawbridge: { id: "liverpool-gate", x: 66, y: 50, w: 18, h: 6, period: 3200, openRatio: 0.4 },
+    // Guards the EAST exit of the middle stretch, right before gate 2's
+    // own gap — bookends the stretch opposite the slope above, so both
+    // ends of that long corridor have something guarding them now.
+    drawbridge: { id: "liverpool-gate", x: 80, y: 57, w: 18, h: 10, period: 3200, openRatio: 0.4 },
+    // Sweeps the corridor between gate 2 and gate 3.
+    patrol: { id: "liverpool", axis: "y", baseX: 85, baseY: 31, range: 5, r: 3, period: 3800 },
   },
   {
     club: "Leeds United",
@@ -156,14 +170,23 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-leeds.png",
     ballHue: 350, // blue bg -> orange/amber ball
     name: "Elland Road",
-    description: "Thread the middle gate, then the cup opens away from the tee — a windmill guards the west loop-around, the east side stays clear.",
+    description: "Thread the middle gate into a real narrow chute, then the cup opens away from the tee — a windmill guards the west loop-around, the east side stays clear.",
     par: 3,
     tee: { x: 50, y: 88 },
     pin: { x: 50, y: 16 },
     obstacles: [
       { x: 21.5, y: 58, w: 37, h: 6 }, // gate — west half
       { x: 79.5, y: 58, w: 35, h: 6 }, // gate — east half (gap x 40-62, dead center)
-      { x: 50, y: 42, r: 3, shape: "circle" }, // leg 2 — a lone post before the cup
+      // Course redesign 2026-08-15 — the U-cup itself already read as a
+      // real maze element, but the approach to it used to be wide open;
+      // these two new walls narrow the gate's own 22-unit gap down to a
+      // proper 28-unit chute (x36-64) as you approach the post, so it's
+      // an actual enclosed corridor rather than open green with a post
+      // in it. Clear of the gate above (3-unit gap) and don't touch the
+      // post itself, which now sits centred inside the new chute.
+      { x: 33, y: 47, w: 6, h: 10 }, // chute wall — west side
+      { x: 67, y: 47, w: 6, h: 10 }, // chute wall — east side
+      { x: 50, y: 42, r: 3, shape: "circle" }, // leg 2 — a lone post, now inside the chute
       // The cup is a U, not an n — walled on the side FACING the tee, open
       // on the far side, so you can't just walk it straight in. Getting to
       // the pin means going wide around the whole cup and coming back in
@@ -195,7 +218,7 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-man-united.png",
     ballHue: 148, // vivid red bg -> cyan/teal ball
     name: "Old Trafford (Theatre of Dreams)",
-    description: "A proper triple-bend slalom, wall to wall to wall.",
+    description: "A proper triple-bend slalom, wall to wall to wall — the tightest squeeze is now a real walled pinch, not just a slope in open ground.",
     par: 4,
     tee: { x: 88, y: 80 },
     pin: { x: 12, y: 18 },
@@ -203,6 +226,12 @@ const GOLF_HOLES = [
       { x: 68, y: 68.5, w: 6, h: 57 }, // gate 1 — gap north (y 3-40)
       { x: 50, y: 31.5, w: 6, h: 57 }, // gate 2 — gap south (y 60-97)
       { x: 32, y: 68.5, w: 6, h: 57 }, // gate 3 — gap north (y 3-40)
+      // Course redesign 2026-08-15 — caps the up-slope below from above,
+      // turning "tightest squeeze" from a figure of speech into an
+      // actual walled pinch between gate 2 and gate 3. Clear of both
+      // gates (x37-45 sits inside the x35-47 gap between gate 2's x47-53
+      // and gate 3's x29-35) and a 2-unit gap above the slope itself.
+      { x: 41, y: 36, w: 8, h: 10 }, // caps the squeeze from above
     ],
     slopes: [
       { x: 82, y: 65, w: 14, h: 16, dir: "down" }, // leg 1 — resists right off the tee
