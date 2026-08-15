@@ -273,7 +273,6 @@ const GOLF_LIP_OUT_FRICTION = 0.8; // extra one-time speed haircut the tick a to
 // golfIdleHazardCheckTick) rather than being part of that function.
 const GOLF_KNOCK_POWER = 0.18; // modest shove (~11 course-percent units unobstructed) — enough to visibly roll the ball clear, not a full-strength shot
 const GOLF_HAZARD_CHECK_MS = 350; // how often the idle-ball-vs-live-hazard check runs
-const GOLF_HAZARD_KNOCK_COOLDOWN_MS = 3000; // don't re-check a ball this soon after ANY new path it got (a real shot or a previous knock) — gives its own replay animation (up to 2.6s) room to actually finish before it's reconsidered
 const GOLF_MAX_STROKES = 10; // holes forcibly finish here, however far short — flat, not per-par, so a tough hole gets real room to work with
 // The driving range has no real hole to play, no strokes/par, and no
 // score — just somewhere to practice dragging (and bouncing off
@@ -799,27 +798,35 @@ function golfIdleHazardHit(hole, ballPos) {
 // and knocks any resting one it finds overlapping a live hazard.
 // `skipPlayerId` (the current turn's player — null in practice, where
 // there's no turn order) is left alone, since that's the one ball that
-// might currently be mid-drag/mid-flight on someone's screen. Reuses
-// golfSimulateShot itself for the knock (a real roll at GOLF_KNOCK_POWER
-// starting from wherever the ball already was, in the direction the
-// collision pushed it) rather than a straight teleport, so it bounces
-// off whatever else is in the way and settles naturally — the exact
-// same physics a real shot gets, just triggered by the environment
-// instead of a player's own swing. Deliberately never lets a knock
-// count as holing out (see the comment inline below) — that's a bigger
-// change (hooking into golfSubmitShot's scoring path) than this
-// deserves; a knock that happens to line up with the cup just stops one
-// step short instead.
+// might currently be mid-drag/mid-flight on someone's screen.
+// local.golfBallFlightActive (set/cleared by animateGolfBallFlight — see
+// its own comment) skips any OTHER ball still genuinely mid-replay too,
+// whether that's from a real shot or an earlier knock. First version of
+// this used a flat 3-second timer instead, started the moment a new path
+// was first detected rather than when the replay actually finished —
+// Craig correctly called that out as an unrealistic delay (a short knock
+// that visually finishes in under a second still had to wait out the
+// full 3s before it could be re-checked). Tracking the real animation
+// state instead means a ball becomes eligible again within one
+// GOLF_HAZARD_CHECK_MS tick of actually coming to rest, not a fixed
+// guess. Reuses golfSimulateShot itself for the knock (a real roll at
+// GOLF_KNOCK_POWER starting from wherever the ball already was, in the
+// direction the collision pushed it) rather than a straight teleport, so
+// it bounces off whatever else is in the way and settles naturally — the
+// exact same physics a real shot gets, just triggered by the environment
+// instead of a player's own swing. Deliberately never lets a knock count
+// as holing out (see the comment inline below) — that's a bigger change
+// (hooking into golfSubmitShot's scoring path) than this deserves; a
+// knock that happens to line up with the cup just stops one step short
+// instead.
 function golfApplyIdleHazardKnocks(balls, hole, wind, skipPlayerId, applyFn) {
   if (!balls || !hole) return;
   const now = Date.now();
   for (const [playerId, ball] of Object.entries(balls)) {
     if (!ball || ball.holedOut || ball.holed || playerId === skipPlayerId) continue;
-    const lastTouch = local.golfHazardKnockCooldown[playerId];
-    if (lastTouch && now - lastTouch < GOLF_HAZARD_KNOCK_COOLDOWN_MS) continue;
+    if (local.golfBallFlightActive[playerId]) continue;
     const hitAngle = golfIdleHazardHit(hole, ball);
     if (hitAngle == null) continue;
-    local.golfHazardKnockCooldown[playerId] = now;
     const sim = golfSimulateShot(hole, ball, hitAngle, GOLF_KNOCK_POWER, wind, now);
     const holedByKnock = sim.holed && sim.path.length > 1;
     const endPoint = holedByKnock ? sim.path[sim.path.length - 2] : { x: sim.endX, y: sim.endY };
@@ -944,7 +951,7 @@ let local = {
   // windmill don't.
   golfHazardFrozenT: null,
   golfIdleHazardCheckStarted: false, // guards ensureGolfIdleHazardCheck's setInterval so it only ever starts once per page load
-  golfHazardKnockCooldown: {}, // playerId -> Date.now() of their ball's last new path (a shot OR a knock) — see golfApplyIdleHazardKnocks
+  golfBallFlightActive: {}, // playerId -> true while their ball's roll (animateGolfBallFlight) is genuinely in progress on THIS client — see golfApplyIdleHazardKnocks
   shootoutAnim: { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
@@ -2867,7 +2874,7 @@ function resetLocalGameState() {
   local.golfWindmillLoopId = null;
   local.golfDrawbridgeLoopId = null;
   local.golfHazardFrozenT = null;
-  local.golfHazardKnockCooldown = {};
+  local.golfBallFlightActive = {};
   local.shootoutAnim = { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
     holeIndex: null,
@@ -4608,12 +4615,6 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         // missing (e.g. a hole/practice reset that jumps the ball
         // straight to the tee — nothing to replay there).
         animating = true;
-        // Also resets the idle-hazard-knock cooldown (see
-        // golfApplyIdleHazardKnocks) — ANY new path, whether a real shot
-        // or a previous knock, buys this ball GOLF_HAZARD_KNOCK_COOLDOWN_MS
-        // before it's reconsidered, so its own replay gets a chance to
-        // actually finish first.
-        local.golfHazardKnockCooldown[p.id] = Date.now();
         const from = { x: track.x, y: track.y };
         const to = { x: ball.x, y: ball.y };
         const path = Array.isArray(ball.path) && ball.path.length > 1 ? ball.path : [from, to];
@@ -4869,9 +4870,17 @@ function ensureGolfDrawbridgeAnim(drawbridge) {
 // (see golfHazardClock for why patrol/windmill don't) — so the gate can
 // never show a state that contradicts the collision that already
 // happened.
+//
+// Also marks local.golfBallFlightActive[playerId] true for the same
+// duration (playerId pulled straight out of `ballId`, same extraction
+// markGolfBallSunk already uses) — golfApplyIdleHazardKnocks checks this
+// before knocking a ball, so it never interrupts a roll that's already
+// genuinely in progress, whether that roll came from a real shot or an
+// earlier knock.
 function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
   const ballEl = document.getElementById(ballId);
   if (!ballEl || path.length < 2) return;
+  const playerId = ballId.replace("golf-ball-", "");
   const emojiEl = ballEl.querySelector(".golf-ball-icon");
   const last = path[path.length - 1];
   if (prefersReducedMotion()) {
@@ -4884,6 +4893,7 @@ function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
     return;
   }
   local.golfHazardFrozenT = shotStartTime;
+  local.golfBallFlightActive[playerId] = true;
   // Cumulative arc length at each waypoint, so "40% of the way through
   // the animation" means 40% of the actual distance rolled, not just the
   // 40th-percentile waypoint (bounces can bunch waypoints close together).
@@ -4920,6 +4930,7 @@ function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
       requestAnimationFrame(frame);
     } else {
       local.golfHazardFrozenT = null; // flight's over — the drawbridge goes back to tracking real time
+      local.golfBallFlightActive[playerId] = false; // ...and this ball is fair game for an idle hazard knock again
       if (holed) animateGolfBallSink(ballId);
     }
   }
