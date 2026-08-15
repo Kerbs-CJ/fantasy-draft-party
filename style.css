@@ -586,7 +586,13 @@ body:has(.golf-course) #app {
 .legend-swatch.slope-down::after { content: "▼"; }
 .legend-swatch.slope-up::after { content: "▲"; }
 .legend-swatch.sand {
-  background: linear-gradient(160deg, #e8c988 0%, #c79b56 100%);
+  /* Simplified from the real .golf-sand's crosshatch texture — at 20px
+     the fine grain lines would just read as noise, so this keeps only
+     the base tone + vignette, which is what actually carries "sand" at
+     a glance. */
+  background:
+    radial-gradient(ellipse at center, transparent 50%, rgba(90,65,30,0.3) 100%),
+    linear-gradient(160deg, #ecd9a6 0%, #c9a868 100%);
   border: 1px solid var(--golf-ink-soft);
 }
 .legend-swatch.water {
@@ -720,11 +726,18 @@ body:has(.golf-course) #app {
 /* Sand — bogs the ball down (GOLF_SAND_FRICTION), pass-through like a
    slope. TIER 2 terrain (see the unified-language comment above
    .golf-course): thin soft outline, inset-only shadow (flush with the
-   green, not sitting on it), the shared golfSheenDrift highlight plus
-   its own fine speckled grain layer for texture — both layers' positions
-   driven together by one keyframe set so the highlight roams the same
-   way it does on every Tier 1 object, while the grain drifts diagonally
-   like wind-blown sand (ties thematically into the hole's wind hazard). */
+   green, not sitting on it), the shared golfSheenDrift highlight.
+   Redone 2026-08-15 — the first "life" pass used a repeating-radial-
+   gradient of evenly spaced dots, which at a glance read as a printed
+   polka-dot pattern, not sand (Craig: "doesn't look like sand"). Real
+   grain doesn't have a regular grid, so this replaces it with two fine
+   crossing diagonal hatch layers (opposite angles, low-opacity light +
+   dark) — that crosshatch is what reads as granular noise instead of a
+   pattern — plus a soft darkened vignette toward the edges for the
+   shallow-bowl look of a real bunker. Every layer's position (including
+   the two grain layers) drifts together via one keyframe set, same
+   "wind-blown" life as before, just built out of texture that actually
+   looks like sand up close. */
 .golf-sand {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -732,16 +745,18 @@ body:has(.golf-course) #app {
   pointer-events: none;
   background:
     var(--golf-highlight),
-    repeating-radial-gradient(circle, rgba(120,90,40,0.32) 0px, rgba(120,90,40,0.32) 1px, transparent 1.5px, transparent 8px),
-    linear-gradient(160deg, #e8c988 0%, #c79b56 100%);
-  background-size: 170% 170%, 18px 18px, auto;
+    repeating-linear-gradient(35deg, rgba(90,65,30,0.16) 0px, rgba(90,65,30,0.16) 1px, transparent 1px, transparent 5px),
+    repeating-linear-gradient(-52deg, rgba(255,244,214,0.18) 0px, rgba(255,244,214,0.18) 1px, transparent 1px, transparent 6px),
+    radial-gradient(ellipse at center, transparent 55%, rgba(90,65,30,0.25) 100%),
+    linear-gradient(160deg, #ecd9a6 0%, #c9a868 100%);
+  background-size: 170% 170%, auto, auto, auto, auto;
   border: 1px solid var(--golf-ink-soft);
   box-shadow: inset 0 0 12px rgba(90,60,20,0.3);
   animation: golfSandDrift 9s ease-in-out infinite;
 }
 @keyframes golfSandDrift {
-  0%, 100% { background-position: 20% 15%, 0 0, 0 0; }
-  50%      { background-position: 80% 60%, 9px 4px, 0 0; }
+  0%, 100% { background-position: 20% 15%, 0 0, 0 0, 0 0, 0 0; }
+  50%      { background-position: 80% 60%, 4px 2px, -4px 2px, 0 0, 0 0; }
 }
 /* Water — ends the shot on contact and sends the ball back to the tee
    (see golfSimulateShot), pass-through going in. TIER 2 terrain, same
@@ -778,14 +793,23 @@ body:has(.golf-course) #app {
 .golf-course-ball { position: absolute; }
 /* Was the ⚽ emoji — a photographic-style glyph next to everything else
    on the course being flat CSS gradients, one of the clashes in Craig's
-   "thrown together" complaint (2026-08-15). Now a plain CSS-drawn ball:
-   TIER 1 object (shared ink outline + flat offset shadow, scaled down to
-   fit something this small), with a few off-center dimple dots — not
-   perfectly symmetric on purpose, so the spin JS already applies to this
-   element (animateGolfBallFlight, rotates it every frame) actually reads
-   as spinning instead of a plain circle silently not appearing to move.
-   Sized via width/height now instead of font-size (19px, was 15px before
-   the emoji->CSS swap — see the ball-size request this replaced). */
+   "thrown together" complaint (2026-08-15). First CSS-drawn attempt used
+   plain off-center dimple dots, which Craig correctly called out as not
+   actually reading as a football anymore — redone with the real ⚽
+   pattern instead: a black pentagon roughly centered, plus a second
+   pentagon peeking in from one edge (classic football-icon
+   simplification, same convention every flat football emoji/icon uses).
+   `overflow: hidden` + `border-radius: 50%` on the ball itself clips both
+   pentagon pseudo-elements to the circle, so the edge one reads as
+   "partially cut off by the ball's own silhouette" rather than a stray
+   shape poking out. TIER 1 object (shared ink outline + flat offset
+   shadow, scaled down to fit something this small). The pentagons are
+   deliberately NOT symmetric around the center, so the spin JS already
+   applied to this element (animateGolfBallFlight, rotates it every
+   frame) actually reads as spinning instead of a plain circle silently
+   not appearing to move. Sized via width/height now instead of font-size
+   (19px, was 15px before the emoji->CSS swap — see the ball-size request
+   this replaced). */
 .golf-ball-icon {
   position: absolute;
   left: 0;
@@ -794,14 +818,33 @@ body:has(.golf-course) #app {
   height: 19px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
+  overflow: hidden;
   background:
-    radial-gradient(circle at 32% 28%, rgba(255,255,255,0.9) 0%, transparent 32%),
-    radial-gradient(circle at 30% 64%, rgba(20,20,25,0.55) 0%, rgba(20,20,25,0.55) 15%, transparent 16%),
-    radial-gradient(circle at 70% 42%, rgba(20,20,25,0.55) 0%, rgba(20,20,25,0.55) 13%, transparent 14%),
-    radial-gradient(circle at 48% 82%, rgba(20,20,25,0.5) 0%, rgba(20,20,25,0.5) 11%, transparent 12%),
-    #f4f1ea;
+    radial-gradient(circle at 30% 26%, rgba(255,255,255,0.85) 0%, transparent 38%),
+    #f7f5ee;
   border: 1.5px solid var(--golf-ink-strong);
   box-shadow: 1.5px 2px 0 rgba(0,0,0,0.35);
+}
+.golf-ball-icon::before,
+.golf-ball-icon::after {
+  content: "";
+  position: absolute;
+  background: #1c1e22;
+  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+}
+.golf-ball-icon::before {
+  left: 50%;
+  top: 48%;
+  width: 46%;
+  height: 46%;
+  transform: translate(-50%, -50%);
+}
+.golf-ball-icon::after {
+  left: 8%;
+  top: -8%;
+  width: 36%;
+  height: 36%;
+  transform: rotate(14deg);
 }
 /* Ball movement is driven directly by JS (animateGolfBallFlight in
    app.js), not CSS — a redundant render mid-flight (the realtime echo of
