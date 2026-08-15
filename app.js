@@ -482,7 +482,7 @@ const GOLF_SAND_FRICTION = 0.975;
 // decided (and fair) the instant the shot is taken, this is a minor
 // visual-polish gap, not a fairness one. Revisit only if it's actually
 // noticeable/annoying once played live.
-const GOLF_PATROL_MS_PER_TICK = 40; // also reused by the windmill/drawbridge below — same "how much wall-clock time does one simulated tick represent" convention, no reason for each timed hazard to invent its own
+const GOLF_PATROL_MS_PER_TICK = 40; // also reused by the windmill below (drawbridge does NOT use this — see the comment above drawbridgeObstacle in golfSimulateShot for why it's decided once per shot instead of per tick)
 function golfPatrolPosition(patrol, tMs) {
   const offset = patrol.range * Math.sin((2 * Math.PI * tMs) / patrol.period);
   return patrol.axis === "x" ? { x: patrol.baseX + offset, y: patrol.baseY } : { x: patrol.baseX, y: patrol.baseY + offset };
@@ -626,6 +626,27 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
       vy -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.ny;
     }
   }
+  // Drawbridge open/closed is decided ONCE here, at the real moment the
+  // shot is taken (shotStartTime) — not re-evaluated per tick against a
+  // drifting nominal clock the way it was the first time this was built.
+  // Two real bugs came out of that first version, both from the same
+  // root cause (a shot's whole path is resolved in one synchronous burst
+  // using an artificial ~40ms/tick clock that has no fixed relationship
+  // to how long the visual replay afterward actually takes): (1) the gate
+  // could visually show "open" while the collision that already happened
+  // used a later, "closed" tick, and (2) forcing the REPLAY to track that
+  // same drifting nominal clock instead just moved the bug — tick-density
+  // per real second spikes hugely during a shot's slow, low-distance
+  // "friction tail" right before it stops (many ticks, barely any
+  // distance, and replay pacing is distance-based), so every timed hazard
+  // visibly sped up right as the ball settled. Deciding it once, up
+  // front, and holding it fixed for the whole shot sidesteps both: the
+  // outcome always matches exactly what was on screen the instant you
+  // released, and there's no drifting clock left for the replay to chase.
+  const drawbridgeObstacle =
+    hole.drawbridge && !golfIsDrawbridgeOpen(hole.drawbridge, shotStartTime)
+      ? { x: hole.drawbridge.x, y: hole.drawbridge.y, w: hole.drawbridge.w, h: hole.drawbridge.h }
+      : null;
   for (let tick = 0; tick < GOLF_MAX_SIM_TICKS && !holed && !splashed; tick++) {
     // Once per TICK, not per substep — same cadence as GOLF_FRICTION
     // below, which is what keeps this self-limiting (see the comment on
@@ -637,22 +658,16 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
       vx += windDx * push;
       vy += windDy * push;
     }
-    // Every timed hazard's state for THIS tick, computed once (see
+    // Patrol/windmill's position for THIS tick, computed once (see
     // GOLF_PATROL_MS_PER_TICK) and reused for all 4 substeps below — the
-    // movement/state change over a single tick's worth of simulated time
-    // is small enough that re-evaluating per-substep wouldn't visibly
-    // change anything, same reasoning as wind/friction's own per-tick
-    // cadence.
+    // movement over a single tick's worth of simulated time is small
+    // enough that re-evaluating per-substep wouldn't visibly change
+    // anything, same reasoning as wind/friction's own per-tick cadence.
+    // (drawbridgeObstacle is NOT re-evaluated here — see the comment
+    // above the tick loop for why it's decided once, up front, instead.)
     const nominalT = shotStartTime + tick * GOLF_PATROL_MS_PER_TICK;
     const patrolObstacle = hole.patrol ? { shape: "circle", r: hole.patrol.r, ...golfPatrolPosition(hole.patrol, nominalT) } : null;
     const windmillNodes = hole.windmill ? golfWindmillNodes(hole.windmill, nominalT) : null;
-    // Omitting `shape` (rather than setting shape:"rect") matches every
-    // other rectangular obstacle in GOLF_HOLES — golfCollideBallObstacle
-    // treats anything that isn't shape:"circle" as a rect.
-    const drawbridgeObstacle =
-      hole.drawbridge && !golfIsDrawbridgeOpen(hole.drawbridge, nominalT)
-        ? { x: hole.drawbridge.x, y: hole.drawbridge.y, w: hole.drawbridge.w, h: hole.drawbridge.h }
-        : null;
     for (let sub = 0; sub < GOLF_SIM_SUBSTEPS; sub++) {
       x += vx / GOLF_SIM_SUBSTEPS;
       y += vy / GOLF_SIM_SUBSTEPS;
@@ -793,14 +808,12 @@ let local = {
   golfPatrolLoopId: null, // element id the patrol-hazard rAF loop is currently driving, so a redundant render doesn't spawn a duplicate loop (see ensureGolfPatrolAnim)
   golfWindmillLoopId: null, // same guard, for the windmill's rAF loop (see ensureGolfWindmillAnim)
   golfDrawbridgeLoopId: null, // same guard, for the drawbridge's rAF loop (see ensureGolfDrawbridgeAnim)
-  // Set by animateGolfBallFlight while a shot is actively replaying, to
-  // the exact nominal time golfSimulateShot used for whichever tick is
-  // currently on screen — null the rest of the time (no ball in flight).
-  // ensureGolfPatrolAnim/-Windmill-/-DrawbridgeAnim all check this FIRST,
-  // ahead of real Date.now(), so what's on screen during a replay always
-  // matches what the physics actually resolved against (see the comment
-  // above animateGolfBallFlight for the bug this fixes).
-  golfHazardNominalT: null,
+  // Set by animateGolfBallFlight, for the duration of one shot's replay,
+  // to the exact shotStartTime golfSimulateShot resolved that shot's
+  // drawbridge collision against — null the rest of the time (no ball in
+  // flight). Only ensureGolfDrawbridgeAnim checks this (see
+  // golfHazardClock) — patrol/windmill always use live Date.now().
+  golfHazardFrozenT: null,
   shootoutAnim: { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
@@ -2722,7 +2735,7 @@ function resetLocalGameState() {
   local.golfPatrolLoopId = null;
   local.golfWindmillLoopId = null;
   local.golfDrawbridgeLoopId = null;
-  local.golfHazardNominalT = null;
+  local.golfHazardFrozenT = null;
   local.shootoutAnim = { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
     holeIndex: null,
@@ -4608,16 +4621,22 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
     </div>`;
 }
 
-// What time every timed-hazard visual (patrol/windmill/drawbridge)
-// should render itself at, right now. Normally real wall-clock time —
-// but while a shot is actively replaying (animateGolfBallFlight sets
-// local.golfHazardNominalT every frame, see its own comment for the full
-// story), hazards instead show whatever nominal time the physics
-// actually resolved that exact moment of the replay against, so a
-// player watching the flight never sees a hazard state that contradicts
-// the collision that already happened.
+// What time the drawbridge should render itself at, right now. Normally
+// real wall-clock time — but while a shot is actively replaying
+// (animateGolfBallFlight sets local.golfHazardFrozenT ONCE, to the exact
+// shotStartTime the physics resolved that shot's drawbridge collision
+// against, and holds it fixed for the whole replay), the drawbridge
+// shows that frozen moment instead, so it can never contradict the
+// outcome that already happened. Deliberately NOT used by the patrol
+// pillar or windmill below — freezing those would stop them visibly
+// moving during a replay, which defeats the entire point of a hazard
+// you're meant to dodge in real time; they always render on live
+// Date.now(), same as originally built, and just accept the same minor
+// (imperceptible, previously already fine) gap between the physics'
+// own nominal-tick clock and real replay time that the patrol pillar
+// always has.
 function golfHazardClock() {
-  return local.golfHazardNominalT != null ? local.golfHazardNominalT : Date.now();
+  return local.golfHazardFrozenT != null ? local.golfHazardFrozenT : Date.now();
 }
 
 // Drives the patrol hazard's on-screen position directly via a
@@ -4641,7 +4660,7 @@ function ensureGolfPatrolAnim(patrol) {
       if (local.golfPatrolLoopId === elId) local.golfPatrolLoopId = null;
       return;
     }
-    const pos = golfPatrolPosition(patrol, golfHazardClock());
+    const pos = golfPatrolPosition(patrol, Date.now());
     el.style.left = pos.x + "%";
     el.style.top = pos.y + "%";
     requestAnimationFrame(frame);
@@ -4662,7 +4681,7 @@ function ensureGolfWindmillAnim(windmill) {
       if (local.golfWindmillLoopId === elId) local.golfWindmillLoopId = null;
       return;
     }
-    const deg = golfWindmillAngleDeg(windmill, golfHazardClock());
+    const deg = golfWindmillAngleDeg(windmill, Date.now());
     el.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
     requestAnimationFrame(frame);
   }
@@ -4671,10 +4690,9 @@ function ensureGolfWindmillAnim(windmill) {
 
 // Same pattern again, toggling the .open class each frame instead of
 // moving anything — see golfIsDrawbridgeOpen for the actual open/closed
-// logic (identical calculation the physics simulation uses, so what
-// players see always matches what a shot taken right now would resolve
-// against — see golfHazardClock for how that holds true DURING a replay
-// too, not just when idle).
+// logic and golfHazardClock (just above) for why this one specifically
+// freezes during a replay instead of tracking live time like patrol/
+// windmill do.
 function ensureGolfDrawbridgeAnim(drawbridge) {
   const elId = `golf-drawbridge-${drawbridge.id}`;
   if (local.golfDrawbridgeLoopId === elId) return;
@@ -4704,19 +4722,22 @@ function ensureGolfDrawbridgeAnim(drawbridge) {
 // distance travelled, not just point count) so the ball moves at a
 // roughly steady pace through however many bounces the shot took.
 //
-// `shotStartTime` (added 2026-08-15, fixing a real bug) is the SAME
-// value golfSimulateShot resolved every timed hazard's collisions
-// against at release time. While this replay is running, it drives
-// local.golfHazardNominalT — which ensureGolfPatrolAnim/-Windmill-/
-// -DrawbridgeAnim all check FIRST, ahead of real Date.now() — so the
-// drawbridge/windmill/patrol you're WATCHING during a flight shows
-// exactly the state the physics actually used, tick for tick. Before
-// this, those three loops always free-ran on true wall-clock time, so a
-// closed-drawbridge collision baked in at release could finish replaying
-// several real seconds later showing the gate visually open — Craig hit
-// exactly this ("hit the gate when it was faded and there was still
-// collision"). Cleared back to null the instant the roll finishes, so
-// hazards go back to tracking real time between shots, same as before.
+// `shotStartTime` (added 2026-08-15, fixing a real bug — see the longer
+// comment in golfSimulateShot above where drawbridgeObstacle is computed
+// for the full history) is the same value golfSimulateShot resolved that
+// shot's drawbridge collision against. For the DURATION of this replay
+// (cleared back to null the instant it finishes), it freezes
+// local.golfHazardFrozenT — which only the drawbridge's own animation
+// loop checks — so the gate can never show a state that contradicts the
+// collision that already happened. Deliberately a single frozen value,
+// not something recomputed every frame from the ball's current on-screen
+// tick: an earlier version tried tracking the physics' own nominal
+// per-tick clock live throughout the replay, which "fixed" the
+// contradiction but caused a worse bug — every timed hazard visibly
+// speeding up right as the ball settled, since a shot's slow, low-
+// distance "friction tail" packs many physics ticks into a tiny sliver
+// of real replay time. Freezing at a single moment sidesteps that
+// entirely: nothing is racing to keep up with anything.
 function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
   const ballEl = document.getElementById(ballId);
   if (!ballEl || path.length < 2) return;
@@ -4731,6 +4752,7 @@ function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
     }
     return;
   }
+  local.golfHazardFrozenT = shotStartTime;
   // Cumulative arc length at each waypoint, so "40% of the way through
   // the animation" means 40% of the actual distance rolled, not just the
   // 40th-percentile waypoint (bounces can bunch waypoints close together).
@@ -4763,19 +4785,10 @@ function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
     el.style.top = y + "%";
     const emoji = el.querySelector(".golf-ball-icon") || emojiEl;
     if (emoji) emoji.style.transform = `translate(-50%, -50%) rotate(${spinDeg * raw}deg)`;
-    // path[k] is the ball's position right after tick (k-1) finished (see
-    // golfSimulateShot — path.push happens once per tick, after the
-    // initial seed entry) — so mid-way between path[i-1] and path[i], the
-    // tick whose hazard state is actually on screen is tick (i-1), which
-    // golfSimulateShot evaluated at nominal time shotStartTime + (i-1) *
-    // GOLF_PATROL_MS_PER_TICK. Recomputing this every frame keeps it
-    // exactly in step with wherever the replay currently is, bounce for
-    // bounce, not just accurate at the start and end.
-    local.golfHazardNominalT = shotStartTime + (i - 1) * GOLF_PATROL_MS_PER_TICK;
     if (raw < 1) {
       requestAnimationFrame(frame);
     } else {
-      local.golfHazardNominalT = null; // flight's over — hazards go back to tracking real time
+      local.golfHazardFrozenT = null; // flight's over — the drawbridge goes back to tracking real time
       if (holed) animateGolfBallSink(ballId);
     }
   }
