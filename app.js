@@ -264,6 +264,16 @@ const GOLF_HOLED_THRESHOLD = 5; // how close (course %) counts as "in the hole"
 // etc.) exactly like a real overhit putt trickling back toward the cup.
 const GOLF_HOLE_CAPTURE_SPEED = 0.32; // ~15% of GOLF_SHOT_V0_MAX at full power — well above GOLF_STOP_SPEED (0.05) so this isn't just "already stopped", but low enough that a hard, direct shot is still moving too fast to drop when it first reaches the pin
 const GOLF_LIP_OUT_FRICTION = 0.8; // extra one-time speed haircut the tick a too-fast ball grazes the rim without capturing — a lip-out isn't perfectly free, but it's not a full bounce either
+// A ball at rest between shots can still get hit by a hazard moving/
+// turning solid into it — the drawbridge closing on a ball parked in
+// its gap, or the patrol/windmill sweeping through where a ball is
+// sitting (added 2026-08-15, Craig: "should collide with my ball and
+// send it a direction"). golfSimulateShot only ever runs at the instant
+// someone takes a shot, so this needed a separate, periodic check (see
+// golfIdleHazardCheckTick) rather than being part of that function.
+const GOLF_KNOCK_POWER = 0.18; // modest shove (~11 course-percent units unobstructed) — enough to visibly roll the ball clear, not a full-strength shot
+const GOLF_HAZARD_CHECK_MS = 350; // how often the idle-ball-vs-live-hazard check runs
+const GOLF_HAZARD_KNOCK_COOLDOWN_MS = 3000; // don't re-check a ball this soon after ANY new path it got (a real shot or a previous knock) — gives its own replay animation (up to 2.6s) room to actually finish before it's reconsidered
 const GOLF_MAX_STROKES = 10; // holes forcibly finish here, however far short — flat, not per-par, so a tough hole gets real room to work with
 // The driving range has no real hole to play, no strokes/par, and no
 // score — just somewhere to practice dragging (and bouncing off
@@ -759,6 +769,108 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
   }
   return { path, endX: x, endY: y, holed, splashed, shotStartTime };
 }
+
+// Does hole's CURRENT hazard state (live Date.now(), same instant a
+// player looking at the screen right now would see) overlap a ball
+// sitting at `ballPos`? Reuses the exact same collision test the shot
+// simulation itself uses (golfCollideBallObstacle) against each hazard
+// kind's live position/state — a closed drawbridge is just a rect
+// obstacle, patrol a circle, windmill the same discretized-arm nodes
+// golfWindmillNodes already builds for real shot collisions. Returns the
+// angle (radians) to knock the ball away along — the first hazard found
+// overlapping wins if somehow more than one does, good enough for this.
+function golfIdleHazardHit(hole, ballPos) {
+  const now = Date.now();
+  const candidates = [];
+  if (hole.patrol) candidates.push({ shape: "circle", r: hole.patrol.r, ...golfPatrolPosition(hole.patrol, now) });
+  if (hole.windmill) candidates.push(...golfWindmillNodes(hole.windmill, now));
+  if (hole.drawbridge && !golfIsDrawbridgeOpen(hole.drawbridge, now)) {
+    candidates.push({ x: hole.drawbridge.x, y: hole.drawbridge.y, w: hole.drawbridge.w, h: hole.drawbridge.h });
+  }
+  for (const obstacle of candidates) {
+    const hit = golfCollideBallObstacle(ballPos.x, ballPos.y, GOLF_BALL_RADIUS, obstacle);
+    if (hit) return Math.atan2(hit.ny, hit.nx);
+  }
+  return null;
+}
+
+// Checks every ball in `balls` (gs.balls for the real round, gs.swings
+// for practice — same shape, both work here) against golfIdleHazardHit,
+// and knocks any resting one it finds overlapping a live hazard.
+// `skipPlayerId` (the current turn's player — null in practice, where
+// there's no turn order) is left alone, since that's the one ball that
+// might currently be mid-drag/mid-flight on someone's screen. Reuses
+// golfSimulateShot itself for the knock (a real roll at GOLF_KNOCK_POWER
+// starting from wherever the ball already was, in the direction the
+// collision pushed it) rather than a straight teleport, so it bounces
+// off whatever else is in the way and settles naturally — the exact
+// same physics a real shot gets, just triggered by the environment
+// instead of a player's own swing. Deliberately never lets a knock
+// count as holing out (see the comment inline below) — that's a bigger
+// change (hooking into golfSubmitShot's scoring path) than this
+// deserves; a knock that happens to line up with the cup just stops one
+// step short instead.
+function golfApplyIdleHazardKnocks(balls, hole, wind, skipPlayerId, applyFn) {
+  if (!balls || !hole) return;
+  const now = Date.now();
+  for (const [playerId, ball] of Object.entries(balls)) {
+    if (!ball || ball.holedOut || ball.holed || playerId === skipPlayerId) continue;
+    const lastTouch = local.golfHazardKnockCooldown[playerId];
+    if (lastTouch && now - lastTouch < GOLF_HAZARD_KNOCK_COOLDOWN_MS) continue;
+    const hitAngle = golfIdleHazardHit(hole, ball);
+    if (hitAngle == null) continue;
+    local.golfHazardKnockCooldown[playerId] = now;
+    const sim = golfSimulateShot(hole, ball, hitAngle, GOLF_KNOCK_POWER, wind, now);
+    const holedByKnock = sim.holed && sim.path.length > 1;
+    const endPoint = holedByKnock ? sim.path[sim.path.length - 2] : { x: sim.endX, y: sim.endY };
+    applyFn(playerId, {
+      ...ball,
+      x: endPoint.x,
+      y: endPoint.y,
+      path: holedByKnock ? sim.path.slice(0, -1) : sim.path,
+      splashed: sim.splashed,
+    });
+  }
+}
+
+// Runs once every GOLF_HAZARD_CHECK_MS on whichever client(s) happen to
+// be viewing a golf screen right now — no single "authority" device;
+// any client can detect and apply this (same open-trust model as every
+// other write in this app's shared room state, see README), and since a
+// correction moves the ball clear of the hazard, a near-simultaneous
+// duplicate detection from another client just stops finding an overlap
+// once the first write actually lands. Always re-reads `room` fresh
+// (not captured in a closure) since the active hole/screen can change
+// between ticks.
+function golfIdleHazardCheckTick() {
+  if (room?.status === "golf" && room.game_state?.golf) {
+    const gs = room.game_state.golf;
+    const hole = GOLF_HOLES[gs.holeIndex];
+    golfApplyIdleHazardKnocks(gs.balls, hole, gs.wind, golfCurrentTurnPlayerId(gs), (playerId, patch) => {
+      updateRoom({ game_state: { golf: { ...gs, balls: { ...gs.balls, [playerId]: patch } } } });
+    });
+  } else if (room?.status === "golf-practice" && room.game_state?.golfPractice) {
+    const gs = room.game_state.golfPractice;
+    const hole = currentPracticeHole(gs);
+    golfApplyIdleHazardKnocks(gs.swings, hole, gs.wind, null, (playerId, patch) => {
+      updateRoom({ game_state: { golfPractice: { ...gs, swings: { ...gs.swings, [playerId]: patch } } } });
+    });
+  }
+}
+// Starts the check above exactly once for the page's whole lifetime —
+// called from renderGolf()/renderGolfPractice() on every render, guarded
+// so only the first call actually does anything. Deliberately a single
+// long-lived setInterval rather than an animation-frame loop tied to a
+// specific hole/element (like the patrol/windmill/drawbridge visuals
+// are) — this isn't driving anything on screen itself, just periodically
+// checking data, so it doesn't need per-frame precision or a per-hole
+// id to key off.
+function ensureGolfIdleHazardCheck() {
+  if (local.golfIdleHazardCheckStarted) return;
+  local.golfIdleHazardCheckStarted = true;
+  setInterval(golfIdleHazardCheckTick, GOLF_HAZARD_CHECK_MS);
+}
+
 // Golf scoring, fourth pass in one day (2026-08-14) — history, in case
 // this gets touched again:
 //  1. Originally: placementPoints(i, n) off final ranking, same mechanism
@@ -831,6 +943,8 @@ let local = {
   // golfHazardClock — see that function's comment for why patrol/
   // windmill don't.
   golfHazardFrozenT: null,
+  golfIdleHazardCheckStarted: false, // guards ensureGolfIdleHazardCheck's setInterval so it only ever starts once per page load
+  golfHazardKnockCooldown: {}, // playerId -> Date.now() of their ball's last new path (a shot OR a knock) — see golfApplyIdleHazardKnocks
   shootoutAnim: { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
@@ -2753,6 +2867,7 @@ function resetLocalGameState() {
   local.golfWindmillLoopId = null;
   local.golfDrawbridgeLoopId = null;
   local.golfHazardFrozenT = null;
+  local.golfHazardKnockCooldown = {};
   local.shootoutAnim = { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
     holeIndex: null,
@@ -4201,6 +4316,7 @@ function practiceSwingLabel(swing, hole) {
 }
 
 function renderGolfPractice() {
+  ensureGolfIdleHazardCheck();
   const isHost = myPlayer()?.is_host;
   const gs = room.game_state.golfPractice || { swings: {} };
   const hole = currentPracticeHole(gs);
@@ -4299,6 +4415,7 @@ function renderGolfHazardLegend() {
 }
 
 function renderGolf() {
+  ensureGolfIdleHazardCheck();
   const me = myPlayer();
   const isHost = me?.is_host;
   const gs = room.game_state.golf;
@@ -4491,6 +4608,12 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         // missing (e.g. a hole/practice reset that jumps the ball
         // straight to the tee — nothing to replay there).
         animating = true;
+        // Also resets the idle-hazard-knock cooldown (see
+        // golfApplyIdleHazardKnocks) — ANY new path, whether a real shot
+        // or a previous knock, buys this ball GOLF_HAZARD_KNOCK_COOLDOWN_MS
+        // before it's reconsidered, so its own replay gets a chance to
+        // actually finish first.
+        local.golfHazardKnockCooldown[p.id] = Date.now();
         const from = { x: track.x, y: track.y };
         const to = { x: ball.x, y: ball.y };
         const path = Array.isArray(ball.path) && ball.path.length > 1 ? ball.path : [from, to];
