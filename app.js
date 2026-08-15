@@ -827,6 +827,28 @@ function golfApplyIdleHazardKnocks(balls, hole, wind, skipPlayerId, applyFn) {
     if (local.golfBallFlightActive[playerId]) continue;
     const hitAngle = golfIdleHazardHit(hole, ball);
     if (hitAngle == null) continue;
+    // Set eagerly, synchronously, the instant we decide to knock — not
+    // only inside animateGolfBallFlight once the write below round-trips
+    // back through Supabase and re-renders. applyFn (updateRoom) is
+    // async and this function's own caller (golfIdleHazardCheckTick)
+    // doesn't await it, so without this the very NEXT tick (350ms later)
+    // could still see this ball's stale, pre-knock position — still
+    // overlapping the hazard — and fire a second knock before the first
+    // one's result has even come back, and a third before THAT lands,
+    // and so on. Each one restarts animateGolfBallFlight's freeze/
+    // unfreeze cycle on the drawbridge, which is exactly what Craig saw
+    // as rapid flashing. animateGolfBallFlight sets this same flag again
+    // once the real animation starts (harmless, already true) and clears
+    // it when the roll actually finishes, same as for a normal shot. If
+    // the write below never lands (a dropped network, an update rejected
+    // rows-wise) that "real" clear never fires either — a safety timeout
+    // force-clears it regardless, comfortably past the longest a genuine
+    // replay can take, so a lost write costs one missed knock, not this
+    // ball forever after.
+    local.golfBallFlightActive[playerId] = true;
+    setTimeout(() => {
+      local.golfBallFlightActive[playerId] = false;
+    }, 3000);
     const sim = golfSimulateShot(hole, ball, hitAngle, GOLF_KNOCK_POWER, wind, now);
     const holedByKnock = sim.holed && sim.path.length > 1;
     const endPoint = holedByKnock ? sim.path[sim.path.length - 2] : { x: sim.endX, y: sim.endY };
