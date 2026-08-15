@@ -161,17 +161,23 @@ const GOLF_HOLES = [
       { x: 75, y: 85, r: 4, shape: "circle" }, // leg 1 — a steward's post right before gate 1's gap
     ],
     slopes: [
-      { x: 16, y: 57, w: 20, h: 14, dir: "up" }, // guards the west entry into the long middle stretch, between gate 1 and gate 2
+      { x: 22, y: 57, w: 20, h: 14, dir: "down" }, // guards the west entry into the long middle stretch, between gate 1 and gate 2
     ],
     water: [
       { x: 20, y: 11, w: 10, h: 5 }, // final approach — overshoot and it's gone
     ],
-    // Guards the EAST exit of the middle stretch, right before gate 2's
-    // own gap — bookends the stretch opposite the slope above, so both
-    // ends of that long corridor have something guarding them now.
-    drawbridge: { id: "liverpool-gate", x: 80, y: 57, w: 18, h: 10, period: 3200, openRatio: 0.4 },
-    // Sweeps the corridor between gate 2 and gate 3.
-    patrol: { id: "liverpool", axis: "y", baseX: 85, baseY: 31, range: 5, r: 3, period: 3800 },
+    // Rotated 90° to a vertical orientation (w/h swapped from the
+    // original 18x10) and moved left, sized to sit EXACTLY in the y47-67
+    // gap between gate 2 (bottom edge y47) and gate 1 (top edge y67) —
+    // touches both, no gap on either end, a real bridge connecting them
+    // rather than a small gate floating in open space. Still only 10
+    // units wide (x35-45), so there's room to route around it via the
+    // rest of the corridor when it's closed.
+    drawbridge: { id: "liverpool-gate", x: 40, y: 57, w: 10, h: 20, period: 3200, openRatio: 0.4 },
+    // Moved further into the middle of the corridor (was baseX 85, right
+    // at the edge) so it sits properly between gate 2 and gate 3 rather
+    // than off to one side of the space between them.
+    patrol: { id: "liverpool", axis: "y", baseX: 50, baseY: 31, range: 5, r: 3, period: 3800 },
   },
   {
     club: "Leeds United",
