@@ -86,7 +86,7 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-arsenal.png",
     ballHue: 0, // navy bg -> warm orange/gold ball
     name: "The Emirates",
-    description: "A proper maze now, not just two open gates — dogleg north through the corridor, then south again to the green.",
+    description: "Tee and green both sit along the bottom now — up through the corridor and back down again, a real U-shaped dogleg.",
     par: 3,
     // Course redesign 2026-08-15 — Craig felt every hole but Barcelona
     // read as "a couple of barriers in an open field" rather than an
@@ -97,8 +97,8 @@ const GOLF_HOLES = [
     // beyond the gap is a real bounded channel, not open green. Easiest
     // hole on the course, so kept to a single S-bend (2 turns) — every
     // other redesigned hole has more.
-    tee: { x: 12, y: 50 },
-    pin: { x: 86, y: 50 },
+    tee: { x: 12, y: 85 },
+    pin: { x: 86, y: 85 },
     obstacles: [
       { x: 35, y: 64.5, w: 6, h: 65 }, // turn 1 — blocks the south 2/3, gap north (y 3-32)
       // Caps the corridor's floor past turn 1, so it's a real enclosed
@@ -119,7 +119,10 @@ const GOLF_HOLES = [
       { x: 50, y: 16, w: 16, h: 22, dir: "down" }, // inside the enclosed corridor past turn 1 — resists cutting straight across it
     ],
     water: [
-      { x: 86, y: 62, w: 14, h: 8 }, // just past the green — overcook the approach and it's gone
+      // Repositioned with the pin (was y62, guarding the old mid-height
+      // green) — still sits just short of it, not past it, so overcooking
+      // the final approach is what finds it, same as before.
+      { x: 86, y: 72, w: 14, h: 8 }, // just short of the green — overcook the approach and it's gone
     ],
     // The easiest hole on the course gets the gentlest, slowest patrol —
     // a fair introduction to the mechanic before the pace ramps up on the
