@@ -307,6 +307,13 @@ const GOLF_PRACTICE_HOLE_VARIANTS = [
     sand: [{ x: 20, y: 55, w: 14, h: 10 }],
     water: [{ x: 68, y: 15, w: 12, h: 8 }],
     patrol: { id: "practice0", axis: "x", baseX: 50, baseY: 50, range: 15, r: 3, period: 3500 },
+    // Windmill/drawbridge (added 2026-08-15) — only on this one practice
+    // variant for now, just so both new mechanics are actually testable
+    // tonight; not yet on variants 1/2 or any real hole. Full practice
+    // parity + real per-hole placement both land in the upcoming
+    // course-design pass, same as every other hazard already did.
+    windmill: { id: "practice0-mill", pivotX: 83, pivotY: 70, length: 9, thickness: 3, r: 3, period: 3000 },
+    drawbridge: { id: "practice0-gate", x: 50, y: 40, w: 20, h: 6, period: 2500, openRatio: 0.45 },
   },
   {
     tee: { x: 50, y: 88 },
@@ -475,10 +482,63 @@ const GOLF_SAND_FRICTION = 0.975;
 // decided (and fair) the instant the shot is taken, this is a minor
 // visual-polish gap, not a fairness one. Revisit only if it's actually
 // noticeable/annoying once played live.
-const GOLF_PATROL_MS_PER_TICK = 40;
+const GOLF_PATROL_MS_PER_TICK = 40; // also reused by the windmill/drawbridge below — same "how much wall-clock time does one simulated tick represent" convention, no reason for each timed hazard to invent its own
 function golfPatrolPosition(patrol, tMs) {
   const offset = patrol.range * Math.sin((2 * Math.PI * tMs) / patrol.period);
   return patrol.axis === "x" ? { x: patrol.baseX + offset, y: patrol.baseY } : { x: patrol.baseX, y: patrol.baseY + offset };
+}
+
+// Windmill — a rotating bar hazard, added 2026-08-15 alongside the timed
+// drawbridge below (both requested after Craig asked for more course
+// variety; picked from a shortlist of real mini-golf/video-game hazard
+// ideas — see conversation). Same wall-clock-time-only convention as the
+// patrol pillar above: position is a pure function of Date.now(), not
+// room state, so every client computes it independently with zero extra
+// DB traffic.
+//
+// Rather than write new rotated-rectangle collision math (real risk of
+// getting subtle geometry wrong with no way to visually verify it before
+// shipping — see the ball-icon redesign earlier the same day), the bar's
+// collision is approximated by a row of circular nodes spaced out along
+// each of its two opposite arms, from just past the pivot out to the
+// tip — reusing golfCollideBallObstacle's already-proven circle branch,
+// the exact same one every pillar/patrol hazard already relies on.
+// GOLF_WINDMILL_ARM_POINTS nodes per arm is enough that a ball can't
+// tunnel through the gaps between them at normal shot speeds (each gap
+// is windmill.length / GOLF_WINDMILL_ARM_POINTS wide, well under a
+// single tick's max travel distance).
+const GOLF_WINDMILL_ARM_POINTS = 3;
+function golfWindmillNodes(windmill, tMs) {
+  const angle = (2 * Math.PI * tMs) / windmill.period;
+  const nodes = [];
+  for (const armAngle of [angle, angle + Math.PI]) {
+    for (let i = 1; i <= GOLF_WINDMILL_ARM_POINTS; i++) {
+      const dist = (windmill.length * i) / GOLF_WINDMILL_ARM_POINTS;
+      nodes.push({ shape: "circle", r: windmill.r, x: windmill.pivotX + Math.cos(armAngle) * dist, y: windmill.pivotY + Math.sin(armAngle) * dist });
+    }
+  }
+  return nodes;
+}
+// The on-screen bar (see renderGolfCourse/ensureGolfWindmillAnim) is one
+// smooth rotating rectangle through the pivot, not discretized dots —
+// same accepted physics/visual gap as the patrol pillar's own comment
+// above: a shot's outcome is fully decided at release using the exact
+// node positions at each simulated tick; only the idle/replay VISUAL
+// takes the smooth-rotation shortcut.
+function golfWindmillAngleDeg(windmill, tMs) {
+  return ((360 * tMs) / windmill.period) % 360;
+}
+
+// Timed drawbridge/gate — a wall segment that's only solid while
+// "closed", same wall-clock-time convention as the windmill/patrol
+// above. `openRatio` is the fraction of one full `period` it spends
+// open (e.g. 0.4 = open 40% of the cycle, closed the rest) — deliberately
+// biased toward closed by default in course design, since "wait for it"
+// should be the normal case and "thread it while open" the skill shot,
+// not the other way round.
+function golfIsDrawbridgeOpen(drawbridge, tMs) {
+  const phase = (((tMs % drawbridge.period) + drawbridge.period) % drawbridge.period) / drawbridge.period;
+  return phase < drawbridge.openRatio;
 }
 
 // Circle-vs-obstacle collision (the ball is always treated as a circle).
@@ -547,6 +607,25 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
   const path = [{ x, y }];
   let holed = false;
   let splashed = false;
+  // Shared by every solid-obstacle check below (regular obstacles, the
+  // patrol pillar, windmill nodes, a closed drawbridge) — same collide-
+  // and-reflect logic four different hazard kinds used to each duplicate
+  // inline. Closes over the tick loop's own x/y/vx/vy (`let`-bound in
+  // this function's scope), so it always reads/mutates whatever the
+  // CURRENT position/velocity is, exactly as if it were still inlined.
+  function collide(obstacle) {
+    const hit = golfCollideBallObstacle(x, y, GOLF_BALL_RADIUS, obstacle);
+    if (!hit) return;
+    x += hit.pushX;
+    y += hit.pushY;
+    // Only reflect if actually still moving into the surface — skips
+    // re-reflecting a ball that's just resting against it.
+    const dot = vx * hit.nx + vy * hit.ny;
+    if (dot < 0) {
+      vx -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.nx;
+      vy -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.ny;
+    }
+  }
   for (let tick = 0; tick < GOLF_MAX_SIM_TICKS && !holed && !splashed; tick++) {
     // Once per TICK, not per substep — same cadence as GOLF_FRICTION
     // below, which is what keeps this self-limiting (see the comment on
@@ -558,14 +637,22 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
       vx += windDx * push;
       vy += windDy * push;
     }
-    // Patrol hazard's position for THIS tick, computed once (see
-    // GOLF_PATROL_MS_PER_TICK) and reused for all 4 substeps below — its
-    // movement over a single tick's worth of simulated time is small
-    // enough that re-evaluating per-substep wouldn't visibly change
-    // anything, same reasoning as wind/friction's own per-tick cadence.
-    const patrolObstacle = hole.patrol
-      ? { shape: "circle", r: hole.patrol.r, ...golfPatrolPosition(hole.patrol, shotStartTime + tick * GOLF_PATROL_MS_PER_TICK) }
-      : null;
+    // Every timed hazard's state for THIS tick, computed once (see
+    // GOLF_PATROL_MS_PER_TICK) and reused for all 4 substeps below — the
+    // movement/state change over a single tick's worth of simulated time
+    // is small enough that re-evaluating per-substep wouldn't visibly
+    // change anything, same reasoning as wind/friction's own per-tick
+    // cadence.
+    const nominalT = shotStartTime + tick * GOLF_PATROL_MS_PER_TICK;
+    const patrolObstacle = hole.patrol ? { shape: "circle", r: hole.patrol.r, ...golfPatrolPosition(hole.patrol, nominalT) } : null;
+    const windmillNodes = hole.windmill ? golfWindmillNodes(hole.windmill, nominalT) : null;
+    // Omitting `shape` (rather than setting shape:"rect") matches every
+    // other rectangular obstacle in GOLF_HOLES — golfCollideBallObstacle
+    // treats anything that isn't shape:"circle" as a rect.
+    const drawbridgeObstacle =
+      hole.drawbridge && !golfIsDrawbridgeOpen(hole.drawbridge, nominalT)
+        ? { x: hole.drawbridge.x, y: hole.drawbridge.y, w: hole.drawbridge.w, h: hole.drawbridge.h }
+        : null;
     for (let sub = 0; sub < GOLF_SIM_SUBSTEPS; sub++) {
       x += vx / GOLF_SIM_SUBSTEPS;
       y += vy / GOLF_SIM_SUBSTEPS;
@@ -601,35 +688,16 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
         }
       }
       if (splashed) break;
-      for (const obstacle of obstacles) {
-        const hit = golfCollideBallObstacle(x, y, GOLF_BALL_RADIUS, obstacle);
-        if (!hit) continue;
-        x += hit.pushX;
-        y += hit.pushY;
-        // Only reflect if actually still moving into the surface — skips
-        // re-reflecting a ball that's just resting against it.
-        const dot = vx * hit.nx + vy * hit.ny;
-        if (dot < 0) {
-          vx -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.nx;
-          vy -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.ny;
-        }
-      }
+      for (const obstacle of obstacles) collide(obstacle);
       // Same collision math as any solid obstacle, just against wherever
-      // the patrol happens to be for this tick (see patrolObstacle above)
-      // — a ball caught mid-sweep bounces off it exactly like a fixed
-      // pillar it happened to run into.
-      if (patrolObstacle) {
-        const hit = golfCollideBallObstacle(x, y, GOLF_BALL_RADIUS, patrolObstacle);
-        if (hit) {
-          x += hit.pushX;
-          y += hit.pushY;
-          const dot = vx * hit.nx + vy * hit.ny;
-          if (dot < 0) {
-            vx -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.nx;
-            vy -= (1 + GOLF_WALL_RESTITUTION) * dot * hit.ny;
-          }
-        }
+      // the patrol/windmill/drawbridge happens to be for this tick (see
+      // above) — a ball caught mid-sweep/mid-swing/against a closed gate
+      // bounces off exactly like a fixed pillar it happened to run into.
+      if (patrolObstacle) collide(patrolObstacle);
+      if (windmillNodes) {
+        for (const node of windmillNodes) collide(node);
       }
+      if (drawbridgeObstacle) collide(drawbridgeObstacle);
       if (Math.hypot(hole.pin.x - x, hole.pin.y - y) <= GOLF_HOLED_THRESHOLD) {
         if (Math.hypot(vx, vy) <= GOLF_HOLE_CAPTURE_SPEED) {
           holed = true;
@@ -723,6 +791,8 @@ let local = {
   botKeeperScheduledFor: null,
   golfBotScheduled: {}, // `${holeIndex}:${botId}:${strokes}` -> true, so a bot's turn isn't scheduled twice
   golfPatrolLoopId: null, // element id the patrol-hazard rAF loop is currently driving, so a redundant render doesn't spawn a duplicate loop (see ensureGolfPatrolAnim)
+  golfWindmillLoopId: null, // same guard, for the windmill's rAF loop (see ensureGolfWindmillAnim)
+  golfDrawbridgeLoopId: null, // same guard, for the drawbridge's rAF loop (see ensureGolfDrawbridgeAnim)
   shootoutAnim: { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false },
   golf: {
     holeIndex: null,
@@ -2635,6 +2705,8 @@ function resetLocalGameState() {
   local.botKeeperScheduledFor = null;
   local.golfBotScheduled = {};
   local.golfPatrolLoopId = null;
+  local.golfWindmillLoopId = null;
+  local.golfDrawbridgeLoopId = null;
   local.shootoutAnim = { matchKey: null, animatedCount: 0, phase: null, entry: null, kickAnimTriggered: false, impactShown: false, finalizing: false };
   local.golf = {
     holeIndex: null,
@@ -4168,6 +4240,8 @@ function renderGolfHazardLegend() {
     { swatch: "water", label: "Water", desc: "Ends the shot on contact, ball back to the tee." },
     { swatch: "wind", label: "Wind", desc: "Pushes the whole flight one way — same for everyone on the hole." },
     { swatch: "patrol", label: "Patrolling hazard", desc: "A solid pillar that sweeps back and forth in real time — time your shot around it." },
+    { swatch: "windmill", label: "Windmill", desc: "A solid bar spinning around a fixed point in real time — same idea as the patrolling hazard, different motion." },
+    { swatch: "drawbridge", label: "Timed gate", desc: "Toggles solid and passable on a repeating timer — wait for it, or thread it while it's open." },
   ];
   return `
     <div class="golf-hazard-legend">
@@ -4440,6 +4514,31 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
     requestAnimationFrame(() => ensureGolfPatrolAnim(hole.patrol));
   }
 
+  // Windmill — same live-position-via-rAF pattern as the patrol pillar
+  // above, just rotation instead of translation. Rendered as ONE smooth
+  // bar through the pivot (see golfWindmillNodes for why collision uses
+  // discrete nodes instead — this element is purely cosmetic, its own
+  // width IS the full arm-to-arm span so it visually reaches both tips).
+  let windmillEl = "";
+  if (hole.windmill) {
+    const w = hole.windmill;
+    const deg0 = golfWindmillAngleDeg(w, Date.now());
+    windmillEl = `<div id="golf-windmill-${w.id}" class="golf-windmill-bar" style="left:${w.pivotX}%; top:${w.pivotY}%; width:${w.length * 2}%; height:${w.thickness}%; transform: translate(-50%, -50%) rotate(${deg0}deg);"></div>`;
+    requestAnimationFrame(() => ensureGolfWindmillAnim(w));
+  }
+
+  // Drawbridge — same live rAF pattern again, toggling an "open" class
+  // (see golf-drawbridge/.open in style.css) rather than moving anything,
+  // so players watching (not just the one taking the shot) can actually
+  // see and time the gate in real time.
+  let drawbridgeEl = "";
+  if (hole.drawbridge) {
+    const db = hole.drawbridge;
+    const openNow = golfIsDrawbridgeOpen(db, Date.now());
+    drawbridgeEl = `<div id="golf-drawbridge-${db.id}" class="golf-drawbridge${openNow ? " open" : ""}" style="left:${db.x}%; top:${db.y}%; width:${db.w}%; height:${db.h}%;"></div>`;
+    requestAnimationFrame(() => ensureGolfDrawbridgeAnim(db));
+  }
+
   const dragging = dragState?.subPhase === "dragging";
   // bgImage (added 2026-08-15, Craig's own crest photos) replaces the
   // plain grass gradient outright for a themed hole — background-image
@@ -4479,6 +4578,8 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       <div class="golf-tee-mat" style="left:${hole.tee.x}%; top:${hole.tee.y}%;"></div>
       ${obstacles}
       ${patrolEl}
+      ${windmillEl}
+      ${drawbridgeEl}
       <div class="golf-cup" style="left:${hole.pin.x}%; top:${hole.pin.y}%;"></div>
       <div class="golf-tee-marker" style="left:${hole.tee.x}%; top:${hole.tee.y}%;"></div>
       ${extraContent}
@@ -4511,6 +4612,47 @@ function ensureGolfPatrolAnim(patrol) {
     const pos = golfPatrolPosition(patrol, Date.now());
     el.style.left = pos.x + "%";
     el.style.top = pos.y + "%";
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// Same self-terminating "re-query by id every frame, guard against a
+// duplicate loop via local.golfWindmillLoopId" pattern as the patrol
+// pillar above — see its comment for the full reasoning.
+function ensureGolfWindmillAnim(windmill) {
+  const elId = `golf-windmill-${windmill.id}`;
+  if (local.golfWindmillLoopId === elId) return;
+  local.golfWindmillLoopId = elId;
+  function frame() {
+    const el = document.getElementById(elId);
+    if (!el) {
+      if (local.golfWindmillLoopId === elId) local.golfWindmillLoopId = null;
+      return;
+    }
+    const deg = golfWindmillAngleDeg(windmill, Date.now());
+    el.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// Same pattern again, toggling the .open class each frame instead of
+// moving anything — see golfIsDrawbridgeOpen for the actual open/closed
+// logic (identical calculation the physics simulation uses, so what
+// players see always matches what a shot taken right now would resolve
+// against).
+function ensureGolfDrawbridgeAnim(drawbridge) {
+  const elId = `golf-drawbridge-${drawbridge.id}`;
+  if (local.golfDrawbridgeLoopId === elId) return;
+  local.golfDrawbridgeLoopId = elId;
+  function frame() {
+    const el = document.getElementById(elId);
+    if (!el) {
+      if (local.golfDrawbridgeLoopId === elId) local.golfDrawbridgeLoopId = null;
+      return;
+    }
+    el.classList.toggle("open", golfIsDrawbridgeOpen(drawbridge, Date.now()));
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
