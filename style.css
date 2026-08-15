@@ -801,6 +801,16 @@ body:has(.golf-course) #app {
    redesign. Kept the outline/shadow treatment as a drop-shadow filter
    (works on emoji glyphs the way box-shadow doesn't) and the 19px sizing
    from the earlier "make the ball slightly bigger" request. */
+/* --ball-sepia/--ball-sat/--ball-hue are set inline per-hole (see
+   renderGolfCourse's colorStyle, driven by GOLF_HOLES' ballHue) alongside
+   --club-primary/--club-secondary on the ancestor .golf-course, and
+   inherit down to this element same as those two already did — no new
+   plumbing needed. Default 0/1/0deg is a full no-op filter chain (sepia
+   at 0 leaves the image completely unchanged, so saturate/hue-rotate
+   have nothing to act on), which is deliberate: the practice range and
+   any hole without a themed background/ballHue keeps the ⚽ emoji's
+   real black-and-white colours untouched, only real holes with a photo
+   background get the complementary tint. */
 .golf-ball-icon {
   position: absolute;
   left: 0;
@@ -808,7 +818,11 @@ body:has(.golf-course) #app {
   transform: translate(-50%, -50%);
   display: block;
   font-size: 19px;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  filter:
+    sepia(var(--ball-sepia, 0))
+    saturate(var(--ball-sat, 1))
+    hue-rotate(var(--ball-hue, 0deg))
+    drop-shadow(0 1px 2px rgba(0,0,0,0.6));
 }
 /* Ball movement is driven directly by JS (animateGolfBallFlight in
    app.js), not CSS — a redundant render mid-flight (the realtime echo of

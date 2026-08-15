@@ -73,6 +73,18 @@ const GOLF_HOLES = [
     club: "Arsenal",
     crest: "AFC",
     colors: { primary: "#EF0107", secondary: "#FFFFFF" },
+    // Craig's own crest artwork, used as the hole's actual background
+    // (2026-08-15) — see the file-level note above .golf-course-tint/
+    // renderGolfCrestWatermark in style.css/app.js for why those two are
+    // skipped whenever bgImage is set (this photo already does their job).
+    // ballHue feeds --ball-hue on .golf-ball-icon (style.css) — an
+    // approximate complementary tint via sepia+hue-rotate so the ball
+    // stays visible against this specific photo's own background colour
+    // (navy here), not the club's brand red used above for the tint/
+    // badge — see the comment above GOLF_HOLES' closing bracket for the
+    // full per-hole colour reasoning.
+    bgImage: "assets/course-bg-arsenal.png",
+    ballHue: 0, // navy bg -> warm orange/gold ball
     name: "The Emirates",
     description: "Two gates down the cannon barrel — south, then north.",
     par: 3,
@@ -100,6 +112,8 @@ const GOLF_HOLES = [
     club: "Liverpool",
     crest: "LFC",
     colors: { primary: "#C8102E", secondary: "#F6EB61" },
+    bgImage: "assets/course-bg-liverpool.png",
+    ballHue: 140, // dark red/maroon bg -> teal/green ball
     name: "Anfield (The Kop)",
     description: "Two gates either side of the Kop — swing wide, then swing back, all the way into the far corner.",
     par: 4,
@@ -131,6 +145,8 @@ const GOLF_HOLES = [
     club: "Leeds United",
     crest: "LUFC",
     colors: { primary: "#1D428A", secondary: "#FFCD00" },
+    bgImage: "assets/course-bg-leeds.png",
+    ballHue: 350, // blue bg -> orange/amber ball
     name: "Elland Road",
     description: "Thread the middle gate, then the cup opens away from the tee — go all the way round.",
     par: 3,
@@ -163,6 +179,8 @@ const GOLF_HOLES = [
     club: "Manchester United",
     crest: "MUFC",
     colors: { primary: "#DA291C", secondary: "#FBE122" },
+    bgImage: "assets/course-bg-man-united.png",
+    ballHue: 148, // vivid red bg -> cyan/teal ball
     name: "Old Trafford (Theatre of Dreams)",
     description: "A proper triple-bend slalom, wall to wall to wall.",
     par: 4,
@@ -190,6 +208,8 @@ const GOLF_HOLES = [
     club: "Barcelona",
     crest: "FCB",
     colors: { primary: "#A50044", secondary: "#004D98" },
+    bgImage: "assets/course-bg-barcelona.png",
+    ballHue: 123, // maroon/magenta bg -> green ball
     name: "Camp Nou",
     description: "The grand finale — corner to corner, four gates, water guarding the green, no easy way through.",
     par: 6,
@@ -4421,11 +4441,36 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
   }
 
   const dragging = dragState?.subPhase === "dragging";
-  const colorStyle = hole.colors ? `--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};` : "";
-  const tint = hole.colors ? `<div class="golf-course-tint"></div>` : "";
-  const crestWatermark = hole.colors && hole.crest ? renderGolfCrestWatermark(hole) : "";
+  // bgImage (added 2026-08-15, Craig's own crest photos) replaces the
+  // plain grass gradient outright for a themed hole — background-image
+  // is a longhand, so setting it inline overrides just that piece of
+  // .golf-course's stylesheet `background: radial-gradient(...)` shorthand
+  // without needing a separate CSS class. `cover` + `center` crops
+  // whatever the source photo's own aspect ratio is to this course's 4:3
+  // box; every supplied crest already sits close enough to its own
+  // image's centre that plain centring lands it close to the middle of
+  // the box too, no per-hole position tuning needed. ballHue drives
+  // --ball-hue (plus the --ball-sepia/--ball-sat toggle) on
+  // .golf-ball-icon in style.css — an approximate complementary tint via
+  // sepia+hue-rotate, since a colour ⚽ emoji has no `color` property to
+  // set directly (same limitation the PK keeper glove hit, see
+  // design-decisions). Both --club-primary/--club-secondary stay set
+  // regardless — the wall's accent stripe and (on any untethed hole
+  // without bgImage) the tint/watermark below still want them.
+  const colorStyle = hole.colors
+    ? `--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};${
+        hole.ballHue != null ? ` --ball-sepia:1; --ball-sat:6; --ball-hue:${hole.ballHue}deg;` : ""
+      }`
+    : "";
+  const bgStyle = hole.bgImage ? `background-image:url('${hole.bgImage}'); background-size:cover; background-position:center;` : "";
+  // The tint wash + drawn watermark crest both exist purely to put the
+  // club's colours/emblem on the grass — redundant (and visually
+  // muddier layered on top of) a real photo doing that job directly, so
+  // both are skipped whenever bgImage is present.
+  const tint = hole.colors && !hole.bgImage ? `<div class="golf-course-tint"></div>` : "";
+  const crestWatermark = hole.colors && hole.crest && !hole.bgImage ? renderGolfCrestWatermark(hole) : "";
   return `
-    <div class="golf-course${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}" style="${colorStyle}">
+    <div class="golf-course${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}" style="${colorStyle}${bgStyle}">
       ${tint}
       ${crestWatermark}
       ${slopeEls}
