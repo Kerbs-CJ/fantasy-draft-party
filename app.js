@@ -4389,7 +4389,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
       if (holed && !animating && sunk) return "";
       return `
         <div id="golf-ball-${p.id}" class="golf-course-ball${holedOut ? " holed" : ""}" style="left:${renderX}%; top:${renderY}%;" title="${escapeHtml(p.name)}">
-          <span class="golf-ball-icon"></span>
+          <span class="golf-ball-icon">⚽</span>
           <span class="golf-course-ball-label">${escapeHtml(p.name)}</span>
         </div>`;
     })

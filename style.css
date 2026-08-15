@@ -791,60 +791,24 @@ body:has(.golf-course) #app {
    starting from the ball). Instead .golf-ball-icon centers ONLY itself on
    the anchor via its own translate(-50%,-50%), independent of the label. */
 .golf-course-ball { position: absolute; }
-/* Was the ⚽ emoji — a photographic-style glyph next to everything else
-   on the course being flat CSS gradients, one of the clashes in Craig's
-   "thrown together" complaint (2026-08-15). First CSS-drawn attempt used
-   plain off-center dimple dots, which Craig correctly called out as not
-   actually reading as a football anymore — redone with the real ⚽
-   pattern instead: a black pentagon roughly centered, plus a second
-   pentagon peeking in from one edge (classic football-icon
-   simplification, same convention every flat football emoji/icon uses).
-   `overflow: hidden` + `border-radius: 50%` on the ball itself clips both
-   pentagon pseudo-elements to the circle, so the edge one reads as
-   "partially cut off by the ball's own silhouette" rather than a stray
-   shape poking out. TIER 1 object (shared ink outline + flat offset
-   shadow, scaled down to fit something this small). The pentagons are
-   deliberately NOT symmetric around the center, so the spin JS already
-   applied to this element (animateGolfBallFlight, rotates it every
-   frame) actually reads as spinning instead of a plain circle silently
-   not appearing to move. Sized via width/height now instead of font-size
-   (19px, was 15px before the emoji->CSS swap — see the ball-size request
-   this replaced). */
+/* Two CSS-drawn attempts at this (2026-08-15 — plain dimple dots, then a
+   hand-coordinated black-pentagon clip-path) both failed to actually read
+   as a football on screen; without a way to visually check a hand-drawn
+   shape's real rendered result, guessing pentagon coordinates a third
+   time isn't reliable. Reverted to the real ⚽ emoji — guaranteed to
+   look like a football, since it is one — as the one deliberate
+   exception to this file's "no emoji, everything else is CSS-drawn"
+   redesign. Kept the outline/shadow treatment as a drop-shadow filter
+   (works on emoji glyphs the way box-shadow doesn't) and the 19px sizing
+   from the earlier "make the ball slightly bigger" request. */
 .golf-ball-icon {
   position: absolute;
   left: 0;
   top: 0;
-  width: 19px;
-  height: 19px;
   transform: translate(-50%, -50%);
-  border-radius: 50%;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 30% 26%, rgba(255,255,255,0.85) 0%, transparent 38%),
-    #f7f5ee;
-  border: 1.5px solid var(--golf-ink-strong);
-  box-shadow: 1.5px 2px 0 rgba(0,0,0,0.35);
-}
-.golf-ball-icon::before,
-.golf-ball-icon::after {
-  content: "";
-  position: absolute;
-  background: #1c1e22;
-  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
-}
-.golf-ball-icon::before {
-  left: 50%;
-  top: 48%;
-  width: 46%;
-  height: 46%;
-  transform: translate(-50%, -50%);
-}
-.golf-ball-icon::after {
-  left: 8%;
-  top: -8%;
-  width: 36%;
-  height: 36%;
-  transform: rotate(14deg);
+  display: block;
+  font-size: 19px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
 }
 /* Ball movement is driven directly by JS (animateGolfBallFlight in
    app.js), not CSS — a redundant render mid-flight (the realtime echo of
