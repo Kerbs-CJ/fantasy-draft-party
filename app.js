@@ -4784,7 +4784,7 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
     aimOverlay = `
       <svg class="golf-aim-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
         <line class="golf-aim-line" x1="${dragState.ballPos.x}" y1="${dragState.ballPos.y}" x2="${pull.pullX}" y2="${pull.pullY}"></line>
-        <circle class="golf-aim-dot" cx="${pull.pullX}" cy="${pull.pullY}" r="2.2"></circle>
+        <circle class="golf-aim-dot" cx="${pull.pullX}" cy="${pull.pullY}" r="1.4"></circle>
       </svg>
       <p class="golf-power-readout">Power ${Math.round(vec.power * 100)}%</p>`;
   }

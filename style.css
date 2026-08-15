@@ -293,30 +293,37 @@ input::placeholder { color: #6c9b83; }
 .golf-course.draggable { cursor: grab; touch-action: none; }
 .golf-course.dragging { cursor: grabbing; }
 .golf-aim-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+/* Slingshot pull line, redesigned 2026-08-15 — the original (thick
+   white, wide dashes, heavy glow-halo) read as bulky and sat right on
+   top of the course during every drag. Slimmed down and switched to
+   --accent (ties it into the same gold already used for the wind arrow/
+   tee flag, rather than a one-off white) with a soft dark shadow for
+   contrast against the grass instead of a bright glow — a thin
+   "guideline" feel instead of a bold bar in the way. */
 .golf-aim-line {
-  stroke: #fff;
-  stroke-width: 0.7;
+  stroke: var(--accent);
+  stroke-width: 0.4;
   stroke-linecap: round;
-  stroke-dasharray: 2.4 2.2;
-  opacity: 0.92;
-  filter: drop-shadow(0 0 2px rgba(255,255,255,0.7));
+  stroke-dasharray: 1.4 1.6;
+  opacity: 0.85;
+  filter: drop-shadow(0 0.5px 1px rgba(0,0,0,0.5));
 }
 .golf-aim-dot {
-  fill: #fff;
-  stroke: var(--accent);
-  stroke-width: 0.6;
-  filter: drop-shadow(0 0 3px rgba(255,255,255,0.85));
+  fill: var(--accent);
+  stroke: rgba(12,14,18,0.7);
+  stroke-width: 0.35;
+  filter: drop-shadow(0 0.5px 1px rgba(0,0,0,0.4));
 }
 .golf-power-readout {
   position: absolute;
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
+  background: rgba(10,12,16,0.6);
   color: #fff;
-  padding: 3px 10px;
-  border-radius: 10px;
-  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 9px;
+  font-size: 11px;
   font-weight: 700;
   pointer-events: none;
 }
