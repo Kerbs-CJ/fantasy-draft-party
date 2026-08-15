@@ -228,13 +228,16 @@ input::placeholder { color: #6c9b83; }
 .golf-course {
   position: relative;
   width: 100%;
-  max-width: 640px;
+  /* Matches the driving range's size (was 640/62vh for real holes, smaller
+     than practice's 760/74vh) — Craig liked the practice range's bigger
+     course better and asked to make it the default everywhere, 2026-08-15. */
+  max-width: 760px;
   /* Landscape, not portrait — wider than tall, and max-height is a second
      constraint so it can't push a laptop-height browser window into
      scrolling even at full max-width. Every hole is laid out for this
      shape (mostly horizontal/diagonal tee-to-pin travel). */
   aspect-ratio: 4 / 3;
-  max-height: 62vh;
+  max-height: 74vh;
   margin: 16px auto;
   border-radius: 14px;
   background: radial-gradient(ellipse at center, #2e7d4f 0%, #256840 70%, #1c4f31 100%);
@@ -250,10 +253,6 @@ input::placeholder { color: #6c9b83; }
      this doesn't affect how the course itself looks. */
   overflow: visible;
 }
-/* The driving range gets a bigger course than the scored round — more
-   room to feel out a drag before it counts, and no side-by-side layout
-   (finishers list, etc.) competing for space on that screen. */
-.golf-course-wrap.practice .golf-course { max-width: 760px; max-height: 74vh; }
 /* touch-action:none stops the browser treating a drag on the course as a
    page-scroll gesture — without it, dragging on a touchscreen would
    scroll the page instead of aiming the shot. */
