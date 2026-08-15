@@ -862,16 +862,26 @@ function golfApplyIdleHazardKnocks(balls, hole, wind, skipPlayerId, applyFn) {
   }
 }
 
-// Runs once every GOLF_HAZARD_CHECK_MS on whichever client(s) happen to
-// be viewing a golf screen right now — no single "authority" device;
-// any client can detect and apply this (same open-trust model as every
-// other write in this app's shared room state, see README), and since a
-// correction moves the ball clear of the hazard, a near-simultaneous
-// duplicate detection from another client just stops finding an overlap
-// once the first write actually lands. Always re-reads `room` fresh
-// (not captured in a closure) since the active hole/screen can change
-// between ticks.
+// Runs once every GOLF_HAZARD_CHECK_MS, but only does anything on the
+// HOST's device — host-only exclusivity (same pattern as every other
+// single-writer host lever in this app, e.g. hostSkipGolfTurn). First
+// version let ANY client detect and apply this, reasoning that a
+// correction moving the ball clear would make a near-simultaneous
+// duplicate detection elsewhere just stop finding an overlap — true for
+// ONE other client's stray tick, but with several real devices all
+// polling the same room at once (the normal case at an actual party,
+// everyone watching the same turn), more than one could detect and
+// knock the SAME ball within the same ~350ms window, each with its own
+// physics result, each racing to write and each restarting
+// animateGolfBallFlight's freeze/unfreeze cycle on the drawbridge —
+// which is exactly the repeated flashing Craig saw, worse than the
+// single-client version of this same race already fixed once. A single
+// designated writer removes the possibility entirely rather than
+// relying on the write race resolving harmlessly. Always re-reads
+// `room`/`myPlayer()` fresh (not captured in a closure) since the active
+// hole/screen/host can change between ticks.
 function golfIdleHazardCheckTick() {
+  if (!myPlayer()?.is_host) return;
   if (room?.status === "golf" && room.game_state?.golf) {
     const gs = room.game_state.golf;
     const hole = GOLF_HOLES[gs.holeIndex];
