@@ -68,6 +68,56 @@ const GUESS_CLUE_POINTS = [15, 12, 7, 3]; // indexed by clueIndex (0 = only 1st 
 // clearance (solid obstacles have real collision; a gap narrower than the
 // ball itself traps it bouncing forever, which is worse than no obstacle
 // at all).
+// Man United's "chaos" slope field, added 2026-08-16 — Craig's third
+// idea for that hole (see its own entry below for the full history).
+// Instead of a hand-placed path, ~40 small up/down patches scattered
+// across the whole tee-to-pin span. Slopes are pass-through terrain, not
+// solid obstacles (see the file comment below) — they can never trap a
+// ball, only nudge it — so unlike every maze-style hole on this course,
+// there's zero soft-lock risk here no matter how dense or "random" the
+// layout looks; worst case is just a wildly bouncy ride, never a stuck
+// ball. That's specifically why this is the one hole on the course where
+// a generated-rather-than-hand-placed layout is safe to use at all.
+// Built once at load via a fixed hash (deliberately NOT Math.random() —
+// every client has to see the exact same course; a per-client-random
+// layout would be unfair/inconsistent), so the scatter reads as chaotic
+// but is 100% deterministic and identical for everyone, every time.
+function manUtdChaosSlopes() {
+  const slopes = [];
+  const cols = 8;
+  const rows = 5; // 8x5 = 40
+  const xMin = 18,
+    xMax = 85,
+    yMin = 18,
+    yMax = 80;
+  const cellW = (xMax - xMin) / cols;
+  const cellH = (yMax - yMin) / rows;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const i = row * cols + col;
+      // Classic cheap deterministic hash (sine + fractional part) — two
+      // independent-looking 0..1 values per cell, for jitter/size and
+      // direction. Not cryptographic, doesn't need to be — just needs to
+      // look scattered and never repeat the same value twice in a row.
+      const h1 = Math.sin(i * 12.9898 + 1.1) * 43758.5453;
+      const h2 = Math.sin(i * 78.233 + 4.5) * 19642.987;
+      const j1 = h1 - Math.floor(h1);
+      const j2 = h2 - Math.floor(h2);
+      const x = xMin + cellW * (col + 0.5) + (j1 - 0.5) * cellW * 0.8;
+      const y = yMin + cellH * (row + 0.5) + (j2 - 0.5) * cellH * 0.8;
+      const size = 5 + j1 * 4; // 5-9, a little size variety on top of the scatter
+      slopes.push({
+        x: Math.round(x * 10) / 10,
+        y: Math.round(y * 10) / 10,
+        w: Math.round(size * 10) / 10,
+        h: Math.round(size * 10) / 10,
+        dir: j1 + j2 > 1 ? "up" : "down", // j1/j2 ~independent uniform -> sum>1 is ~50/50
+      });
+    }
+  }
+  return slopes;
+}
+
 const GOLF_HOLES = [
   {
     club: "Arsenal",
@@ -272,38 +322,20 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-man-united.png",
     ballHue: 148, // vivid red bg -> cyan/teal ball
     name: "Old Trafford (Theatre of Dreams)",
-    description: "A climbing ladder of safe rungs from the tee up to a top-right green — miss a rung high or low and the ground drags the ball further off it, rung after rung.",
+    description: "Total chaos — forty small patches of push-you-around ground scattered corner to corner, no safe line through any of it.",
     par: 4,
-    // Redesign 2026-08-16, revised same day per Craig's follow-up — v1 was
-    // a single flat tightrope corner-to-corner; he liked the tee (kept
-    // exactly where it was) but wanted the pin moved to the top-right and
-    // the single alley turned into REPEATED rungs — "almost creating a
-    // ladder of safety" climbing from tee to pin. Every hole's slope zone
-    // already renders as a field of ▲/▼ arrows (see renderGolfCourse's
-    // slopeEls) — this hole is built entirely out of them, no walls.
-    // Three safe rungs (flat, hazard-free rectangles — tee/pin both sit
-    // inside one), stepping diagonally up and to the right:
-    //   rung 1 (tee): x8-38,  y68-80
-    //   rung 2:       x38-68, y42-54
-    //   rung 3 (pin): x68-95, y16-28
-    // Each GAP between two rungs is split into two flanking bands, same
-    // "too high -> shoved further away, too low -> shoved further away"
-    // logic as v1 had once, just repeated at every rung transition: the
-    // half nearer the LOWER rung pushes "down" (undershoot gets sent
-    // back toward the rung you came from), the half nearer the UPPER
-    // rung pushes "up" (overshoot keeps sailing past, away from the rung
-    // you were aiming for). A clean miss on any rung gets punished twice
-    // — once falling short, once flying past — same as the single-alley
-    // version, just now three times over on the way up.
+    // Redesign 2026-08-16, Craig's THIRD idea for this hole in one
+    // session (v1: single tightrope alley; v2: 3-rung diagonal ladder;
+    // both fully replaced, not layered on). Same tee/pin as v2 — kept
+    // per his "keep the tee and hole position" ask this time. No hand-
+    // placed structure at all now: see manUtdChaosSlopes (defined just
+    // above GOLF_HOLES) for the ~40-patch scatter and why a generated
+    // layout is safe specifically for slopes (unlike every maze-style
+    // hole on this course, which are hand-placed and connectivity-
+    // checked precisely because a generated WALL layout risks an
+    // unwinnable soft-lock).
     obstacles: [],
-    slopes: [
-      { x: 23, y: 86, w: 30, h: 12, dir: "down" }, // below rung 1, right off the tee — shoot too weak and it slides back south before you've even cleared the rung you started on
-      { x: 38, y: 64.5, w: 40, h: 7, dir: "down" }, // gap 1, lower half (near rung 1) — undershoot rung 2, get sent back down
-      { x: 38, y: 57.5, w: 40, h: 7, dir: "up" }, // gap 1, upper half (near rung 2) — overshoot rung 1, keep sailing north past rung 2
-      { x: 68, y: 39, w: 40, h: 7, dir: "down" }, // gap 2, lower half (near rung 2) — undershoot rung 3, get sent back down
-      { x: 68, y: 31, w: 40, h: 7, dir: "up" }, // gap 2, upper half (near rung 3) — overshoot rung 2, keep sailing north past rung 3
-      { x: 82, y: 9.5, w: 31, h: 13, dir: "up" }, // above rung 3, guarding the green — overshoot the pin and it just keeps going
-    ],
+    slopes: manUtdChaosSlopes(),
     tee: { x: 12, y: 78 },
     pin: { x: 88, y: 20 },
   },
