@@ -2512,7 +2512,12 @@ function ensureGolfReady() {
 function golfAlreadyAnswered(gs) {
   const me = myPlayer();
   if (!me) return true;
-  return (gs.results[me.id] || []).length > gs.holeIndex;
+  // Fixed 2026-08-16, same root cause/fix as golfFinishedPlayers (see its
+  // own comment for the full story) — this used the identical fragile
+  // `results.length > holeIndex` check, which breaks the same way once
+  // "Force next hole" has ever skipped anyone. Live ball state for the
+  // CURRENT hole only, not cross-hole bookkeeping.
+  return !!gs.balls[me.id]?.holedOut;
 }
 
 function golfBallFor(gs, hole, playerId) {
@@ -4869,7 +4874,17 @@ function renderGolf() {
 
   let instructions;
   if (answered) {
-    const myResult = gs.results[me?.id]?.[holeIndex];
+    // Fixed 2026-08-16 — was `gs.results[me?.id]?.[holeIndex]`, the same
+    // fragile array-index-as-hole-number assumption fixed elsewhere this
+    // session (see golfFinishedPlayers' comment for the full story).
+    // `answered` (golfAlreadyAnswered, itself just fixed the same way)
+    // being true here guarantees this player's CURRENT hole is done,
+    // which — since golfSubmitShot always pushes a result in the same
+    // update that sets holedOut — means their most recently pushed
+    // result IS this hole's, regardless of what index that happens to
+    // land on after any past skips.
+    const myResults = gs.results[me?.id] || [];
+    const myResult = myResults[myResults.length - 1];
     instructions = myResult
       ? `You holed out in ${myResult.strokes} — ${GOLF_TERM_LABEL[myResult.term]} (+${myResult.points} points). ${isHost ? "" : "Waiting for host to continue…"}`
       : isHost
@@ -5599,9 +5614,26 @@ function animateGolfBallSink(ballId) {
 // can move to the next hole (not skippable by accident).
 function renderGolfFinishers(gs, holeIndex, finished, allDone) {
   const revealedClass = local.golfAnim.revealed ? " revealed" : "";
+  // CRITICAL FIX 2026-08-16 — this was `gs.results[p.id][holeIndex]`,
+  // the same fragile array-index-as-hole-number assumption already
+  // fixed in golfFinishedPlayers/golfAlreadyAnswered (see the first
+  // one's comment for the full story) — EXCEPT this one didn't just
+  // show stale data, it CRASHED THE WHOLE APP: `finished` is now (since
+  // that same fix) computed from live ball state, so it can include a
+  // player whose results array is shorter than holeIndex+1 (anyone ever
+  // skipped by "Force next hole" on an earlier hole) — indexing straight
+  // into it landed on `undefined`, and `undefined.term` below threw,
+  // which render()'s top-level try/catch caught by wiping the whole
+  // session back to the "create a room" screen. This is exactly what
+  // Craig hit holing out on a real hole. `finished` guarantees each of
+  // these players' CURRENT hole is done, so — same reasoning as the
+  // instructions block above — their most recently pushed result is
+  // this hole's, whatever index it landed on.
   const rows = finished
     .map((p) => {
-      const r = gs.results[p.id][holeIndex];
+      const list = gs.results[p.id] || [];
+      const r = list[list.length - 1];
+      if (!r) return ""; // shouldn't happen (golfSubmitShot always pushes atomically with holedOut) — belt and braces, not a silent re-throw
       return `<li>${GOLF_TERM_LABEL[r.term]} — ${escapeHtml(p.name)} (${r.strokes} strokes, +${r.points})</li>`;
     })
     .join("");
