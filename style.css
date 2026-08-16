@@ -470,6 +470,47 @@ input::placeholder { color: #6c9b83; }
   font-size: 13px;
   color: var(--sub);
 }
+/* Added 2026-08-16 — "display the par for each course somewhere that
+   can be seen and it should look nice". A small gold pill (same accent
+   already used for the aim-line/dot elsewhere on this course) rather
+   than plain text, so it reads as a stat chip, not just another label.
+   Used two places: inline in the in-game .golf-club-badge row (pushed
+   to the row's far end via margin-left:auto, crest+name stay left-
+   aligned), and repeated once per hole in .golf-par-row below, on the
+   intro screen's course overview. */
+.golf-par-pill {
+  flex: none;
+  margin-left: auto;
+  background: var(--accent);
+  color: #241a04;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  white-space: nowrap;
+}
+.golf-par-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.golf-par-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+}
+.golf-par-row-name {
+  font-weight: 600;
+  font-size: 13.5px;
+}
 /* One new random condition per hole (see randomWind) — the arrow's
    rotation is set inline per-render (style="transform: rotate(...)"),
    this just handles the static look. Moved 2026-08-15 (Craig: it wasn't

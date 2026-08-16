@@ -196,19 +196,23 @@ const GOLF_HOLES = [
       // Caps the corridor's floor past turn 1, so it's a real enclosed
       // channel and not open field beyond it. Positioned at y40-46, NOT
       // flush with turn 1's own gap ceiling (y32) — turn 2's upper piece
-      // (below) only starts blocking at y33 (originally y35, trimmed
-      // slightly — see its own comment), so capping the floor at y32
-      // would seal off y32-33 as dead space with no opening on either
+      // (below) only starts blocking at y30 (originally y35, trimmed
+      // twice since — see its own comment), so capping the floor at y32
+      // would seal off y30-32 as dead space with no opening on either
       // side (found and fixed during verification — a genuine soft-lock,
       // not just a clearance nitpick). y40-46 gives real overlap with
-      // turn 2's gap (y33-65) instead of a sealed gap.
+      // turn 2's gap (y30-65) instead of a sealed gap.
       { x: 50, y: 43, w: 32, h: 6 },
       // Trimmed 2 units off turn 2's upper piece (was h:32/y:19, blocking
       // to y35) at Craig's request — the passage past this piece and the
       // capping wall above felt just barely too tight to fit through
-      // cleanly. Gap is now the MIDDLE band (y 33-65) between this and
-      // the piece below, was y35-65.
-      { x: 65, y: 18, w: 6, h: 30 }, // turn 2, upper piece
+      // cleanly. Then trimmed again 2026-08-16 (its bottom edge, the only
+      // one of its two boundaries that CAN move — the top's already
+      // flush with the course's own y3 bound): was h:30/y:18, bottom
+      // edge y33; now bottom edge y30, a slight further widening of the
+      // gap. Gap is now the MIDDLE band (y 30-65) between this and the
+      // piece below.
+      { x: 65, y: 16.5, w: 6, h: 27 }, // turn 2, upper piece
       { x: 65, y: 81, w: 6, h: 32 }, // turn 2, lower piece
       { x: 17, y: 58, r: 3.5, shape: "circle" }, // a third loose cannonball, between the tee and leg 1's post below
       { x: 22, y: 30, r: 3.5, shape: "circle" }, // leg 1 — a loose cannonball, right in the mouth of the opening corridor
@@ -4651,6 +4655,18 @@ function renderGolfIntro() {
       <h3>The format</h3>
       <p>${GOLF_HOLES.length} club-themed holes, real stroke play on a shared top-down course. Players take <b>turns, one stroke at a time</b> — everyone watches every shot land. Fewer strokes is better, same as real golf.</p>
 
+      <h3>Course pars</h3>
+      <ul class="golf-par-list">
+        ${GOLF_HOLES.map(
+          (h, i) => `
+          <li class="golf-par-row">
+            <span class="golf-club-crest" style="--club-primary:${h.colors.primary}; --club-secondary:${h.colors.secondary};">${escapeHtml(h.crest)}</span>
+            <span class="golf-par-row-name">${i + 1}. ${escapeHtml(h.club)}</span>
+            <span class="golf-par-pill">Par ${h.par}</span>
+          </li>`
+        ).join("")}
+      </ul>
+
       <h3>How a shot works</h3>
       <p>Press and drag your ball like a slingshot — it fires the <b>opposite</b> way you pull. Pull distance sets power, angle sets direction, no timer. Watch for slopes, sand and water as you read the course.</p>
       <p>Every hole also has its own wind, shown above the course before you shoot — the same wind for everyone who plays that hole, pushing the ball for the whole flight, so it's worth aiming to compensate rather than straight at the target.</p>
@@ -4886,10 +4902,18 @@ function renderGolf() {
       ? `<p class="waiting">⏳ ${escapeHtml(turnPlayerName)}'s turn — watching…</p>`
       : "";
 
+  // Par pill added 2026-08-16, Craig's ask — "display the par for each
+  // course somewhere that can be seen and it should look nice". Lives in
+  // the existing club badge row (crest + name), pushed to the row's far
+  // end via CSS margin-left:auto rather than a new standalone element —
+  // same badge every player already glances at for "which hole is this"
+  // now also answers "what am I aiming for". See renderGolfIntro for the
+  // companion full-course overview shown before the round starts.
   const badge = hole.colors
     ? `<div class="golf-club-badge" style="--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};">
         <span class="golf-club-crest">${escapeHtml(hole.crest)}</span>
         <span class="golf-club-name">${escapeHtml(hole.club)}</span>
+        <span class="golf-par-pill">Par ${hole.par}</span>
       </div>`
     : "";
 
