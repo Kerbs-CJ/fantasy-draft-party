@@ -93,7 +93,7 @@ const GUESS_CLUE_POINTS = [15, 12, 7, 3]; // indexed by clueIndex (0 = only 1st 
 function manUtdChaosSlopes() {
   const slopes = [];
   const cols = 14;
-  const rows = 10; // 14x10 = 140
+  const rows = 10; // 14x10 = 140, minus whatever the pin-clearance skip below drops
   // xMax/yMin widened 2026-08-16, Craig's follow-up — the box used to
   // end almost exactly AT the pin (88,20), leaving the green itself in
   // a relative pocket of calm: nothing above it, nothing to its right,
@@ -109,6 +109,30 @@ function manUtdChaosSlopes() {
     yMax = 83;
   const cellW = (xMax - xMin) / cols;
   const cellH = (yMax - yMin) / rows;
+  // Found same day, right after the widening above shipped: Craig
+  // reported every shot going in as a hole-in-one regardless of aim.
+  // Root cause — patches here are 8-14 wide (half-width up to 7) and
+  // densely overlapping BY DESIGN (that's the whole "stacking" point of
+  // the comment below), and the widening above put patches directly on
+  // top of the pin for the first time. A ball passing near the hole was
+  // getting hit by several opposing push zones AT the pin itself, and
+  // with GOLF_MAX_SIM_TICKS giving a shot up to 240 ticks to bounce
+  // around a field that's now push-zones almost edge to edge, it was
+  // statistically close to inevitable that SOME tick would land within
+  // GOLF_HOLED_THRESHOLD (5) of the pin at a moment slow enough to pass
+  // GOLF_HOLE_CAPTURE_SPEED (0.32) too — the dense chaos was dragging
+  // the ball into the hole instead of just knocking it around near it.
+  // Fix: skip any generated patch whose center falls within 14 units of
+  // the pin — 5 (capture radius) + 7 (largest possible patch half-width)
+  // + a couple extra, so NO patch can even partially overlap the actual
+  // capture zone, guaranteed by construction, not just by likelihood.
+  // Patches still exist just outside that radius in every direction
+  // (including above/right/northwest of the pin, per the ask above) —
+  // only the small clear bubble immediately around the hole itself is
+  // gone, so a shot that actually arrives at the green still has to earn
+  // it, rather than being magneted in by hazards sitting on the pin.
+  const PIN_CLEAR_RADIUS = 14;
+  const pin = { x: 88, y: 20 }; // matches this hole's own pin below — kept in sync manually, there are only the two
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const i = row * cols + col;
@@ -122,6 +146,7 @@ function manUtdChaosSlopes() {
       const j2 = h2 - Math.floor(h2);
       const x = xMin + cellW * (col + 0.5) + (j1 - 0.5) * cellW * 0.95;
       const y = yMin + cellH * (row + 0.5) + (j2 - 0.5) * cellH * 0.95;
+      if (Math.hypot(x - pin.x, y - pin.y) < PIN_CLEAR_RADIUS) continue;
       const size = 8 + j1 * 6; // 8-14, comfortably bigger than a cell (~6.2x6.8) so neighbors overlap
       slopes.push({
         x: Math.round(x * 10) / 10,
@@ -154,7 +179,7 @@ const GOLF_HOLES = [
     ballHue: 0, // navy bg -> warm orange/gold ball
     name: "The Emirates",
     description: "Tee and green both sit along the bottom now — up through the corridor and back down again, a real U-shaped dogleg.",
-    par: 3,
+    par: 8, // raised 2026-08-16 per Craig's live-play recommendation (was 3) — long overdue, deferred since 2026-08-14 pending a difficulty/fun pass that's now well past done
     // Course redesign 2026-08-15 — Craig felt every hole but Barcelona
     // read as "a couple of barriers in an open field" rather than an
     // actual mini-golf maze. Rebuilt as a genuinely ENCLOSED corridor
@@ -212,7 +237,7 @@ const GOLF_HOLES = [
     ballHue: 140, // dark red/maroon bg -> teal/green ball
     name: "Anfield (The Kop)",
     description: "A real three-gate zigzag corner to corner — a slope and a timed gate both guard the long middle stretch.",
-    par: 4,
+    par: 8, // raised 2026-08-16 per Craig's live-play recommendation (was 4)
     // Course redesign 2026-08-15 — was 2 gates in an otherwise open
     // diagonal; now 3 alternating gates (west/east/west) forming a
     // genuine zigzag, with the patrol swapped for a drawbridge (teaching
@@ -277,7 +302,7 @@ const GOLF_HOLES = [
     ballHue: 350, // blue bg -> orange/amber ball
     name: "Elland Road",
     description: "Thread the middle gate into a real narrow chute — if it's even open — then the cup opens away from the tee, guarded by a windmill on both loop-arounds.",
-    par: 3,
+    par: 6, // raised 2026-08-16 per Craig's live-play recommendation (was 3)
     tee: { x: 50, y: 88 },
     pin: { x: 50, y: 16 },
     obstacles: [
@@ -340,6 +365,11 @@ const GOLF_HOLES = [
     ballHue: 148, // vivid red bg -> cyan/teal ball
     name: "Old Trafford (Theatre of Dreams)",
     description: "Total, deliberate chaos — 140 overlapping patches of push-you-around ground corner to corner, stacking on top of each other, genuinely no safe line through any of it.",
+    // par: STILL not updated, unlike the other 4 holes — Craig gave pars
+    // for those on 2026-08-16 but flagged this one as "broken" (every
+    // shot going in as a hole-in-one, see the fix in manUtdChaosSlopes'
+    // own comment above) instead of giving it a number. Ask for this
+    // hole's par once he's confirmed the fix actually plays right.
     par: 4,
     // Redesign 2026-08-16, Craig's THIRD idea for this hole in one
     // session (v1: single tightrope alley; v2: 3-rung diagonal ladder;
@@ -364,7 +394,7 @@ const GOLF_HOLES = [
     ballHue: 123, // maroon/magenta bg -> green ball
     name: "Camp Nou",
     description: "The grand finale, total redesign — an open chicane around a lone post, a windmill-guarded gate, then a knife-edge causeway onto a green that's practically an island, water on every side of it.",
-    par: 6,
+    par: 7, // raised 2026-08-16 per Craig's live-play recommendation (was 6)
     // Total redesign 2026-08-16, Craig's idea — the pillar that used to
     // sit right off the tee is gone, and this isn't a reshuffle of the
     // old four-gate layout, it's a new path using every hazard type in
