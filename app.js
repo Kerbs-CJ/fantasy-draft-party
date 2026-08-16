@@ -2443,8 +2443,29 @@ function golfScoreTerm(strokes, par) {
 }
 
 // How many players have holed out on the current hole yet.
+// Fixed 2026-08-16 — this used to compare `results[p.id].length` against
+// `gs.holeIndex`, on the assumption that finishing hole N always pushes
+// exactly one results entry per player per hole in strict order, so
+// "length > holeIndex" meant "has a result for THIS hole". That
+// assumption breaks the instant the host's own "⏭️ Force next hole
+// (skips anyone still playing)" button is used on anyone who hasn't
+// finished yet — genuinely its whole job, per its own label — since
+// golfNextHole() just carries `results` forward as-is and advances
+// holeIndex regardless of who's actually finished. A skipped player's
+// results array permanently stays one entry short of holeIndex from
+// that point on, and the old length check could then never be satisfied
+// again for ANY later hole, no matter how many they go on to finish —
+// which is exactly what Craig hit: everyone genuinely finished Liverpool
+// (holeIndex 1), but an earlier force-skip on hole 0 had already
+// desynced every player's results length, so `length > holeIndex` never
+// went true again and the "Continue" button never appeared. Checking
+// `gs.balls[p.id].holedOut` instead is hole-scoped and self-correcting —
+// golfBallsAtTee resets it false for everyone at the start of EVERY
+// hole (golfNextHole/resetCurrentGolfHole both go through it), so it
+// can never carry a stale cross-hole desync the way a running array
+// length can.
 function golfFinishedPlayers(gs) {
-  return players.filter((p) => (gs.results[p.id] || []).length > gs.holeIndex);
+  return players.filter((p) => !!gs.balls[p.id]?.holedOut);
 }
 
 // Everyone's ball starts bunched up at the tee, visible to the whole
@@ -2725,6 +2746,24 @@ function ensureGolfAnim() {
 // randomized power — a plausible shot, not a solved one, same spirit as
 // the shootout bots picking a random zone.
 function ensureGolfBotSwing() {
+  // Host-only (added 2026-08-16, after Craig hit a real bug from this) —
+  // same single-writer exclusivity as golfIdleHazardCheckTick and every
+  // other host-only lever in this app. Without it, EVERY device viewing
+  // the golf screen independently schedules and fires the same bot's
+  // shot off the same turn — with 2+ real devices open (any actual
+  // multiplayer room, not just solo ?dev=1 testing), two clients could
+  // both submit a shot for the same bot's same turn before either write
+  // propagates back to the other. golfSubmitShot's `results`/`balls`
+  // patch is built from whatever `gs` the calling client currently has
+  // in memory and sent as a whole-column replace, not a merge — so the
+  // SECOND write to land can silently overwrite the first one's changes
+  // entirely, including another player's already-recorded result for
+  // this hole. That's the likely cause of "I finished the hole, a bot
+  // hit the shot limit, but it never showed the hole as complete" — a
+  // result got clobbered by a redundant racing write, so
+  // golfFinishedPlayers never saw everyone as finished and the host
+  // never got the "Continue" button.
+  if (!myPlayer()?.is_host) return;
   const gs = room.game_state?.golf;
   if (!gs) return;
   const turnId = golfCurrentTurnPlayerId(gs);
