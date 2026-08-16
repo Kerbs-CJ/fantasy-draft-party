@@ -382,16 +382,21 @@ const GOLF_HOLES = [
       { id: "barcelona", axis: "x", baseX: 16.5, baseY: 72, range: 8, r: 2.5, period: 2800 },
       // Added 2026-08-16, Craig's follow-up — a second patrol directly
       // above the chicane post (which sits at x50,y58), sweeping left to
-      // right over BOTH sand pits (sand1 x28-42, sand2 x58-72). baseY 50
-      // sits clear of the chicane row itself (walls/post/sand all at
-      // y53-63, 3-unit margin) and clear of the stage 3 gate above it
-      // (wall at y35-41, 9-unit margin). Range 22 around baseX 50 puts
-      // its reach (± r 2.5) at x25.5-74.5 — comfortably past both sand
-      // pits' outer edges (28/72) on each pass, and still clear of the
-      // chicane's own east/west walls (end x23 / start x77, ~2.5-unit
-      // margin either side, same as this hole's other tight-margin
-      // patrol above).
-      { id: "barcelona2", axis: "x", baseX: 50, baseY: 50, range: 22, r: 2.5, period: 3400 },
+      // right over BOTH sand pits (sand1 x28-42, sand2 x58-72). Nudged
+      // north from its first placement (baseY 50 -> 46) per a same-day
+      // follow-up — the patrol's own reach (r 2.5) matters here as much
+      // as baseY, since it doesn't wobble vertically (axis "x"): the
+      // clear band between the stage 3 gate above (wall ends y41) and
+      // the chicane row below (sand/post start y53) is y41-53, so a
+      // baseY of 46 (reach y43.5-48.5) sits with a real 2.5-unit margin
+      // off the gate and 4.5-unit margin off the chicane, instead of the
+      // original 50's much tighter halves. Range 22 around baseX 50 puts
+      // its horizontal reach (± r 2.5) at x25.5-74.5 — comfortably past
+      // both sand pits' outer edges (28/72) on each pass, and still
+      // clear of the chicane's own east/west walls (end x23 / start x77,
+      // ~2.5-unit margin either side, same as this hole's other
+      // tight-margin patrol above).
+      { id: "barcelona2", axis: "x", baseX: 50, baseY: 46, range: 22, r: 2.5, period: 3400 },
     ],
     // Guards stage 3's gap (x64-97). Reach (length+r = 9.5) around pivot
     // (80,38) stays clear of that gate's wall (ends x64, 6.5-unit margin)
