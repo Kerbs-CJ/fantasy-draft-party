@@ -442,6 +442,12 @@ input::placeholder { color: #6c9b83; }
   opacity: 0.22;
   pointer-events: none;
 }
+.golf-club-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 10px;
+}
 .golf-club-crest {
   flex: none;
   width: 32px;
@@ -459,18 +465,19 @@ input::placeholder { color: #6c9b83; }
   letter-spacing: 0.3px;
   text-shadow: 0 1px 2px rgba(0,0,0,0.65);
 }
+.golf-club-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--sub);
+}
 /* Added 2026-08-16 — "display the par for each course somewhere that
    can be seen and it should look nice". A small gold pill (same accent
    already used for the aim-line/dot elsewhere on this course) rather
    than plain text, so it reads as a stat chip, not just another label.
-   Used two places: in the in-game .golf-side-hole card (see
-   .golf-play-layout below — moved there from an earlier version that
-   lived inline above the course, per Craig's follow-up to pull it into
-   the side panel instead), and repeated once per hole in .golf-par-row,
-   on the intro screen's course overview. margin-left:auto only actually
-   pushes it to a row's far end in a flex ROW context (.golf-par-row) —
-   .golf-side-hole-info is a flex COLUMN, so there it just sits on its
-   own line under the club name instead, which still reads fine. */
+   Used two places: inline in the in-game .golf-club-badge row (pushed
+   to the row's far end via margin-left:auto, crest+name stay left-
+   aligned), and repeated once per hole in .golf-par-row below, on the
+   intro screen's course overview. */
 .golf-par-pill {
   flex: none;
   margin-left: auto;
@@ -593,130 +600,6 @@ body:has(.golf-course) #app {
     flex: 0 0 260px;
     margin: 0;
   }
-}
-/* Same shape as .golf-practice-layout above, mirrored to put the panel
-   on the LEFT instead of the right (added 2026-08-16, Craig's ask — move
-   the par/club info and the Totals list out of the play area into the
-   open space beside it). DOM order does the mirroring for free: the
-   side panel comes first in the markup, so plain left-to-right flex
-   already puts it on the left without any extra ordering rule. */
-.golf-play-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.golf-play-layout .golf-course-wrap {
-  width: 100%;
-}
-.golf-play-layout .golf-side-panel {
-  margin: 0 auto;
-}
-@media (min-width: 980px) {
-  .golf-play-layout {
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-between;
-  }
-  .golf-play-layout .golf-course-wrap {
-    width: auto;
-    flex: 1 1 auto;
-    display: flex;
-    justify-content: center;
-  }
-  .golf-play-layout .golf-side-panel {
-    flex: 0 0 260px;
-    margin: 0;
-    /* Sticky so the panel — par, and everyone's live totals — stays in
-       view while scrolling a tall course on a small screen, instead of
-       scrolling away above it. */
-    position: sticky;
-    top: 12px;
-  }
-}
-/* The panel's own look — a proper little scorecard, not just a bullet
-   list. Podium rows (top 3 by total) get a medal glyph instead of a
-   rank number (see the `medal` array at this function's call site); the
-   viewer's own row gets a soft gold highlight so they can find
-   themselves at a glance without reading every name. */
-.golf-side-panel {
-  max-width: 320px;
-  width: 100%;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--card-border);
-  border-radius: 14px;
-  padding: 14px 16px 16px;
-}
-.golf-side-hole {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--card-border);
-}
-.golf-club-crest.lg {
-  width: 44px;
-  height: 44px;
-  font-size: 11px;
-}
-.golf-side-hole-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-}
-.golf-side-hole-name {
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--text);
-}
-.golf-side-heading {
-  margin: 0 0 8px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-  color: var(--sub);
-}
-.golf-side-totals {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.golf-side-totals li {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 8px;
-  border-radius: 8px;
-}
-.golf-side-totals li.me {
-  background: rgba(255,209,102,0.12);
-  border: 1px solid rgba(255,209,102,0.35);
-}
-.golf-side-rank {
-  flex: none;
-  width: 22px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--sub);
-}
-.golf-side-name {
-  flex: 1 1 auto;
-  font-size: 13.5px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.golf-side-total {
-  flex: none;
-  font-weight: 800;
-  font-size: 13.5px;
-  color: var(--accent);
 }
 .golf-hazard-legend {
   max-width: 280px;
