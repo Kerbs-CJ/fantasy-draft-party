@@ -1185,7 +1185,12 @@ function ensureGolfIdleHazardCheck() {
 //     without re-checking this reasoning first.
 const GOLF_TERM_POINTS = { eagle: 16, birdie: 11, par: 8, bogey: 5, "double-bogey": 3, "triple-plus": 1 };
 const GOLF_TERM_LABEL = {
-  eagle: "🦅 Eagle!",
+  // "or better"/"or worse" on the two open-ended ends of the ladder — the
+  // underlying logic (golfScoreTerm: diff <= -2) already lumps an
+  // albatross or better in with a plain eagle, same as triple-plus below
+  // already lumps in anything worse; the label just didn't say so. Craig
+  // pointed this out 2026-08-16.
+  eagle: "🦅 Eagle or better!",
   birdie: "🐦 Birdie!",
   par: "⛳ Par",
   bogey: "😬 Bogey",
