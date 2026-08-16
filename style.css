@@ -272,6 +272,26 @@ input::placeholder { color: #6c9b83; }
      shape (mostly horizontal/diagonal tee-to-pin travel). */
   aspect-ratio: 4 / 3;
   max-height: 74vh;
+  /* Added 2026-08-16 — Craig: browser zoom (ctrl+scroll) made the ball
+     "gigantic" relative to the course. Root cause: most course elements
+     (.golf-cup, .golf-tee-mat, every wall/slope/hazard) are sized as a
+     PERCENTAGE of this box, so they track its actual rendered size
+     exactly, including under zoom or any reflow. The ball is a real ⚽
+     emoji though (deliberately — see .golf-ball-icon's own comment, two
+     earlier CSS-drawn attempts both failed to read as a football), and
+     font-size can't be expressed as "% of an ancestor's WIDTH" the way
+     a box's own width can — only as a % of the ancestor's font-size,
+     which nothing here sets up. Raw px font-size doesn't have that
+     problem under NORMAL responsive layout (the course's own size is
+     itself bounded by fixed px max-width/vh values most of the time,
+     so ball:course ratio stayed roughly stable) — but browser zoom
+     changes how those px/vh bounds resolve independently of how the
+     ball's own raw px scales, decoupling the two. container-type here
+     turns this box into a size query container, so cqw units below (1
+     cqw = 1% of THIS element's own rendered width) can express "size
+     relative to the course" for text the same way % already does for
+     boxes — properly locked together under zoom, resize, anything. */
+  container-type: inline-size;
   margin: 16px auto;
   border-radius: 14px;
   background: radial-gradient(ellipse at center, #2e7d4f 0%, #256840 70%, #1c4f31 100%);
@@ -919,7 +939,12 @@ body:has(.golf-course) #app {
   top: 0;
   transform: translate(-50%, -50%);
   display: block;
-  font-size: 19px;
+  /* cqw, not px — see the container-type comment on .golf-course above.
+     2.5cqw = 2.5% of the course's own rendered width, which equals
+     exactly the old 19px at the course's 760px max-width (19/760 =
+     2.5%) — same visual size as before at the common case, but now
+     genuinely tied to the course instead of the raw viewport/zoom. */
+  font-size: 2.5cqw;
   filter:
     sepia(var(--ball-sepia, 0))
     saturate(var(--ball-sat, 1))
@@ -935,9 +960,12 @@ body:has(.golf-course) #app {
 .golf-course-ball-label {
   position: absolute;
   left: 0;
-  top: 11px; /* nudged down from 9px to clear the bigger ball icon above */
+  /* cqw again, same reasoning as .golf-ball-icon above — this sits right
+     below the ball, so it has to scale (and stay offset by roughly the
+     same amount) as the ball's own size changes, not just its font. */
+  top: 1.45cqw; /* nudged down from 9px to clear the bigger ball icon above; was a flat 11px */
   transform: translateX(-50%);
-  font-size: 8px;
+  font-size: 1.05cqw;
   color: #fff;
   background: rgba(0,0,0,0.6);
   padding: 1px 4px;
