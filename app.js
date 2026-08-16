@@ -365,12 +365,7 @@ const GOLF_HOLES = [
     ballHue: 148, // vivid red bg -> cyan/teal ball
     name: "Old Trafford (Theatre of Dreams)",
     description: "Total, deliberate chaos — 140 overlapping patches of push-you-around ground corner to corner, stacking on top of each other, genuinely no safe line through any of it.",
-    // par: STILL not updated, unlike the other 4 holes — Craig gave pars
-    // for those on 2026-08-16 but flagged this one as "broken" (every
-    // shot going in as a hole-in-one, see the fix in manUtdChaosSlopes'
-    // own comment above) instead of giving it a number. Ask for this
-    // hole's par once he's confirmed the fix actually plays right.
-    par: 4,
+    par: 4, // confirmed by Craig 2026-08-16, after the auto-hole-in-one fix above (see manUtdChaosSlopes) — same value it already had, just no longer a placeholder
     // Redesign 2026-08-16, Craig's THIRD idea for this hole in one
     // session (v1: single tightrope alley; v2: 3-rung diagonal ladder;
     // both fully replaced, not layered on). Same tee/pin as v2 — kept
