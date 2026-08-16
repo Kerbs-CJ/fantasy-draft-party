@@ -474,10 +474,14 @@ input::placeholder { color: #6c9b83; }
    can be seen and it should look nice". A small gold pill (same accent
    already used for the aim-line/dot elsewhere on this course) rather
    than plain text, so it reads as a stat chip, not just another label.
-   Used two places: inline in the in-game .golf-club-badge row (pushed
-   to the row's far end via margin-left:auto, crest+name stay left-
-   aligned), and repeated once per hole in .golf-par-row below, on the
-   intro screen's course overview. */
+   Used two places: inline in the in-game .golf-club-badge row, and
+   repeated once per hole in .golf-par-row below, on the intro screen's
+   course overview. Default position is margin-left:auto (pushed to a
+   row's far end) — overridden immediately below for .golf-club-badge
+   specifically, per Craig's follow-up wanting it sitting right beside
+   the hole name (e.g. "Arsenal") instead of off at the row's far edge;
+   .golf-par-row (the intro list) keeps the far-end/auto placement, which
+   reads fine there as a table-like column of pills. */
 .golf-par-pill {
   flex: none;
   margin-left: auto;
@@ -490,6 +494,12 @@ input::placeholder { color: #6c9b83; }
   border-radius: 999px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.35);
   white-space: nowrap;
+}
+.golf-club-badge .golf-par-pill {
+  /* .golf-club-badge already has its own gap:8px between every child —
+     zeroing this out (instead of a positive value on top of that gap)
+     avoids double-spacing the pill away from the name. */
+  margin-left: 0;
 }
 .golf-par-list {
   list-style: none;
@@ -1271,6 +1281,27 @@ code {
 .role-banner.role-shoot { background: linear-gradient(135deg, var(--accent2), #04a97f); color: #04241a; }
 .role-banner.role-keep { background: linear-gradient(135deg, #4b8bf0, #2f5fc4); color: #f0f5ff; }
 .role-banner.locked { opacity: 0.55; }
+/* Golf's own "YOUR SHOT" banner only (added 2026-08-16, Craig: "the
+   giant your shot banner is really obnoxious") — scoped to this one
+   extra class rather than shrinking .role-banner/.role-icon/.role-text
+   themselves, which are shared with the Penalty Shootout's shooter/
+   keeper banners (untouched, not what was asked about). Every dimension
+   cut roughly in half from the shared base. */
+.role-banner.golf-turn-banner {
+  padding: 6px 12px;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.role-banner.golf-turn-banner .role-icon {
+  font-size: 17px;
+}
+.role-banner.golf-turn-banner .role-text {
+  font-size: 12.5px;
+}
+.role-banner.golf-turn-banner .role-text small {
+  font-size: 10.5px;
+  margin-top: 0;
+}
 
 .zone-btn.shoot { border-color: var(--accent2); }
 .zone-btn.shoot:active { background: rgba(6,214,160,0.18); }

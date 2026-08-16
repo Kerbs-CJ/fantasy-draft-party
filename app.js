@@ -4894,7 +4894,7 @@ function renderGolf() {
   // point of turns: everyone can see and learn from every shot, not just
   // their own), not just the player whose turn it actually is.
   const turnBanner = isMyTurn
-    ? `<div class="role-banner role-shoot">
+    ? `<div class="role-banner role-shoot golf-turn-banner">
         <span class="role-icon">⛳</span>
         <span class="role-text">YOUR SHOT<br><small>Drag your ball to aim, release to shoot</small></span>
       </div>`
