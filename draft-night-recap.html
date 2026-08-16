@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugaloo Draft Night</title>
+<style>
+  :root {
+    --pitch-deep: #071a12;
+    --pitch-mid: #0f3d2b;
+    --pitch-card: #123a28;
+    --pitch-line: #23624a;
+    --gold: #ffd166;
+    --bright: #06d6a0;
+    --coral: #ef476f;
+    --ink: #eaf6ef;
+    --ink-dim: #9fc9b3;
+    --ink-faint: #6c9c85;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: var(--pitch-deep);
+    color: var(--ink);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(ellipse 900px 500px at 20% -5%, rgba(255,209,102,0.14), transparent 60%),
+      radial-gradient(ellipse 900px 600px at 85% 10%, rgba(6,214,160,0.12), transparent 55%),
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 64px),
+      linear-gradient(180deg, var(--pitch-deep), var(--pitch-mid) 45%, var(--pitch-deep) 100%);
+    min-height: 100vh;
+  }
+
+  .page {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 44px 22px 60px;
+  }
+
+  /* -- hero -- */
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--gold);
+    margin-bottom: 18px;
+  }
+  .eyebrow .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--bright);
+    box-shadow: 0 0 0 3px rgba(6,214,160,0.18);
+  }
+
+  .headline {
+    text-align: center;
+    margin: 0 0 6px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    font-size: clamp(38px, 10vw, 56px);
+    line-height: 0.98;
+    transform: scaleX(0.94);
+    text-wrap: balance;
+  }
+  .headline span {
+    display: block;
+  }
+  .headline .accent {
+    background: linear-gradient(100deg, var(--gold), var(--bright) 75%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .subhead {
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 16px;
+    line-height: 1.55;
+    max-width: 440px;
+    margin: 18px auto 0;
+  }
+  .subhead b { color: var(--ink); font-weight: 700; }
+
+  /* -- section shell -- */
+  .section {
+    margin-top: 54px;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--pitch-line);
+    padding-bottom: 12px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--ink);
+  }
+  .section-tag {
+    font-size: 12px;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* -- the route: matchday-program style lineup -- */
+  .route {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .stop {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 14px;
+    padding: 15px 4px;
+    border-bottom: 1px dashed rgba(159,201,179,0.18);
+  }
+  .stop:last-child { border-bottom: none; }
+  .stop-num {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--pitch-deep);
+    background: var(--gold);
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stop.is-finale .stop-num {
+    background: var(--bright);
+  }
+  .stop-body { min-width: 0; }
+  .stop-name {
+    font-weight: 700;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .stop-desc {
+    color: var(--ink-dim);
+    font-size: 13.5px;
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+  .chip {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--pitch-deep);
+    background: var(--ink-dim);
+    padding: 2px 7px;
+    border-radius: 5px;
+  }
+
+  /* -- stat tiles -- */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .stat {
+    background: var(--pitch-card);
+    border: 1px solid var(--pitch-line);
+    border-radius: 14px;
+    padding: 16px 16px 14px;
+  }
+  .stat-num {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--gold);
+    line-height: 1;
+  }
+  .stat-label {
+    margin-top: 7px;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    line-height: 1.4;
+  }
+
+  /* -- how it plays out (draft mechanics) -- */
+  .plaque {
+    background: var(--pitch-card);
+    border: 1px solid var(--pitch-line);
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .plaque-row {
+    display: flex;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(159,201,179,0.12);
+    align-items: flex-start;
+  }
+  .plaque-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .plaque-row:first-child { padding-top: 0; }
+  .plaque-icon {
+    font-size: 17px;
+    flex: none;
+    width: 22px;
+    text-align: center;
+  }
+  .plaque-text { font-size: 14px; color: var(--ink-dim); line-height: 1.5; }
+  .plaque-text b { color: var(--ink); font-weight: 700; }
+
+  /* -- footer / CTA -- */
+  .cta {
+    margin-top: 56px;
+    text-align: center;
+    padding: 28px 20px 6px;
+    border-top: 1px solid var(--pitch-line);
+  }
+  .cta-line {
+    font-size: 19px;
+    font-weight: 800;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .cta-sub {
+    margin-top: 8px;
+    font-size: 13.5px;
+    color: var(--ink-faint);
+    max-width: 380px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.6;
+  }
+
+  .sig {
+    margin-top: 34px;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    opacity: 0.7;
+  }
+
+  /* -- ambient confetti flecks, static & sparse -- */
+  .flecks { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+  .fleck {
+    position: absolute;
+    width: 6px; height: 10px;
+    opacity: 0.5;
+    border-radius: 1px;
+  }
+  .page { position: relative; z-index: 1; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .fleck { animation: drift 9s ease-in-out infinite; }
+  }
+  @keyframes drift {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(14px) rotate(20deg); }
+  }
+
+  @media (max-width: 420px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="flecks" id="flecks"></div>
+
+<div class="page">
+
+  <div class="eyebrow"><span class="dot"></span> Fantasy League Bugaloo</div>
+  <h1 class="headline">
+    <span>Draft Night</span>
+    <span class="accent">Is Ready</span>
+  </h1>
+  <p class="subhead">
+    The whole app is built, tested, and running end&#8209;to&#8209;end &mdash; <b>four mini&#8209;games</b>
+    to decide who picks first, then a <b>real live Premier League draft</b> where
+    that order actually plays out. Craig (the host) will send the link before
+    kickoff &mdash; open it, type your name, you're in.
+  </p>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">The Route to the Draft</div>
+      <div class="section-tag">6 stops</div>
+    </div>
+    <div class="route">
+      <div class="stop">
+        <div class="stop-num">1</div>
+        <div class="stop-body">
+          <div class="stop-name">&#9917; Guess the Missing Club</div>
+          <div class="stop-desc">A player's career timeline with one club blanked out &mdash; name the gap.</div>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="stop-num">2</div>
+        <div class="stop-body">
+          <div class="stop-name">&#129346; Penalty Shootout</div>
+          <div class="stop-desc">Everyone takes penalties against everyone else. Standings on wins, then goal difference.</div>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="stop-num">3</div>
+        <div class="stop-body">
+          <div class="stop-name">&#127908; Half&#8209;Time Game <span class="chip">No points</span></div>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="stop-num">4</div>
+        <div class="stop-body">
+          <div class="stop-name">&#128373;&#65039; Guess the Footballer</div>
+          <div class="stop-desc">Progressive clues, fewer points the longer you take to name them.</div>
+        </div>
+      </div>
+      <div class="stop">
+        <div class="stop-num">5</div>
+        <div class="stop-body">
+          <div class="stop-name">&#127947;&#65039; Football Golf</div>
+          <div class="stop-desc">Real physics stroke play across five surprise holes. Sand, slopes, water, the lot.</div>
+        </div>
+      </div>
+      <div class="stop is-finale">
+        <div class="stop-num">6</div>
+        <div class="stop-body">
+          <div class="stop-name">&#127942; The Reveal</div>
+          <div class="stop-desc">Combined leaderboard crowns the winner and the order, confetti and all &mdash; then it's straight through to a brand&#8209;new draft portal, built just for tonight.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">Under the Hood</div>
+      <div class="section-tag">For the nerds</div>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num">222</div>
+        <div class="stat-label">Commits it took to get here</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">41</div>
+        <div class="stat-label">Bugs found and squashed along the way &mdash; One that looked suspiciously like &#214;zil</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">16,019</div>
+        <div class="stat-label">Lines of code written all&#8209;time &mdash; plenty since rewritten or ripped out</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">1 Kettle</div>
+        <div class="stat-label">Of water allegedly evaporated keeping the AI cool while the AI and Craig argued about collisions on Football Golf</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="plaque">
+      <div class="plaque-row">
+        <div class="plaque-icon">&#127919;</div>
+        <div class="plaque-text"><b>Straight order, not snake</b> &mdash; the same pick order from the reveal repeats every round, so tonight's result really is the draft order.</div>
+      </div>
+      <div class="plaque-row">
+        <div class="plaque-icon">&#129302;</div>
+        <div class="plaque-text"><b>Missing a drafter?</b> A stand&#8209;in bot picks a sensible affordable player for them automatically &mdash; verified working tonight, four bots deep, budgets and all.</div>
+      </div>
+      <div class="plaque-row">
+        <div class="plaque-icon">&#128241;</div>
+        <div class="plaque-text"><b>Nothing to install</b> &mdash; it's a web page. Open it, join the room, and every roster updates live as picks come in.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta">
+    <div class="cta-line">Grab your PC. We're doing this properly.</div>
+    <div class="cta-sub">This one's on a laptop or desktop, not your phone &mdash; Craig will send the link before kickoff, then it's just your name and you're in the room.</div>
+  </div>
+
+  <div class="sig">Fantasy League Bugaloo &middot; Draft Party</div>
+
+</div>
+
+<script>
+  (function () {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var colors = ['#ffd166', '#06d6a0', '#ef476f', '#eaf6ef'];
+    var host = document.getElementById('flecks');
+    for (var i = 0; i < 18; i++) {
+      var el = document.createElement('div');
+      el.className = 'fleck';
+      el.style.left = (Math.random() * 100) + 'vw';
+      el.style.top = (Math.random() * 100) + 'vh';
+      el.style.background = colors[i % colors.length];
+      el.style.animationDelay = (Math.random() * 6) + 's';
+      el.style.animationDuration = (7 + Math.random() * 5) + 's';
+      host.appendChild(el);
+    }
+  })();
+</script>
+</body>
+</html>
