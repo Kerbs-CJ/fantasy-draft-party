@@ -4949,7 +4949,18 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         animating = true;
         const from = { x: track.x, y: track.y };
         const to = { x: ball.x, y: ball.y };
-        const path = Array.isArray(ball.path) && ball.path.length > 1 ? ball.path : [from, to];
+        const fullPath = Array.isArray(ball.path) && ball.path.length > 1 ? ball.path : [from, to];
+        // A splashed shot's stored path ends with a synthetic "snapped
+        // back to the tee" waypoint tacked on by golfSimulateShot — that
+        // final leg isn't a real roll (see its own comment there), so
+        // it's excluded from the distance-based roll animation/duration
+        // below and handled separately by animateGolfBallSplash instead,
+        // which is what actually moves the ball to the tee. Guarded on
+        // length>2 because splashed paths are always >= 3 long (start +
+        // at least one real tick + the synthetic tee point — see
+        // golfSimulateShot), so this never empties the roll out entirely.
+        const splashed = !!ball.splashed;
+        const path = splashed && fullPath.length > 2 ? fullPath.slice(0, -1) : fullPath;
         trackMap[p.id] = { x: ball.x, y: ball.y };
         let totalDist = 0;
         for (let i = 1; i < path.length; i++) totalDist += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
@@ -4964,7 +4975,9 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
         // golfSubmitShot/practice's updateRoom) — falls back to "now" only
         // for the rare case of pre-existing room data from before this
         // field existed; a live shot always has it.
-        requestAnimationFrame(() => animateGolfBallFlight(ballId, path, durationMs, holed, ball.shotStartTime || Date.now()));
+        requestAnimationFrame(() =>
+          animateGolfBallFlight(ballId, path, durationMs, holed, ball.shotStartTime || Date.now(), splashed ? hole.tee : null)
+        );
         // Paint at the START position right away, so there's no flash at
         // the destination before the rAF loop takes over a frame later.
         renderX = path[0].x;
@@ -5223,15 +5236,26 @@ function ensureGolfDrawbridgeAnim(drawbridge) {
 // before knocking a ball, so it never interrupts a roll that's already
 // genuinely in progress, whether that roll came from a real shot or an
 // earlier knock.
-function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
+// `splashTeePoint` is null for a normal shot/knock, or {x,y} (always
+// hole.tee) when this replay's shot ended in water — see the comment at
+// this function's one call site (renderGolfCourse) for why `path` itself
+// already excludes the synthetic "snap to tee" waypoint in that case:
+// the roll animates for real up to `last` (the actual splash spot), then
+// animateGolfBallSplash below takes over for the tee-ward jump instead
+// of continuing the roll straight through it.
+function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime, splashTeePoint = null) {
   const ballEl = document.getElementById(ballId);
   if (!ballEl || path.length < 2) return;
   const playerId = ballId.replace("golf-ball-", "");
   const emojiEl = ballEl.querySelector(".golf-ball-icon");
   const last = path[path.length - 1];
   if (prefersReducedMotion()) {
-    ballEl.style.left = last.x + "%";
-    ballEl.style.top = last.y + "%";
+    // For a splash, `last` is the real splash spot (see above), not the
+    // tee — jump straight to the tee itself, same as a normal shot jumps
+    // straight to its own final resting spot with motion off.
+    const endPos = splashTeePoint || last;
+    ballEl.style.left = endPos.x + "%";
+    ballEl.style.top = endPos.y + "%";
     if (holed) {
       ballEl.style.display = "none"; // straight to "in the cup", no animation to skip
       markGolfBallSunk(ballId);
@@ -5297,8 +5321,107 @@ function animateGolfBallFlight(ballId, path, durationMs, holed, shotStartTime) {
       // replay.
       local.golfHazardFreezeCount = Math.max(0, (local.golfHazardFreezeCount || 0) - 1);
       if (local.golfHazardFreezeCount === 0) local.golfHazardFrozenT = null;
-      local.golfBallFlightActive[playerId] = false; // ...and this ball is fair game for an idle hazard knock again
-      if (holed) animateGolfBallSink(ballId);
+      if (holed) {
+        local.golfBallFlightActive[playerId] = false; // ...and this ball is fair game for an idle hazard knock again
+        animateGolfBallSink(ballId);
+      } else if (splashTeePoint) {
+        // Deliberately NOT clearing golfBallFlightActive here — the ball
+        // hasn't visually finished yet, the splash + tee-ward jump still
+        // has to play, and this ball's ROOM-STATE position is already
+        // the tee (set the instant the shot resolved, well before this
+        // replay catches up) — an idle-hazard knock firing right now
+        // would start a SECOND animateGolfBallFlight on this exact
+        // ballId while animateGolfBallSplash's own rAF loop is still
+        // running, both fighting over the same element every frame.
+        // animateGolfBallSplash clears the flag itself once IT finishes.
+        animateGolfBallSplash(ballId, last, splashTeePoint, playerId);
+      } else {
+        local.golfBallFlightActive[playerId] = false;
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// The other way a shot can end besides holing out: a splash. Same core
+// technique as animateGolfBallSink below — direct DOM mutation via a
+// self-driving rAF loop, re-querying the ball element by id every frame
+// — but deliberately reuses ONLY the ball's own pre-existing elements
+// (its container + `.golf-ball-icon` span), no new DOM nodes: a freshly
+// *created* child would vanish the instant a redundant render (see the
+// file comment above renderGolfCourse) replaces this ball's whole
+// subtree, since nothing in the render() template would recreate it.
+// The container/icon survive that exactly because the template always
+// recreates THEM.
+// Two phases: a quick "plop" right at the splash spot (icon swaps to a
+// splash emoji, grows slightly, fades, plus an expanding/fading cyan
+// ring via boxShadow — same growing-boxShadow trick as the cup's glow
+// in animateGolfBallSink, just here on the ball's own container), then
+// — invisible by that point — an instant reposition to the tee followed
+// by a "pop" back in as a normal ball. Clears golfBallFlightActive when
+// done (see the comment at this function's call site for why that has
+// to wait until now, not when the roll itself finished).
+function animateGolfBallSplash(ballId, splashPoint, teePoint, playerId) {
+  const plopMs = 420;
+  const popMs = 260;
+  function finish() {
+    local.golfBallFlightActive[playerId] = false;
+  }
+  if (prefersReducedMotion()) {
+    const el = document.getElementById(ballId);
+    if (el) {
+      el.style.left = teePoint.x + "%";
+      el.style.top = teePoint.y + "%";
+    }
+    finish();
+    return;
+  }
+  const t0 = performance.now();
+  function frame(now) {
+    const el = document.getElementById(ballId);
+    if (!el) {
+      finish(); // gone (redundant render already settled past it) — nothing left to animate
+      return;
+    }
+    const emoji = el.querySelector(".golf-ball-icon");
+    const elapsed = now - t0;
+    if (elapsed < plopMs) {
+      const raw = elapsed / plopMs;
+      const eased = raw * raw; // ease-in — accelerating reads as "going under", same feel as the sink animation
+      el.style.left = splashPoint.x + "%";
+      el.style.top = splashPoint.y + "%";
+      el.style.boxShadow = `0 0 0 ${(eased * 14).toFixed(1)}px rgba(110, 210, 255, ${(0.5 * (1 - eased)).toFixed(2)})`;
+      if (emoji) {
+        emoji.textContent = "💦";
+        emoji.style.transform = `translate(-50%, -50%) scale(${(1 + eased * 0.6).toFixed(3)})`;
+        emoji.style.opacity = String(1 - eased);
+      }
+      requestAnimationFrame(frame);
+    } else if (elapsed < plopMs + popMs) {
+      // Ball is fully faded out by this point (opacity hit 0 at the end
+      // of the plop phase above) — the reposition to the tee happens
+      // while invisible, so there's no visible slide/teleport streak.
+      const raw = (elapsed - plopMs) / popMs;
+      const eased = 1 - Math.pow(1 - raw, 2); // ease-out — "popping in"
+      el.style.left = teePoint.x + "%";
+      el.style.top = teePoint.y + "%";
+      el.style.boxShadow = "";
+      if (emoji) {
+        emoji.textContent = "⚽";
+        emoji.style.transform = `translate(-50%, -50%) scale(${(0.3 + eased * 0.7).toFixed(3)})`;
+        emoji.style.opacity = String(eased);
+      }
+      requestAnimationFrame(frame);
+    } else {
+      el.style.left = teePoint.x + "%";
+      el.style.top = teePoint.y + "%";
+      el.style.boxShadow = "";
+      if (emoji) {
+        emoji.textContent = "⚽";
+        emoji.style.transform = "translate(-50%, -50%) scale(1)";
+        emoji.style.opacity = "1";
+      }
+      finish();
     }
   }
   requestAnimationFrame(frame);
