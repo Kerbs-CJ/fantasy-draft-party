@@ -272,38 +272,40 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-man-united.png",
     ballHue: 148, // vivid red bg -> cyan/teal ball
     name: "Old Trafford (Theatre of Dreams)",
-    description: "A dead-straight tightrope from corner to corner — a narrow safe alley the whole way, with the ground itself dragging any mis-hit further off-line the harder it drifts.",
+    description: "A climbing ladder of safe rungs from the tee up to a top-right green — miss a rung high or low and the ground drags the ball further off it, rung after rung.",
     par: 4,
-    // Total redesign 2026-08-16, Craig's idea — replaces the old
-    // triple-gate slalom+pillar entirely. Tee bottom-left, pin
-    // bottom-right, both sitting inside a single flat "safe alley" (the
-    // neutral y71-85 gap below, no hazard of its own — just the plain
-    // grass every other hole's corridors already are). No walls at all
-    // this time: the whole hazard IS precision. Every existing hole's
-    // slope zone already renders as a field of ▲/▼ arrows (see
-    // renderGolfCourse's slopeEls) — this hole is built entirely out of
-    // two of them, used as flanking punishment zones instead of a single
-    // push:
-    //   - north zone (dir "up", above the alley): a shot hit even
-    //     slightly high lands here and gets shoved further north, away
-    //     from the tee-to-pin line — the longer it's inside the zone,
-    //     the further it drifts.
-    //   - south zone (dir "down", below the alley): the mirror image for
-    //     a shot hit low — shoved south, toward the bottom boundary.
-    // Deliberately asymmetric in SIZE, not in effect: tee/pin sit near
-    // the bottom of the course, so the south zone only has 12 units of
-    // room before the bottom boundary (y97) versus the north zone's 68 —
-    // a low miss gets punished fast (boundary bounce back into the same
-    // down-slope, losing speed each pass), a high miss just sails,
-    // needing a real correction shot to claw back. Both x5-95, comfortably
-    // either side of tee(12)/pin(88).
+    // Redesign 2026-08-16, revised same day per Craig's follow-up — v1 was
+    // a single flat tightrope corner-to-corner; he liked the tee (kept
+    // exactly where it was) but wanted the pin moved to the top-right and
+    // the single alley turned into REPEATED rungs — "almost creating a
+    // ladder of safety" climbing from tee to pin. Every hole's slope zone
+    // already renders as a field of ▲/▼ arrows (see renderGolfCourse's
+    // slopeEls) — this hole is built entirely out of them, no walls.
+    // Three safe rungs (flat, hazard-free rectangles — tee/pin both sit
+    // inside one), stepping diagonally up and to the right:
+    //   rung 1 (tee): x8-38,  y68-80
+    //   rung 2:       x38-68, y42-54
+    //   rung 3 (pin): x68-95, y16-28
+    // Each GAP between two rungs is split into two flanking bands, same
+    // "too high -> shoved further away, too low -> shoved further away"
+    // logic as v1 had once, just repeated at every rung transition: the
+    // half nearer the LOWER rung pushes "down" (undershoot gets sent
+    // back toward the rung you came from), the half nearer the UPPER
+    // rung pushes "up" (overshoot keeps sailing past, away from the rung
+    // you were aiming for). A clean miss on any rung gets punished twice
+    // — once falling short, once flying past — same as the single-alley
+    // version, just now three times over on the way up.
     obstacles: [],
     slopes: [
-      { x: 50, y: 37, w: 90, h: 68, dir: "up" }, // north zone — y 3-71
-      { x: 50, y: 91, w: 90, h: 12, dir: "down" }, // south zone — y 85-97
+      { x: 23, y: 86, w: 30, h: 12, dir: "down" }, // below rung 1, right off the tee — shoot too weak and it slides back south before you've even cleared the rung you started on
+      { x: 38, y: 64.5, w: 40, h: 7, dir: "down" }, // gap 1, lower half (near rung 1) — undershoot rung 2, get sent back down
+      { x: 38, y: 57.5, w: 40, h: 7, dir: "up" }, // gap 1, upper half (near rung 2) — overshoot rung 1, keep sailing north past rung 2
+      { x: 68, y: 39, w: 40, h: 7, dir: "down" }, // gap 2, lower half (near rung 2) — undershoot rung 3, get sent back down
+      { x: 68, y: 31, w: 40, h: 7, dir: "up" }, // gap 2, upper half (near rung 3) — overshoot rung 2, keep sailing north past rung 3
+      { x: 82, y: 9.5, w: 31, h: 13, dir: "up" }, // above rung 3, guarding the green — overshoot the pin and it just keeps going
     ],
     tee: { x: 12, y: 78 },
-    pin: { x: 88, y: 78 },
+    pin: { x: 88, y: 20 },
   },
   {
     club: "Barcelona",
@@ -376,7 +378,21 @@ const GOLF_HOLES = [
     // Sweeps stage 1's gate gap. Reach (baseX 16.5 ± range 8 ± r 2.5 =
     // x6-27) keeps a clean 3-unit margin either side of the gap's own
     // x3-30.
-    patrols: [{ id: "barcelona", axis: "x", baseX: 16.5, baseY: 72, range: 8, r: 2.5, period: 2800 }],
+    patrols: [
+      { id: "barcelona", axis: "x", baseX: 16.5, baseY: 72, range: 8, r: 2.5, period: 2800 },
+      // Added 2026-08-16, Craig's follow-up — a second patrol directly
+      // above the chicane post (which sits at x50,y58), sweeping left to
+      // right over BOTH sand pits (sand1 x28-42, sand2 x58-72). baseY 50
+      // sits clear of the chicane row itself (walls/post/sand all at
+      // y53-63, 3-unit margin) and clear of the stage 3 gate above it
+      // (wall at y35-41, 9-unit margin). Range 22 around baseX 50 puts
+      // its reach (± r 2.5) at x25.5-74.5 — comfortably past both sand
+      // pits' outer edges (28/72) on each pass, and still clear of the
+      // chicane's own east/west walls (end x23 / start x77, ~2.5-unit
+      // margin either side, same as this hole's other tight-margin
+      // patrol above).
+      { id: "barcelona2", axis: "x", baseX: 50, baseY: 50, range: 22, r: 2.5, period: 3400 },
+    ],
     // Guards stage 3's gap (x64-97). Reach (length+r = 9.5) around pivot
     // (80,38) stays clear of that gate's wall (ends x64, 6.5-unit margin)
     // and clear of the water barrier below it (starts y14, windmill's own
