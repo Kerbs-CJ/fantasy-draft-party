@@ -180,18 +180,26 @@ const GOLF_HOLES = [
     // TWO patrols now (added 2026-08-15) — a hole can have more than one,
     // see the note above ensureGolfPatrolAnim for what that took. Both
     // sweep the same corridor between gate 2 and gate 3, either side of
-    // its centre, widened twice since the first attempt (baseX 56/48 ->
-    // 58/46 -> 60/44). The second one's range is NEGATIVE (-5, not 5) so
-    // its motion is a mirror image of the first's, not identical — same
-    // |range|/period, so they still cover the same ground at the same
-    // pace, but golfPatrolPosition's `range * Math.sin(...)` means a
-    // negated range is exactly a 180° phase flip (sin is odd:
-    // -sin(x) === sin(x+π)) — when one is at the top of its sweep the
-    // other is at the bottom, no new field or phase-tracking code
-    // needed, just the sign.
+    // its centre, widened three times since the first attempt (baseX
+    // 56/48 -> 58/46 -> 60/44 -> 62/38, 2026-08-16) — each pass mostly
+    // via the LEFT one (id "liverpool2") moving further left, the right
+    // one only nudged slightly, per Craig's ask. Gap between their
+    // occupied lanes (baseX ± r 3) is now x41-59, 18 units, up from 10.
+    // Both lanes stay clear of gate 2 (wall ends y47, patrols' highest
+    // reach is y39) and gate 3 (wall starts y15, patrols' lowest reach is
+    // y23) regardless of X — neither gate's solid span overlaps the
+    // patrols' y-range at all, so X can move freely without a new
+    // clearance check against either wall. The second one's range is
+    // NEGATIVE (-5, not 5) so its motion is a mirror image of the
+    // first's, not identical — same |range|/period, so they still cover
+    // the same ground at the same pace, but golfPatrolPosition's
+    // `range * Math.sin(...)` means a negated range is exactly a 180°
+    // phase flip (sin is odd: -sin(x) === sin(x+π)) — when one is at the
+    // top of its sweep the other is at the bottom, no new field or
+    // phase-tracking code needed, just the sign.
     patrols: [
-      { id: "liverpool", axis: "y", baseX: 60, baseY: 31, range: 5, r: 3, period: 3800 },
-      { id: "liverpool2", axis: "y", baseX: 44, baseY: 31, range: -5, r: 3, period: 3800 },
+      { id: "liverpool", axis: "y", baseX: 62, baseY: 31, range: 5, r: 3, period: 3800 },
+      { id: "liverpool2", axis: "y", baseX: 38, baseY: 31, range: -5, r: 3, period: 3800 },
     ],
   },
   {
