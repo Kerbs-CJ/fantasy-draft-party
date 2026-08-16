@@ -304,44 +304,83 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-barcelona.png",
     ballHue: 123, // maroon/magenta bg -> green ball
     name: "Camp Nou",
-    description: "The grand finale — corner to corner, four gates, a windmill in the thick of it, water guarding the green, no easy way through.",
+    description: "The grand finale, total redesign — an open chicane around a lone post, a windmill-guarded gate, then a knife-edge causeway onto a green that's practically an island, water on every side of it.",
     par: 6,
-    // Corner to corner — the longest possible line the course allows —
-    // through FOUR gates instead of three, with sand bogging down an
-    // imprecise entry into two of them and water guarding the final
-    // approach to the green. Genuinely the hardest hole on the course, as
-    // a grand finale should be.
-    tee: { x: 6, y: 94 },
-    pin: { x: 94, y: 6 },
+    // Total redesign 2026-08-16, Craig's idea — the pillar that used to
+    // sit right off the tee is gone, and this isn't a reshuffle of the
+    // old four-gate layout, it's a new path using every hazard type in
+    // the game at least once (wall, circular post, sand, slope, patrol,
+    // windmill, water, drawbridge — nothing else on the course combines
+    // all of them). Four stages, tee to pin, verified connected by hand
+    // stage by stage since there's no JS runtime on this machine to
+    // simulate it first (see the note on the maze redesign's soft-lock
+    // catch elsewhere in this file for why that matters):
+    //   1. One wide gate, gap west (x3-30) — simple opener, a patrol
+    //      sweeping the gap itself supplies the pressure, not the wall.
+    //   2. An OPEN chicane: two short walls jut in from each course edge
+    //      (not a full gate — the real hazard is the post+sand between
+    //      them), forcing a lane choice around a center post.
+    //   3. One more wide gate, gap east (x64-97) this time, guarded by a
+    //      windmill sweeping the gap.
+    //   4. A full-width water barrier (edge to edge, x3-97, same
+    //      "no way around it" principle as every gate wall above — this
+    //      is what makes it a real barrier and not just a patch to skirt
+    //      round) with the drawbridge as the ONLY dry crossing. A slope
+    //      boosts speed into the funnel just before it, so the timing is
+    //      harder to judge than it looks. Beyond the drawbridge, the
+    //      green itself is flanked by two more water patches — nothing
+    //      left to bypass at that point, so purely extra risk on an
+    //      overshoot, not a connectivity concern.
+    tee: { x: 10, y: 90 },
+    pin: { x: 78, y: 9 },
     obstacles: [
-      { x: 63.5, y: 76, w: 67, h: 6 }, // gate 1 — gap west (x 3-30)
-      { x: 36.5, y: 59, w: 67, h: 6 }, // gate 2 — gap east (x 70-97)
-      { x: 63.5, y: 41, w: 67, h: 6 }, // gate 3 — gap west (x 3-30)
-      { x: 36.5, y: 24, w: 67, h: 6 }, // gate 4 — gap east (x 70-97)
-      { x: 50, y: 89, r: 4, shape: "circle" }, // right off the tee
+      { x: 63.5, y: 72, w: 67, h: 6 }, // stage 1 — gate, gap west (x 3-30)
+      { x: 13, y: 58, w: 20, h: 8 }, // stage 2 — chicane wall, west edge
+      { x: 87, y: 58, w: 20, h: 8 }, // stage 2 — chicane wall, east edge
+      { x: 50, y: 58, r: 5, shape: "circle" }, // stage 2 — chicane post, dead center
+      { x: 33.5, y: 38, w: 61, h: 6 }, // stage 3 — gate, gap east (x 64-97)
     ],
     sand: [
-      { x: 72, y: 52, w: 14, h: 10 }, // the landing zone right after gate 2
-      { x: 25, y: 35, w: 14, h: 10 }, // guarding the entry to gate 3
+      { x: 35, y: 58, w: 14, h: 10 }, // stage 2 — west lane through the post
+      { x: 65, y: 58, w: 14, h: 10 }, // stage 2 — east lane through the post
+    ],
+    slopes: [
+      // Boosts toward the green right in the funnel between the stage 3
+      // gate and the water barrier — extra speed you don't fully
+      // control, which makes the drawbridge's timing genuinely harder to
+      // read on approach.
+      { x: 78, y: 30, w: 24, h: 10, dir: "up" },
     ],
     water: [
-      { x: 82, y: 14, w: 14, h: 10 }, // guarding the final approach to the green
+      // The barrier — spans the FULL course width (x3-97) at y14-26,
+      // split into two rects only so the drawbridge (x73-83) can sit
+      // exactly between them with zero gap on either side, same
+      // "no floating gate" convention as every other drawbridge on the
+      // course. This is what actually seals the green off, not the two
+      // decorative patches below it.
+      { x: 38, y: 20, w: 70, h: 12 }, // barrier — west of the drawbridge (x 3-73)
+      { x: 90, y: 20, w: 14, h: 12 }, // barrier — east of the drawbridge (x 83-97)
+      // Purely cosmetic/extra-risk once past the barrier — an overshoot
+      // either side of the pin still splashes.
+      { x: 68, y: 8, w: 8, h: 10 }, // green — west flank
+      { x: 88, y: 8, w: 8, h: 10 }, // green — east flank
     ],
-    // The grand finale gets the fastest, most aggressive patrol on the
-    // course — sits in leg 2's corridor (west side, clear of both sand
-    // traps), inside gate 3's own gap so it never overlaps that wall.
-    patrols: [{ id: "barcelona", axis: "y", baseX: 15, baseY: 48, range: 6, r: 2.5, period: 2600 }],
-    // Course redesign 2026-08-15 — the finale is the one hole that
-    // combines TWO timed hazards (every other hole has exactly one; see
-    // the note on Liverpool's drawbridge above for the full per-hole
-    // reasoning), on top of the four gates/sand/water it already had.
-    // Sits in the corridor between gate 3 and gate 4 (east side, clear of
-    // sand2's footprint), reach (length+r = 7) kept clear of gate 3's
-    // wall above it (~2 unit margin) and gate 4's own wall below-left of
-    // it (the sweep's x-range starts past gate 4's solid portion, which
-    // ends at x70, so it never overlaps gate 4 either — only sits inside
-    // its gap).
-    windmills: [{ id: "barcelona-mill", pivotX: 79, pivotY: 29, length: 5, thickness: 3, r: 2, period: 3000 }],
+    // Sweeps stage 1's gate gap. Reach (baseX 16.5 ± range 8 ± r 2.5 =
+    // x6-27) keeps a clean 3-unit margin either side of the gap's own
+    // x3-30.
+    patrols: [{ id: "barcelona", axis: "x", baseX: 16.5, baseY: 72, range: 8, r: 2.5, period: 2800 }],
+    // Guards stage 3's gap (x64-97). Reach (length+r = 9.5) around pivot
+    // (80,38) stays clear of that gate's wall (ends x64, 6.5-unit margin)
+    // and clear of the water barrier below it (starts y14, windmill's own
+    // lowest reach is y28.5, comfortable margin).
+    windmills: [{ id: "barcelona-mill", pivotX: 80, pivotY: 38, length: 7, thickness: 3, r: 2.5, period: 2800 }],
+    // The causeway gate — w10/h12 isn't a "wide" or "tall" bar like the
+    // other holes' drawbridges, it's sized to exactly plug the one gap
+    // the water barrier leaves: w10 matches the causeway's own x-width
+    // (x73-83), h12 matches the barrier band's y-depth (y14-26) — zero
+    // overlap needed on either dimension since the water rects already
+    // end/start exactly at its edges.
+    drawbridge: { id: "barcelona-gate", x: 78, y: 20, w: 10, h: 12, period: 2400, openRatio: 0.35 },
   },
 ];
 // Dragging GOLF_MAX_DRAG_PERCENT of the course's own rendered
