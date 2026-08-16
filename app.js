@@ -4902,32 +4902,58 @@ function renderGolf() {
       ? `<p class="waiting">⏳ ${escapeHtml(turnPlayerName)}'s turn — watching…</p>`
       : "";
 
-  // Par pill added 2026-08-16, Craig's ask — "display the par for each
-  // course somewhere that can be seen and it should look nice". Lives in
-  // the existing club badge row (crest + name), pushed to the row's far
-  // end via CSS margin-left:auto rather than a new standalone element —
-  // same badge every player already glances at for "which hole is this"
-  // now also answers "what am I aiming for". See renderGolfIntro for the
-  // companion full-course overview shown before the round starts.
-  const badge = hole.colors
-    ? `<div class="golf-club-badge" style="--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};">
-        <span class="golf-club-crest">${escapeHtml(hole.crest)}</span>
-        <span class="golf-club-name">${escapeHtml(hole.club)}</span>
-        <span class="golf-par-pill">Par ${hole.par}</span>
+  // Side panel added 2026-08-16, Craig's ask — pull the club/par badge
+  // AND the Totals list out of the play area entirely, into the open
+  // space beside the course (same "widen #app, flex row beside the
+  // course" trick .golf-practice-layout already established for the
+  // hazard legend — see style.css — just mirrored to the LEFT here
+  // instead of the right, and reused for a genuinely different sidebar).
+  // Totals are still in plain top-to-bottom order (Craig: "north to
+  // south"), but now sorted by score (scoreboardRows already does this)
+  // with medal icons on the podium spots and the viewer's own row
+  // highlighted — the "look nicer, more professional or fun" ask, same
+  // data as before, presented as an actual leaderboard instead of a
+  // plain bullet list. Collapses to a column above the course below the
+  // 980px breakpoint, same as the practice layout.
+  const holeCard = hole.colors
+    ? `<div class="golf-side-hole" style="--club-primary:${hole.colors.primary}; --club-secondary:${hole.colors.secondary};">
+        <span class="golf-club-crest lg">${escapeHtml(hole.crest)}</span>
+        <div class="golf-side-hole-info">
+          <span class="golf-side-hole-name">${escapeHtml(hole.club)}</span>
+          <span class="golf-par-pill">Par ${hole.par}</span>
+        </div>
       </div>`
     : "";
+  const medal = ["🥇", "🥈", "🥉"];
+  const sidePanel = `
+    <aside class="golf-side-panel">
+      ${holeCard}
+      <h3 class="golf-side-heading">🏆 Totals</h3>
+      <ol class="golf-side-totals">
+        ${scoreboardRows
+          .map(
+            (r, i) => `
+          <li class="${r.player.id === me?.id ? "me" : ""}">
+            <span class="golf-side-rank">${medal[i] || i + 1}</span>
+            <span class="golf-side-name">${escapeHtml(r.player.name)}</span>
+            <span class="golf-side-total">${r.total}</span>
+          </li>`
+          )
+          .join("")}
+      </ol>
+    </aside>`;
 
   return `
     <div class="card">
       <h2>⛳ Football Golf</h2>
-      ${badge}
-      ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
-      ${turnBanner}
-      ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered && isMyTurn, renderGolfWindBadge(gs.wind))}
-      <h3>Totals</h3>
-      <ul class="player-list compact">
-        ${scoreboardRows.map((r) => `<li>${escapeHtml(r.player.name)}: ${r.total}</li>`).join("")}
-      </ul>
+      <div class="golf-play-layout">
+        ${sidePanel}
+        <div class="golf-course-wrap">
+          ${instructions ? `<p class="sub" style="text-align:center">${instructions}</p>` : ""}
+          ${turnBanner}
+          ${renderGolfCourse(hole, gs.balls, local.golfBallAnim, local.golf, !answered && isMyTurn, renderGolfWindBadge(gs.wind))}
+        </div>
+      </div>
       ${renderGolfFinishers(gs, holeIndex, finished, allDone)}
       ${
         isHost
