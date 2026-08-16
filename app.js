@@ -94,9 +94,18 @@ function manUtdChaosSlopes() {
   const slopes = [];
   const cols = 14;
   const rows = 10; // 14x10 = 140
+  // xMax/yMin widened 2026-08-16, Craig's follow-up — the box used to
+  // end almost exactly AT the pin (88,20), leaving the green itself in
+  // a relative pocket of calm: nothing above it, nothing to its right,
+  // and only a thin sliver to its northwest. xMax 88->95 wraps the field
+  // around to the pin's right (keeps a 2-unit margin off the x97
+  // boundary); yMin 15->5 wraps it up above the pin too (2-unit margin
+  // off the y3 boundary) — and since the box's interior is what's
+  // northwest of the pin, lowering yMin alone already thickens that
+  // coverage without a separate knob for it.
   const xMin = 15,
-    xMax = 88,
-    yMin = 15,
+    xMax = 95,
+    yMin = 5,
     yMax = 83;
   const cellW = (xMax - xMin) / cols;
   const cellH = (yMax - yMin) / rows;
