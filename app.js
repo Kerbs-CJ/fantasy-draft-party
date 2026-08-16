@@ -69,27 +69,35 @@ const GUESS_CLUE_POINTS = [15, 12, 7, 3]; // indexed by clueIndex (0 = only 1st 
 // ball itself traps it bouncing forever, which is worse than no obstacle
 // at all).
 // Man United's "chaos" slope field, added 2026-08-16 — Craig's third
-// idea for that hole (see its own entry below for the full history).
-// Instead of a hand-placed path, ~40 small up/down patches scattered
-// across the whole tee-to-pin span. Slopes are pass-through terrain, not
-// solid obstacles (see the file comment below) — they can never trap a
-// ball, only nudge it — so unlike every maze-style hole on this course,
-// there's zero soft-lock risk here no matter how dense or "random" the
-// layout looks; worst case is just a wildly bouncy ride, never a stuck
-// ball. That's specifically why this is the one hole on the course where
-// a generated-rather-than-hand-placed layout is safe to use at all.
+// idea for that hole (see its own entry below for the full history), then
+// cranked up further same day ("more arrows... almost unplayable"):
+// density 8x5 (40) -> 14x10 (140), patch size 5-9 -> 8-14, and jitter
+// widened from 0.8x a cell to 0.95x — at this size/spacing patches are
+// now GUARANTEED to overlap their neighbors, not just scattered near
+// them, which matters here specifically because golfSimulateShot's
+// slope loop applies every overlapping zone's push independently each
+// tick (see the loop below the file comment) — a ball sitting in 2-3
+// stacked patches at once gets 2-3x the accel, compounding rather than
+// just alternating. Slopes are pass-through terrain, not solid obstacles
+// (see the file comment below) — they can never trap a ball, only nudge
+// it — so unlike every maze-style hole on this course, there's zero
+// soft-lock risk here no matter how dense or "random" the layout looks;
+// worst case is an absurdly bouncy ride, never a stuck ball. That's
+// specifically why this is the one hole on the course where a generated-
+// rather-than-hand-placed layout is safe to use at all, and safe to push
+// this far past "reasonable" without a live-testing check first.
 // Built once at load via a fixed hash (deliberately NOT Math.random() —
 // every client has to see the exact same course; a per-client-random
 // layout would be unfair/inconsistent), so the scatter reads as chaotic
 // but is 100% deterministic and identical for everyone, every time.
 function manUtdChaosSlopes() {
   const slopes = [];
-  const cols = 8;
-  const rows = 5; // 8x5 = 40
-  const xMin = 18,
-    xMax = 85,
-    yMin = 18,
-    yMax = 80;
+  const cols = 14;
+  const rows = 10; // 14x10 = 140
+  const xMin = 15,
+    xMax = 88,
+    yMin = 15,
+    yMax = 83;
   const cellW = (xMax - xMin) / cols;
   const cellH = (yMax - yMin) / rows;
   for (let row = 0; row < rows; row++) {
@@ -103,9 +111,9 @@ function manUtdChaosSlopes() {
       const h2 = Math.sin(i * 78.233 + 4.5) * 19642.987;
       const j1 = h1 - Math.floor(h1);
       const j2 = h2 - Math.floor(h2);
-      const x = xMin + cellW * (col + 0.5) + (j1 - 0.5) * cellW * 0.8;
-      const y = yMin + cellH * (row + 0.5) + (j2 - 0.5) * cellH * 0.8;
-      const size = 5 + j1 * 4; // 5-9, a little size variety on top of the scatter
+      const x = xMin + cellW * (col + 0.5) + (j1 - 0.5) * cellW * 0.95;
+      const y = yMin + cellH * (row + 0.5) + (j2 - 0.5) * cellH * 0.95;
+      const size = 8 + j1 * 6; // 8-14, comfortably bigger than a cell (~6.2x6.8) so neighbors overlap
       slopes.push({
         x: Math.round(x * 10) / 10,
         y: Math.round(y * 10) / 10,
@@ -322,14 +330,14 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-man-united.png",
     ballHue: 148, // vivid red bg -> cyan/teal ball
     name: "Old Trafford (Theatre of Dreams)",
-    description: "Total chaos — forty small patches of push-you-around ground scattered corner to corner, no safe line through any of it.",
+    description: "Total, deliberate chaos — 140 overlapping patches of push-you-around ground corner to corner, stacking on top of each other, genuinely no safe line through any of it.",
     par: 4,
     // Redesign 2026-08-16, Craig's THIRD idea for this hole in one
     // session (v1: single tightrope alley; v2: 3-rung diagonal ladder;
     // both fully replaced, not layered on). Same tee/pin as v2 — kept
     // per his "keep the tee and hole position" ask this time. No hand-
     // placed structure at all now: see manUtdChaosSlopes (defined just
-    // above GOLF_HOLES) for the ~40-patch scatter and why a generated
+    // above GOLF_HOLES) for the 140-patch overlapping scatter and why a generated
     // layout is safe specifically for slopes (unlike every maze-style
     // hole on this course, which are hand-placed and connectivity-
     // checked precisely because a generated WALL layout risks an
