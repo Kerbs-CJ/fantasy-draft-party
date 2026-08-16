@@ -201,7 +201,7 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-leeds.png",
     ballHue: 350, // blue bg -> orange/amber ball
     name: "Elland Road",
-    description: "Thread the middle gate into a real narrow chute, then the cup opens away from the tee — a windmill guards the west loop-around, the east side stays clear.",
+    description: "Thread the middle gate into a real narrow chute — if it's even open — then the cup opens away from the tee, guarded by a windmill on both loop-arounds.",
     par: 3,
     tee: { x: 50, y: 88 },
     pin: { x: 50, y: 16 },
@@ -233,14 +233,29 @@ const GOLF_HOLES = [
       { x: 50, y: 24, w: 14, h: 4 }, // right at the back of the cup — overshoot the pin and it's gone
     ],
     // Course redesign 2026-08-15 — patrol swapped for a windmill, same
-    // spot and same role the patrol had (guards the WEST loop-around
-    // route only; the east side stays deliberately clear, so there's
-    // always a totally safe if slightly longer route regardless of
-    // timing) — see the note on Liverpool's drawbridge above for the
-    // full per-hole allocation reasoning. Reach (length+r = 9.5) stays
-    // clear of the cup's west wall (x32-38) with a ~2.5 unit margin and
-    // well inside the course's own left edge.
-    windmill: { id: "leeds-mill", pivotX: 20, pivotY: 25, length: 7, thickness: 3, r: 2.5, period: 3600 },
+    // spot and same role the patrol had, originally guarding only the
+    // WEST loop-around (east side left clear so there was always a
+    // totally safe if slightly longer route). 2026-08-16: Craig asked
+    // for a second, mirrored windmill on the identical opposite side —
+    // the safe-route design is deliberately gone now, both loop-arounds
+    // are contested. pivotX 80 = 100-20, an exact mirror of the west
+    // mill across the course's centerline; reach (length+r = 9.5) stays
+    // clear of the cup's east wall (x62-68) with the same ~2.5 unit
+    // margin the west mill already had against the west wall (x32-38).
+    windmills: [
+      { id: "leeds-mill", pivotX: 20, pivotY: 25, length: 7, thickness: 3, r: 2.5, period: 3600 },
+      { id: "leeds-mill-east", pivotX: 80, pivotY: 25, length: 7, thickness: 3, r: 2.5, period: 3600 },
+    ],
+    // 2026-08-16: a drawbridge barricading the first gap a player has to
+    // clear off the tee — the middle gate at y58 (west wall ends x40,
+    // east wall starts x62, so the gap itself is x40-62). w22 sized to
+    // exactly touch both walls with no gap on either end, same "real
+    // bridge, not a floating gate" convention as Liverpool's drawbridge;
+    // h6/y58 matches the gate walls' own band so it visually reads as
+    // part of the same gate. Horizontal (w>h) since the gap it's filling
+    // is wide, not tall — same shape convention as the practice range's
+    // horizontal gate. period/openRatio reused from Liverpool's gate.
+    drawbridge: { id: "leeds-gate", x: 51, y: 58, w: 22, h: 6, period: 3200, openRatio: 0.4 },
   },
   {
     club: "Manchester United",
@@ -249,33 +264,38 @@ const GOLF_HOLES = [
     bgImage: "assets/course-bg-man-united.png",
     ballHue: 148, // vivid red bg -> cyan/teal ball
     name: "Old Trafford (Theatre of Dreams)",
-    description: "A proper triple-bend slalom, wall to wall to wall — the tightest squeeze is now a real walled pinch, not just a slope in open ground.",
+    description: "A dead-straight tightrope from corner to corner — a narrow safe alley the whole way, with the ground itself dragging any mis-hit further off-line the harder it drifts.",
     par: 4,
-    tee: { x: 88, y: 80 },
-    pin: { x: 12, y: 18 },
-    obstacles: [
-      { x: 68, y: 68.5, w: 6, h: 57 }, // gate 1 — gap north (y 3-40)
-      { x: 50, y: 31.5, w: 6, h: 57 }, // gate 2 — gap south (y 60-97)
-      { x: 32, y: 68.5, w: 6, h: 57 }, // gate 3 — gap north (y 3-40)
-      // Course redesign 2026-08-15 — caps the up-slope below from above,
-      // turning "tightest squeeze" from a figure of speech into an
-      // actual walled pinch between gate 2 and gate 3. Clear of both
-      // gates (x37-45 sits inside the x35-47 gap between gate 2's x47-53
-      // and gate 3's x29-35) and a 2-unit gap above the slope itself.
-      { x: 41, y: 36, w: 8, h: 10 }, // caps the squeeze from above
-    ],
+    // Total redesign 2026-08-16, Craig's idea — replaces the old
+    // triple-gate slalom+pillar entirely. Tee bottom-left, pin
+    // bottom-right, both sitting inside a single flat "safe alley" (the
+    // neutral y71-85 gap below, no hazard of its own — just the plain
+    // grass every other hole's corridors already are). No walls at all
+    // this time: the whole hazard IS precision. Every existing hole's
+    // slope zone already renders as a field of ▲/▼ arrows (see
+    // renderGolfCourse's slopeEls) — this hole is built entirely out of
+    // two of them, used as flanking punishment zones instead of a single
+    // push:
+    //   - north zone (dir "up", above the alley): a shot hit even
+    //     slightly high lands here and gets shoved further north, away
+    //     from the tee-to-pin line — the longer it's inside the zone,
+    //     the further it drifts.
+    //   - south zone (dir "down", below the alley): the mirror image for
+    //     a shot hit low — shoved south, toward the bottom boundary.
+    // Deliberately asymmetric in SIZE, not in effect: tee/pin sit near
+    // the bottom of the course, so the south zone only has 12 units of
+    // room before the bottom boundary (y97) versus the north zone's 68 —
+    // a low miss gets punished fast (boundary bounce back into the same
+    // down-slope, losing speed each pass), a high miss just sails,
+    // needing a real correction shot to claw back. Both x5-95, comfortably
+    // either side of tee(12)/pin(88).
+    obstacles: [],
     slopes: [
-      { x: 82, y: 65, w: 14, h: 16, dir: "down" }, // leg 1 — resists right off the tee
-      { x: 41, y: 50, w: 8, h: 14, dir: "up" }, // leg 2 — a boost through the tightest squeeze
+      { x: 50, y: 37, w: 90, h: 68, dir: "up" }, // north zone — y 3-71
+      { x: 50, y: 91, w: 90, h: 12, dir: "down" }, // south zone — y 85-97
     ],
-    water: [
-      { x: 12, y: 30, w: 10, h: 8 }, // short-side miss on the final approach — splash
-    ],
-    // Sweeps the open corridor between gate 1 and gate 2 — a new pinch
-    // point on top of the three gates the hole already forces, faster
-    // than Arsenal/Liverpool/Leeds' patrols to match this hole's step up
-    // in difficulty.
-    patrols: [{ id: "manutd", axis: "y", baseX: 59, baseY: 50, range: 15, r: 3, period: 3200 }],
+    tee: { x: 12, y: 78 },
+    pin: { x: 88, y: 78 },
   },
   {
     club: "Barcelona",
@@ -321,7 +341,7 @@ const GOLF_HOLES = [
     // it (the sweep's x-range starts past gate 4's solid portion, which
     // ends at x70, so it never overlaps gate 4 either — only sits inside
     // its gap).
-    windmill: { id: "barcelona-mill", pivotX: 79, pivotY: 29, length: 5, thickness: 3, r: 2, period: 3000 },
+    windmills: [{ id: "barcelona-mill", pivotX: 79, pivotY: 29, length: 5, thickness: 3, r: 2, period: 3000 }],
   },
 ];
 // Dragging GOLF_MAX_DRAG_PERCENT of the course's own rendered
@@ -416,7 +436,7 @@ const GOLF_PRACTICE_HOLE_VARIANTS = [
     // (middle) -> windmill (top/near pin).
     patrols: [{ id: "practice0", axis: "x", baseX: 50, baseY: 76, range: 15, r: 3, period: 3500 }],
     drawbridge: { id: "practice0-gate", x: 50, y: 54, w: 20, h: 6, period: 2500, openRatio: 0.45 },
-    windmill: { id: "practice0-mill", pivotX: 50, pivotY: 32, length: 9, thickness: 3, r: 3, period: 3000 },
+    windmills: [{ id: "practice0-mill", pivotX: 50, pivotY: 32, length: 9, thickness: 3, r: 3, period: 3000 }],
   },
   {
     tee: { x: 50, y: 88 },
@@ -780,7 +800,10 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
     // Liverpool) — hole.patrols is always an array now, one obstacle per
     // entry, same collide() loop as windmillNodes just below.
     const patrolObstacles = (hole.patrols || []).map((p) => ({ shape: "circle", r: p.r, ...golfPatrolPosition(p, nominalT) }));
-    const windmillNodes = hole.windmill ? golfWindmillNodes(hole.windmill, nominalT) : null;
+    // A hole can have more than one windmill too (added 2026-08-16, for
+    // Leeds' mirrored east/west pair) — same "always an array" shape as
+    // patrols above, flattened into one node list for the collide() loop.
+    const windmillNodes = (hole.windmills || []).flatMap((w) => golfWindmillNodes(w, nominalT));
     for (let sub = 0; sub < GOLF_SIM_SUBSTEPS; sub++) {
       x += vx / GOLF_SIM_SUBSTEPS;
       y += vy / GOLF_SIM_SUBSTEPS;
@@ -823,9 +846,7 @@ function golfSimulateShot(hole, start, angle, power, wind, shotStartTime = Date.
       // any of them bounces off exactly like a fixed pillar it happened
       // to run into.
       for (const po of patrolObstacles) collide(po);
-      if (windmillNodes) {
-        for (const node of windmillNodes) collide(node);
-      }
+      for (const node of windmillNodes) collide(node);
       if (drawbridgeObstacle) collide(drawbridgeObstacle);
       if (Math.hypot(hole.pin.x - x, hole.pin.y - y) <= GOLF_HOLED_THRESHOLD) {
         if (Math.hypot(vx, vy) <= GOLF_HOLE_CAPTURE_SPEED) {
@@ -871,7 +892,7 @@ function golfIdleHazardHit(hole, ballPos) {
   const now = Date.now();
   const candidates = [];
   for (const p of hole.patrols || []) candidates.push({ shape: "circle", r: p.r, ...golfPatrolPosition(p, now) });
-  if (hole.windmill) candidates.push(...golfWindmillNodes(hole.windmill, now));
+  for (const w of hole.windmills || []) candidates.push(...golfWindmillNodes(w, now));
   if (hole.drawbridge && !golfIsDrawbridgeOpen(hole.drawbridge, now)) {
     candidates.push({ x: hole.drawbridge.x, y: hole.drawbridge.y, w: hole.drawbridge.w, h: hole.drawbridge.h });
   }
@@ -1062,7 +1083,7 @@ let local = {
   botKeeperScheduledFor: null,
   golfBotScheduled: {}, // `${holeIndex}:${botId}:${strokes}` -> true, so a bot's turn isn't scheduled twice
   golfPatrolLoopIds: new Set(), // element ids the patrol-hazard rAF loops are currently driving (a hole can have more than one patrol) — same duplicate-loop guard as golfWindmillLoopId below, just a Set since there can be several at once (see ensureGolfPatrolAnim)
-  golfWindmillLoopId: null, // same guard, for the windmill's rAF loop (see ensureGolfWindmillAnim)
+  golfWindmillLoopIds: new Set(), // same guard, for the windmill's rAF loop(s) — a Set since 2026-08-16 (Leeds' mirrored pair), same reasoning as golfPatrolLoopIds above (see ensureGolfWindmillAnim)
   golfDrawbridgeLoopId: null, // same guard, for the drawbridge's rAF loop (see ensureGolfDrawbridgeAnim)
   // Set by animateGolfBallFlight, for the duration of one shot's replay,
   // to the exact shotStartTime golfSimulateShot froze that shot's
@@ -3044,7 +3065,7 @@ function resetLocalGameState() {
   local.botKeeperScheduledFor = null;
   local.golfBotScheduled = {};
   local.golfPatrolLoopIds = new Set();
-  local.golfWindmillLoopId = null;
+  local.golfWindmillLoopIds = new Set();
   local.golfDrawbridgeLoopId = null;
   local.golfHazardFrozenT = null;
   local.golfHazardFreezeCount = 0;
@@ -4900,13 +4921,15 @@ function renderGolfCourse(hole, ballPositions, trackMap, dragState, canDrag, ext
   // bar through the pivot (see golfWindmillNodes for why collision uses
   // discrete nodes instead — this element is purely cosmetic, its own
   // width IS the full arm-to-arm span so it visually reaches both tips).
-  let windmillEl = "";
-  if (hole.windmill) {
-    const w = hole.windmill;
-    const deg0 = golfWindmillAngleDeg(w, Date.now());
-    windmillEl = `<div id="golf-windmill-${w.id}" class="golf-windmill-bar" style="left:${w.pivotX}%; top:${w.pivotY}%; width:${w.length * 2}%; height:${w.thickness}%; transform: translate(-50%, -50%) rotate(${deg0}deg);"></div>`;
-    requestAnimationFrame(() => ensureGolfWindmillAnim(w));
-  }
+  // A hole can have more than one (added 2026-08-16, Leeds' mirrored
+  // pair) — same array/`.map()` shape as the patrol pillar above.
+  const windmillEl = (hole.windmills || [])
+    .map((w) => {
+      const deg0 = golfWindmillAngleDeg(w, Date.now());
+      requestAnimationFrame(() => ensureGolfWindmillAnim(w));
+      return `<div id="golf-windmill-${w.id}" class="golf-windmill-bar" style="left:${w.pivotX}%; top:${w.pivotY}%; width:${w.length * 2}%; height:${w.thickness}%; transform: translate(-50%, -50%) rotate(${deg0}deg);"></div>`;
+    })
+    .join("");
 
   // Drawbridge — same live rAF pattern again, toggling an "open" class
   // (see golf-drawbridge/.open in style.css) rather than moving anything,
@@ -5022,16 +5045,18 @@ function ensureGolfPatrolAnim(patrol) {
 }
 
 // Same self-terminating "re-query by id every frame, guard against a
-// duplicate loop via local.golfWindmillLoopId" pattern as the patrol
-// pillar above — see its comment for the full reasoning.
+// duplicate loop via a Set of running ids" pattern as the patrol pillar
+// above — see its comment for the full reasoning, including why a
+// single shared id (the original design here) stopped being safe once
+// a hole could have more than one windmill (Leeds, added 2026-08-16).
 function ensureGolfWindmillAnim(windmill) {
   const elId = `golf-windmill-${windmill.id}`;
-  if (local.golfWindmillLoopId === elId) return;
-  local.golfWindmillLoopId = elId;
+  if (local.golfWindmillLoopIds.has(elId)) return;
+  local.golfWindmillLoopIds.add(elId);
   function frame() {
     const el = document.getElementById(elId);
     if (!el) {
-      if (local.golfWindmillLoopId === elId) local.golfWindmillLoopId = null;
+      local.golfWindmillLoopIds.delete(elId);
       return;
     }
     const deg = golfWindmillAngleDeg(windmill, Date.now());
