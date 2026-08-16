@@ -1516,6 +1516,11 @@ async function onClick(e) {
 
   if (action === "create-room") return createRoom();
   if (action === "join-room") return joinRoom();
+  // From render()'s crash-recovery screen — see its own comment for why
+  // "try again" (reconnect as the same player, mid-game) is offered
+  // before the destructive full reset, not instead of it.
+  if (action === "recover-retry") return rejoinSession();
+  if (action === "recover-reset") return hardResetSession();
   if (action === "copy-link") return copyInviteLink();
   if (action === "missing-club-select") return selectMissingClub(btn.dataset.club);
   if (action === "missing-club-confirm") return confirmMissingClub();
@@ -3643,22 +3648,61 @@ async function devQuickStart(status) {
 // game_state shape left over from a previous version of the app, or any
 // other unexpected render-time error) can never leave the page stuck on
 // the static "Loading…" placeholder forever with no way out — instead it
-// falls back to a recovery screen that clears the broken session.
+// falls back to a recovery screen.
+// Rewritten 2026-08-16 after a real render-time bug (since fixed —
+// renderGolfFinishers indexing a results array by the wrong key) tripped
+// this on a live test and revealed a much bigger problem than the crash
+// itself: the OLD version here immediately called clearSession() and
+// dropped the player back to the create/join screen — but joinRoom()
+// flatly refuses to (re)join anything whose status isn't "lobby", and
+// there is no OTHER "reclaim my existing player identity mid-game" flow
+// anywhere in the app. So a mid-game render crash didn't just glitch the
+// screen, it permanently locked that person out of their own
+// in-progress room, recoverable only by the host fixing something
+// server-side. That's true no matter what causes the crash — today's
+// specific bug, or any other one nobody's found yet — so the fix has to
+// be here, not just at today's bug's own call site.
+// Now: session/room are left completely untouched, and "Try again"
+// (rejoinSession, the same fetch-fresh-and-resubscribe logic normal page
+// load already uses) is offered FIRST — if the failure was transient, or
+// this device just hadn't picked up a fix that's since been deployed, a
+// straight retry recovers completely, still as the same player, mid-game
+// exactly where they left off. "Start over" still exists as an explicit
+// last resort, doing the old destructive clear-everything reset — never
+// triggered automatically anymore, only if the player chooses it.
 function render() {
   try {
     renderInner();
   } catch (err) {
-    console.error("Render failed — resetting session.", err);
-    clearSession();
-    room = null;
-    players = [];
-    scores = [];
-    if (channel) {
-      sb?.removeChannel(channel);
-      channel = null;
-    }
-    APP_EL.innerHTML = `${renderHome()}<p class="error" style="margin-top:12px">Something went wrong loading your last session, so it's been reset — sorry! Try creating or joining a room again.</p>`;
+    console.error("Render failed.", err);
+    const roomCode = session?.roomCode;
+    APP_EL.innerHTML = `
+      <div class="card">
+        <h2>⚠️ Something went wrong</h2>
+        <p class="sub">The app hit an error showing the current screen. Your room and session haven't been touched — this is usually recoverable.</p>
+        ${
+          session
+            ? `<button class="btn primary" data-action="recover-retry">🔄 Try again</button>`
+            : ""
+        }
+        ${roomCode ? `<p class="sub" style="margin-top:10px">Still stuck after a couple of tries? Tell your host — room code <b>${escapeHtml(roomCode)}</b>.</p>` : ""}
+        <button class="btn${session ? "" : " primary"}" data-action="recover-reset" style="margin-top:10px">Start over (clears this device's session)</button>
+      </div>`;
   }
+}
+
+// The deliberate last-resort path from the recovery screen above — same
+// destructive reset render() used to do unconditionally on any error.
+function hardResetSession() {
+  clearSession();
+  room = null;
+  players = [];
+  scores = [];
+  if (channel) {
+    sb?.removeChannel(channel);
+    channel = null;
+  }
+  APP_EL.innerHTML = `${renderHome()}<p class="error" style="margin-top:12px">Session cleared. Try creating or joining a room again.</p>`;
 }
 
 function renderInner() {
